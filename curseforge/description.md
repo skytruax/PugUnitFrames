@@ -12,25 +12,25 @@ Everything a frame should tell you is there, and nothing shouts. Bars are colour
 
 Player, target, target of target, focus, pet, party and raid. Switch each one off, size it, scale it, and put it where you want it. The player, target, focus and pet have their own cast bars; the target shows its buffs and debuffs, and your combo points if you are a rogue or a druid. Shamans get their totems under the player frame.
 
-![The five single frames: pet, player with a cast bar, focus, target with buffs, debuffs and combo points, and target of target](https://raw.githubusercontent.com/skytruax/FreeUnitFrames/main/curseforge/web/02-frames.jpg?v=0.1.0-3)
+![A game screen with all seven frames labelled: raid, party, focus, pet, player, target and target of target](https://raw.githubusercontent.com/skytruax/FreeUnitFrames/main/curseforge/web/02-frames.jpg?v=0.1.0-3)
 
 ### Your group, at a glance
 
 Party and raid frames tell you what you need without a second look: an outline on whoever is being attacked, healing on its way drawn past the end of the health bar, a frame lit in the colour of a debuff you can remove, and members out of range faded. Raid frames come for 10, 20 or 40 players and are drawn larger in a small raid. Ready checks, raid icons, the leader's crown and a resurrection on its way all show on the frame.
 
-![Party frames with threat outline, incoming heal, removable debuff and range fade, next to a raid of twenty](https://raw.githubusercontent.com/skytruax/FreeUnitFrames/main/curseforge/web/03-groups.jpg?v=0.1.0-3)
+![Party frames with a threat outline, incoming heal, removable debuff and range fade, each explained, next to a raid of twenty](https://raw.githubusercontent.com/skytruax/FreeUnitFrames/main/curseforge/web/03-groups.jpg?v=0.1.0-3)
 
 ### Built for how Forever fights
 
 In a fight, Forever seals much of what a unit frame shows: an addon is handed health, names, casts and auras that it can pass on to be drawn and may not read. Free Unit Frames is written around that from the first line, so the frames keep drawing in the middle of a fight, and someone who joins your group mid-pull gets a working frame at once. It includes no library and no other addon's code.
 
-![A hostile target in combat: debuffs by kind, a threat outline, and a cast bar with a shield](https://raw.githubusercontent.com/skytruax/FreeUnitFrames/main/curseforge/web/04-combat.jpg?v=0.1.0-3)
+![A checklist of what keeps working in a fight, beside a hostile target with debuffs by kind, a threat outline and a shielded cast bar](https://raw.githubusercontent.com/skytruax/FreeUnitFrames/main/curseforge/web/04-combat.jpg?v=0.1.0-3)
 
 ### Buffs, debuffs and cast bars
 
 Icons show their time left and their stacks. Debuffs are rimmed in the colour of their kind (magic, curse, disease, poison), and on your target you can show only your own. Put the icons above, below or beside a frame, or on the frame itself. A cast bar fills for a cast and drains for a channel, shows a shield when the cast cannot be interrupted, and flashes red when it is.
 
-![The five debuff kinds and their colours, and two cast bars, one with a shield](https://raw.githubusercontent.com/skytruax/FreeUnitFrames/main/curseforge/web/05-auras.jpg?v=0.1.0-3)
+![Debuff icons rimmed in the colour of their kind, the three states of a cast bar, and the four places icons can go](https://raw.githubusercontent.com/skytruax/FreeUnitFrames/main/curseforge/web/05-auras.jpg?v=0.1.0-3)
 
 ### Three looks, three textures
 
@@ -42,7 +42,7 @@ Slate, Night and Hearth, each with smooth, flat or glass bars, all drawn for thi
 
 Type **/freeuf unlock** and a green handle appears on every frame: drag one to move its frame, then **/freeuf lock**. Everything else is in the options, frame by frame. Profiles can be copied, switched per character, and shared as text.
 
-![Green handles on the party, focus, pet, player, target and target-of-target frames, and the commands](https://raw.githubusercontent.com/skytruax/FreeUnitFrames/main/curseforge/web/07-arrange.jpg?v=0.1.0-3)
+![Green handles on the frames of a game screen, the target's being dragged, and the list of commands](https://raw.githubusercontent.com/skytruax/FreeUnitFrames/main/curseforge/web/07-arrange.jpg?v=0.1.0-3)
 
 ## Getting started
 
