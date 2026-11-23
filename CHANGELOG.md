@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.1
+
+- Nothing in the frames has changed. This is the first version built and published by the release workflow, to CurseForge and GitHub alike, and the addon now carries its CurseForge project id.
+
 ## v0.1.0
 
 The first version.

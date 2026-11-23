@@ -37,7 +37,7 @@ LifeCraft, a typeface by Eliot Truelove.</sub></p>
 
 ## Status
 
-**0.1.0 is the first version.** It passes both of its test suites (a model of the client that seals
+**0.1 is the first version.** It passes both of its test suites (a model of the client that seals
 values the way the game does, and a simulator running Blizzard's real interface code). Neither is
 the game, and this version comes straight from them, so expect a rough edge. If something looks
 wrong in the game, `/freeuf status` lists any error it caught: please open an issue with that text.

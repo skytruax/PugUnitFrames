@@ -86,9 +86,10 @@ Later versions: by pushing a tag
     3. Push a version tag (git tag -a v0.1.1 -m "Free Unit Frames 0.1.1"; git push origin v0.1.1).
        The release workflow builds the zip, makes a GitHub release and sends the file to
        CurseForge with CHANGELOG.md as its changelog.
-    v0.1.0 was tagged before the secret was there, so it is a GitHub release only and the file
+    v0.1.0 was tagged before the secret was there, so it is a GitHub release only and the 0.1.0
     on CurseForge is the one uploaded by hand. Running that workflow again now would send a
-    second 0.1.0 to CurseForge: leave it be.
+    second 0.1.0 to CurseForge: leave it be. v0.1.1 is the same addon, published by the workflow
+    to both.
 
 GitHub
     docs/social.png goes in the repository's Settings > Social preview (that one cannot be set
