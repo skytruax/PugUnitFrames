@@ -12,7 +12,8 @@
   curseforge/gallery/05-auras.png      buffs, debuffs and cast bars
   curseforge/gallery/06-looks.png      the three themes and three bar textures
   curseforge/gallery/07-arrange.png    moving frames, and the commands
-  curseforge/web/*.jpg                 the same seven at 1280 x 720, a fraction of the size: what
+  curseforge/gallery/08-logo.png       the emblem and the name, large
+  curseforge/web/*.jpg                 the same eight at 1280 x 720, a fraction of the size: what
                                        the description page loads, so it opens quickly
   docs/banner.png                      the README header
   docs/social.png                      for GitHub's Settings > Social preview
@@ -435,6 +436,49 @@ def social():
     return hero(1280, 640, 1.0, 84, 100, 28, 372, note_size=14, city=0.56)
 
 
+def logo_picture(w=W, h=H):
+    """The emblem, large, in open sky over the sunny city, with the name under it: the picture to
+    use wherever the addon is shown as itself and not by what it does."""
+    scene = brand.landscape(w, round(h * 0.50))
+    gap = h - scene.height
+    canvas = Image.new("RGBA", (w, h), (0, 0, 0, 255))
+    strip = scene.convert("RGB").crop((0, 0, w, 8)).resize((max(2, w // 48), 1), Image.BOX).resize((w, 1), Image.BICUBIC)
+    sky = np.asarray(strip.resize((w, gap), Image.NEAREST)).astype(np.float32)
+    sky = sky * np.linspace(0.78, 1.0, gap, dtype=np.float32)[:, None, None] + brand.noise((w, gap), 1.6, 5)
+    canvas.paste(Image.fromarray(np.clip(sky, 0, 255).astype(np.uint8), "RGB"), (0, 0))
+    canvas.alpha_composite(scene, (0, gap))
+
+    size = round(h * 0.46)
+    cx, cy = w // 2, round(h * 0.285)
+    y, x = np.mgrid[0:h, 0:w].astype(np.float32)
+
+    def veil(colour, strength):
+        layer = np.zeros((h, w, 4), np.float32)
+        layer[..., :3] = colour
+        layer[..., 3] = np.clip(strength, 0, 1) * 255
+        canvas.alpha_composite(Image.fromarray(layer.astype(np.uint8), "RGBA"))
+
+    # A soft light behind the emblem, and a deeper blue behind the lettering so it reads over the roofs.
+    veil((255, 246, 214), np.clip(1 - np.hypot(x - cx, y - cy) / (size * 0.95), 0, 1) ** 2 * 0.45)
+    veil((8, 30, 70), np.clip(1 - np.hypot((x - cx) / (0.50 * w), (y - 0.70 * h) / (0.20 * h)), 0, 1) ** 1.1 * 0.62)
+    veil((8, 30, 70), np.clip((y - (h - 0.13 * h)) / (0.13 * h), 0, 1) ** 1.4 * 0.80)
+
+    emblem = make_art.emblem(size)
+    pad = round(size * 0.2)  # room for the shadow to fade out in, or its edge would show as a box
+    shade = Image.new("L", (size + 2 * pad, size + 2 * pad), 0)
+    shade.paste(emblem.getchannel("A").point(lambda v: int(v * 0.60)), (pad, pad))
+    shadow = Image.new("RGBA", shade.size, (4, 20, 48, 255))
+    shadow.putalpha(shade.filter(ImageFilter.GaussianBlur(size * 0.035)))
+    over(canvas, shadow, cx - size / 2 - pad, cy - size / 2 - pad + size * 0.05)
+    over(canvas, emblem, cx - size / 2, cy - size / 2)
+
+    brand.title_text(canvas, (w / 2, h * 0.655), TITLE, h * 0.155)
+    brand.shadow_text(canvas, (w / 2, h * 0.655 + h * 0.112), TAGLINE, h * 0.042, (238, 240, 248, 255), "SemiBold", spread=7)
+    brand.shadow_text(canvas, (w / 2, h - 26), "Emblem and scenery drawn for the addon.", 18 * h / 1080, (206, 210, 224, 255), "Medium",
+                      spread=4, strength=0.9)
+    return canvas
+
+
 # ---------------------------------------------------------------------------
 # Feature pictures: a dark slide with the emblem and a headline, filled with cards
 # ---------------------------------------------------------------------------
@@ -770,6 +814,7 @@ PICTURES = {
     "auras": (auras, os.path.join(GALLERY, "05-auras.png")),
     "looks": (looks, os.path.join(GALLERY, "06-looks.png")),
     "arrange": (arrange, os.path.join(GALLERY, "07-arrange.png")),
+    "logo-picture": (logo_picture, os.path.join(GALLERY, "08-logo.png")),
     "banner": (banner, os.path.join(DOCS, "banner.png")),
     "social": (social, os.path.join(DOCS, "social.png")),
     "web": (web_copies, WEB),

@@ -37,28 +37,58 @@ error it caught: please open an issue with that text.
 
 ## What you get
 
-- **Seven frames**: player, target, target of target, focus, pet, party, and raid for 10, 20 or
-  40 players. Each can be switched off, sized, scaled and moved on its own.
-- **Health and power bars** coloured by class, by friend or foe, by how much health is left, or
-  plain. Health and power as exact numbers, short numbers, a percentage, or what is missing.
-- **Buffs and debuffs** as icons with their time left and stacks, debuffs rimmed in the colour of
-  their kind. On the target, optionally only your own.
-- **Cast bars** for player, target, focus and pet, with a shield on a cast that cannot be
-  interrupted and a moment of red when one is.
-- **For groups**: members out of range fade, an outline appears on whoever is being attacked,
-  healing on its way shows past the end of the health bar, and a frame lights up in the colour of
-  a debuff you can remove.
-- **Marks**: raid icons, the leader's crown, resting, in combat, ready-check answers, and a
-  resurrection on its way.
-- **Combo points** on the target for rogues and druids, **totems** under the player for shamans.
-- **Three looks** (Slate, Night, Hearth) and three bar textures, all drawn for this addon.
-- **Party frames when alone**, if you like to see yourself there, and no second copy of your own
-  cast bar on your own party frame.
-- **Profiles** you can copy, switch per character, and carry in and out of the game as text.
-- English, German, Spanish and French.
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="curseforge/web/02-frames.jpg" alt="A game screen with all seven frames labelled: raid, party, focus, pet, player, target, target of target">
+      <b>Seven frames, yours to arrange.</b> Player, target, target of target, focus, pet, party,
+      and raid for 10, 20 or 40. Each can be switched off, sized, scaled and moved on its own.
+    </td>
+    <td width="50%" valign="top">
+      <img src="curseforge/web/03-groups.jpg" alt="Party frames with a threat outline, incoming heal, removable debuff and range fade, beside a raid of twenty">
+      <b>Your group, at a glance.</b> An outline on whoever is being attacked, healing on its way
+      past the end of the bar, a frame lit in the colour of a debuff you can remove, and members
+      out of range faded.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="curseforge/web/04-combat.jpg" alt="A checklist of what keeps working in a fight, beside a hostile target with debuffs, a threat outline and a shielded cast bar">
+      <b>Built for how Forever fights.</b> In a fight the game seals health, names, casts and auras
+      from addons. These frames are written around that, and a late joiner gets a frame at once.
+    </td>
+    <td width="50%" valign="top">
+      <img src="curseforge/web/05-auras.jpg" alt="Debuff icons rimmed by kind, three cast bars, and the four places icons can go">
+      <b>Buffs, debuffs and cast bars.</b> Icons with time left and stacks, debuffs rimmed in the
+      colour of their kind, on the target only your own if you like. Cast bars with a shield on a
+      cast that cannot be interrupted and a moment of red when one is.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <img src="curseforge/web/06-looks.jpg" alt="The same frames in the themes Slate, Night and Hearth, with smooth, flat and glass bars">
+      <b>Three looks, three textures.</b> Slate, Night and Hearth, all drawn for this addon. Health
+      coloured by class, by friend or foe, by how much is left, or plain; numbers exact, short, as
+      a percentage, or as what is missing.
+    </td>
+    <td width="50%" valign="top">
+      <img src="curseforge/web/07-arrange.jpg" alt="Green handles on the frames of a game screen, one being dragged, and the list of commands">
+      <b>Unlock, drag, done.</b> A handle on every frame, and everything else in the options, frame
+      by frame. Profiles can be copied, switched per character, and carried in and out as text.
+    </td>
+  </tr>
+</table>
+
+Also in there: raid icons, the leader's crown, resting, in combat, ready-check answers and a
+resurrection on its way; combo points on the target for rogues and druids and totems under the
+player for shamans; party frames when you are alone, if you like to see yourself there; English,
+German, Spanish and French.
 
 A click on a frame targets the unit, a right click opens its menu, and addons that bind spells to
 clicks on unit frames find these frames where they look for them.
+
+<sub>The pictures on this page are illustrations, not screenshots, drawn by <code>tools/make_listing.py</code>
+from the addon's own textures and layout numbers. The spell icons and raid marks in them are Blizzard's.</sub>
 
 ## Install
 

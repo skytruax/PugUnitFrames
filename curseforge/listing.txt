@@ -3,17 +3,30 @@ The project does not exist yet: you create it by hand at https://authors.cursefo
 (Create a project > World of Warcraft > Addons). Everything below is ready to paste or upload.
 
 Name
-    Free Unit Frames
+    Free Unit Frames - PitBull-Style, Lighter, Ready to Play
 
-    CurseForge search matches a project's name, summary and author, not its description, and puts
-    name matches first. "Unit Frames" is what people type. The game's name and version numbers
-    stay out of it: the naming rule forbids them.
+    56 characters. It says what you asked for (like PitBull, but better) in two things that are
+    true today: lighter (one small folder, no libraries) and ready to play (no setup). PitBull's
+    own page lists Retail, MoP Classic, Classic and Classic TBC and no Forever (looked at on
+    2026-11-23), so "PitBull-style" is also what a PitBull player on Forever will type.
+
+    Why "Forever" is in the summary and not in the name: CurseForge's Moderation Policies say
+    "Names should not contain game name, class name versions, file versions ect...." Other
+    projects have the word in their names and are listed, so it is not always enforced, but a
+    rejected name costs a day.
+
+    Why not "better": it is a claim PitBull's players will test against PitBull's options, of
+    which it has far more than a first version does. If you want it said anyway:
+        Free Unit Frames - Like PitBull for Forever, but Better     (also has the game's name in it)
+    Without the other addon's name at all:
+        Free Unit Frames - Light Player, Target, Party & Raid Frames
 
 Summary
-    Clean, light unit frames: player, target, target of target, focus, pet, party and raid (10, 20, 40), with auras, cast bars, threat, range and dispel highlights, themes and shareable profiles.
+    PitBull-style unit frames written from scratch for Forever: clean class-coloured player, target, focus, pet, party and raid frames that keep working in combat, with auras, cast bars, threat, range and dispel highlights. Light, no libraries, no setup.
 
-    188 characters; the field takes 256 and asks for one clear sentence. Search matches the
-    summary, so it carries the words people type: unit frames, party, raid, auras, cast bars.
+    250 characters; the field takes 256 and asks for one clear sentence. Search matches the name
+    and the summary, so between them they carry what people type: unit frames, PitBull, Forever,
+    party, raid, auras, cast bars.
 
 Main category        Unit Frames
 Additional category  Combat, HUDs
@@ -28,13 +41,13 @@ Logo
 Description
     curseforge/description.html, pasted into the editor's source view (the "<>" button).
     It is built from description.md by: python3 tools/make_listing.py description
-    Its pictures are the seven gallery pictures at a smaller size (curseforge/web/, loaded from
+    Its pictures are seven of the gallery pictures at a smaller size (curseforge/web/, loaded from
     GitHub), so there is nothing to upload for them. The "?v=" on each link is there so that a
     changed picture is fetched afresh: raise it in description.md when the pictures change.
 
 Images, in this order
     your own screenshots from the game first, then curseforge/gallery/01-hero.png to
-    07-arrange.png (1920 x 1080 each). They are illustrations and say so on the picture, with
+    08-logo.png (1920 x 1080 each). They are illustrations and say so on the picture, with
     the game's own spell icons and raid marks on the frames, credited to Blizzard on each one.
 
 File: the first one goes up by hand
