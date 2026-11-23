@@ -46,9 +46,16 @@ function Marks.Layout(frame, cfg, on)
 	local small = math.max(10, math.min(16, cfg.height * 0.36))
 	local big = math.max(12, math.min(22, cfg.height * 0.5))
 
+	-- The raid mark sits on the middle of the top edge. A wide frame has room for it inside, between
+	-- the name and the numbers, where it keeps clear of icons standing above the plate; a narrow
+	-- one has its name there, so the mark rides the edge.
 	marks.raid:ClearAllPoints()
 	marks.raid:SetSize(big, big)
-	marks.raid:SetPoint("CENTER", frame.body, "TOP", 0, 0)
+	if cfg.width < Frame.NARROW then
+		marks.raid:SetPoint("CENTER", frame.body, "TOP", 0, 0)
+	else
+		marks.raid:SetPoint("TOP", frame.body, "TOP", 0, -2 * frame.pixel)
+	end
 
 	marks.leader:ClearAllPoints()
 	marks.leader:SetSize(small, small)

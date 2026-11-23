@@ -422,6 +422,14 @@ Test("a raid mark is one cell of the game's sheet, chosen by a sealed number", f
 	False(mark:IsShown(), "mark taken off")
 end)
 
+Test("the raid mark sits inside a wide frame and rides the edge of a narrow one", function()
+	local ns = Login()
+	Equal("TOP", FreeUnitFrames_player.marks.raid.anchors[1][1], "inside, clear of icons above the plate")
+	Raid(3)
+	local button = ns.Group.Get("raid"):GetAttribute("child1")
+	Equal("CENTER", button.marks.raid.anchors[1][1], "on the edge, clear of the name")
+end)
+
 Test("leader, combat and resting marks follow the game", function()
 	local ns = Login()
 	local marks = FreeUnitFrames_player.marks

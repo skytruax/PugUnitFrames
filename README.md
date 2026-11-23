@@ -23,8 +23,8 @@
   <a href="#developing">Developing</a>
 </p>
 
-<p align="center"><sub>The picture above is an illustration built from the addon's own artwork, not a screenshot. Its
-title lettering is LifeCraft, a typeface by Eliot Truelove.</sub></p>
+<p align="center"><sub>The picture above is an illustration built from the addon's own artwork, not a screenshot. The
+spell icons and raid marks in it are Blizzard's, and its title lettering is LifeCraft, a typeface by Eliot Truelove.</sub></p>
 
 ---
 
@@ -121,6 +121,7 @@ tools/
   sim/                 the simulator run: Blizzard's real interface code, in Docker
   make_art.py          draws every texture the addon ships
   make_listing.py      draws the banner, the logo and the store pictures
+  game_icons.py        fetches the game's own spell icons and raid marks those pictures show
   brand.py             the look those pictures share with FreeControl's
   sealed_list.py       makes tools/sealed_apis.txt from Blizzard's API documentation
 ```
@@ -150,6 +151,12 @@ The pictures and textures are drawn by scripts too (`pip install pillow numpy`):
 python3 tools/make_art.py            # the textures in FreeUnitFrames/Art
 python3 tools/make_listing.py        # docs/banner.png, docs/social.png, the logo, curseforge/gallery
 ```
+
+The pictures show the game's own spell icons and raid marks, as the frames do in the game. Those
+are Blizzard Entertainment's and are not part of this repository: `tools/game_icons.py` fetches
+them into a git-ignored folder from a [public mirror](https://github.com/Gethe/wow-ui-textures) of
+the game's interface art when the pictures are built (`--placeholders` draws stand-ins instead).
+The addon itself ships no icon: it hands whatever the game names back to the game to draw.
 
 ## Licence
 

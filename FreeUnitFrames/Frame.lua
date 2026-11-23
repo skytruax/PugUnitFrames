@@ -25,6 +25,9 @@ ns.Elements = {}
 
 local Style = ns.Style
 
+-- Frames less wide than this (raid frames) are laid out the narrow way: name in the middle.
+Frame.NARROW = 110
+
 -- How far above its button a frame's plate is drawn. The levels in between are for what shows
 -- from under the plate (the threat outline).
 Frame.BODY_LEVEL = 6

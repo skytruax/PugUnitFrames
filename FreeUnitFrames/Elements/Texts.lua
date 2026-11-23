@@ -14,7 +14,7 @@ Texts.events = {
 	"UNIT_HEALTH", "UNIT_MAXHEALTH", "UNIT_POWER_UPDATE", "UNIT_MAXPOWER", "UNIT_DISPLAYPOWER",
 }
 
-local NARROW = 110 -- frames less wide than this are laid out the narrow way
+local NARROW = Frame.NARROW
 local PAD = 4
 
 function Texts.Wanted(cfg)

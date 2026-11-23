@@ -34,7 +34,8 @@ Description
 
 Images, in this order
     your own screenshots from the game first, then curseforge/gallery/01-hero.png to
-    07-arrange.png (1920 x 1080 each). They are illustrations and say so on the picture.
+    07-arrange.png (1920 x 1080 each). They are illustrations and say so on the picture, with
+    the game's own spell icons and raid marks on the frames, credited to Blizzard on each one.
 
 File: the first one goes up by hand
     dist/FreeUnitFrames-0.1.0.zip   (tools/package.sh builds it; dist/ is not in the repository)
