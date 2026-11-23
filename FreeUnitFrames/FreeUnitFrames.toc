@@ -8,6 +8,7 @@
 ## Author: Sky Truax
 ## X-License: MIT
 ## X-Website: https://github.com/skytruax/FreeUnitFrames
+## X-Curse-Project-ID: 1826652
 ## IconTexture: Interface\AddOns\FreeUnitFrames\Art\Logo
 ## SavedVariables: FreeUnitFramesDB
 ## SavedVariablesPerCharacter: FreeUnitFramesCharDB

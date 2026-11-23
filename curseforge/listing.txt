@@ -1,6 +1,9 @@
 What goes in which field of the CurseForge project form (World of Warcraft > Addons).
-The project does not exist yet: you create it by hand at https://authors.curseforge.com/
-(Create a project > World of Warcraft > Addons). Everything below is ready to paste or upload.
+
+Project
+    id 1826652, created by hand on 2026-11-23
+    https://authors.curseforge.com/#/projects/1826652/general
+    public page, once CurseForge has reviewed it: https://www.curseforge.com/projects/1826652
 
 Name
     Free Unit Frames - PitBull-Style, but Lighter: Player, Target, Focus, Pet, Party & Raid Frames with Cast Bars, Auras and Threat
@@ -65,23 +68,26 @@ Images, in this order
     drawing a fight in the simulator; the others are illustrations. Each says on the picture what
     it is, and credits the game's spell icons and raid marks on the frames to Blizzard.
 
-File: the first one goes up by hand
+File: the first one went up by hand
     dist/FreeUnitFrames-0.1.0.zip   (tools/package.sh builds it; dist/ is not in the repository)
     Release type    Release
     Game version    World of Warcraft: Forever, 1.60.1
     Changelog       the v0.1.0 section of CHANGELOG.md (markup type: Markdown)
+    The one with the bundled font and the shadows is 299 KB; a zip built before 15:26 on
+    2026-11-23 is a fraction of that and has the first look.
     A new project, and each new file, is public once CurseForge has reviewed it.
 
 Later versions: by pushing a tag
-    Once the project exists it has an id (the number in its author-console address).
-    1. Put it in FreeUnitFrames/FreeUnitFrames.toc as a line "## X-Curse-Project-ID: <id>".
-    2. Give this repository the upload token as a secret named CF_API_TOKEN. It is the author
-       API token FreeControl's repository already uses (authors.curseforge.com > API tokens);
-       the Core API key you can apply for separately is a different thing and is not needed
-       for any of this. With gh: gh secret set CF_API_TOKEN -R skytruax/FreeUnitFrames
+    1. The project id is in FreeUnitFrames/FreeUnitFrames.toc ("## X-Curse-Project-ID: 1826652").
+    2. Still to do: give this repository the upload token as a secret named CF_API_TOKEN. It is
+       the author API token FreeControl's repository already uses (authors.curseforge.com >
+       API tokens); the Core API key you can apply for separately is a different thing and is
+       not needed for any of this. With gh: gh secret set CF_API_TOKEN -R skytruax/FreeUnitFrames
     3. Push a version tag (git tag -a v0.1.1 -m "Free Unit Frames 0.1.1"; git push origin v0.1.1).
        The release workflow builds the zip, makes a GitHub release and sends the file to
        CurseForge with CHANGELOG.md as its changelog.
+    A tag pushed while the secret is not there makes the GitHub release only. That is the way to
+    give GitHub a v0.1.0 without a second copy of it going to CurseForge.
 
 GitHub
     docs/social.png goes in the repository's Settings > Social preview (that one cannot be set
