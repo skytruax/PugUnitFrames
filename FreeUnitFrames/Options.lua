@@ -17,7 +17,8 @@ local COLUMN = 330
 -- What the settings are called
 ---------------------------------------------------------------------------
 local SETTING_LABELS = {
-	theme = "Theme", texture = "Bar texture", fontSize = "Text size", outline = "Outlined text",
+	theme = "Theme", texture = "Bar texture", font = "Font", fontSize = "Text size", outline = "Outlined text",
+	shadows = "Shadows under frames",
 	smooth = "Bars glide to a new value", farAlpha = "Out-of-range members fade to", tooltips = "Tooltips on frames",
 	enabled = "Show this frame", width = "Width", height = "Height", scale = "Scale",
 	powerHeight = "Power bar height", color = "Health colour", healthText = "Health text", powerText = "Power text",
@@ -36,6 +37,7 @@ local SETTING_LABELS = {
 local CHOICE_LABELS = {
 	theme = { slate = "Slate", night = "Night", hearth = "Hearth" },
 	texture = { smooth = "Smooth", flat = "Flat", glass = "Glass" },
+	font = { inter = "Inter", game = "The game's font" },
 	tooltips = { always = "Always", calm = "Out of combat", never = "Never" },
 	color = { class = "Class", reaction = "Friend or foe", health = "By health", plain = "Plain" },
 	healthText = { none = "None", value = "Exact (1,234,567)", short = "Short (1234K)", percent = "Percent (87%)", both = "Short and percent", max = "Short / maximum", deficit = "What is missing" },

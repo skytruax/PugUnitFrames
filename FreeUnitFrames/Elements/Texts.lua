@@ -45,8 +45,10 @@ function Texts.Layout(frame, cfg, on)
 	local narrow = cfg.width < NARROW
 	local showHealth, showPower = cfg.healthText ~= "none", cfg.powerText ~= "none"
 
-	Style.SetFont(texts.level, 0)
-	Style.SetFont(texts.name, 0)
+	-- On a tall plate the name is set a size larger than the numbers beside it.
+	local tall = not narrow and cfg.height >= 40
+	Style.SetFont(texts.level, tall and 1 or 0)
+	Style.SetFont(texts.name, tall and 1 or 0)
 	Style.SetFont(texts.health, narrow and -1 or 0)
 	Style.SetFont(texts.power, -2)
 	texts.name:SetTextColor(theme.text[1], theme.text[2], theme.text[3])
@@ -111,6 +113,11 @@ end
 -- "60", "62+" for an elite, "??" for something too far above the player to tell.
 local CLASSIFICATION_SUFFIX = { elite = "+", rareelite = "+", worldboss = "+", rare = "" }
 
+-- How far the game's difficulty colours are lifted towards white. As they come, the red of a
+-- deadly fight is the red of the hostile bar it is written on, and the grey of an easy one is
+-- lost on any bar.
+local LIFT = 0.45
+
 local function ShowLevel(text, unit)
 	local level = UnitLevel(unit)
 	local label = level and level > 0 and tostring(level) or "??"
@@ -118,7 +125,7 @@ local function ShowLevel(text, unit)
 	if UnitCanAttack("player", unit) then
 		-- The game's own colour for how hard a fight it would be.
 		local color = GetCreatureDifficultyColor(level and level > 0 and level or 999)
-		text:SetTextColor(color.r, color.g, color.b)
+		text:SetTextColor(color.r + (1 - color.r) * LIFT, color.g + (1 - color.g) * LIFT, color.b + (1 - color.b) * LIFT)
 	else
 		-- Someone who cannot be fought: the same tone as the name, so it reads on any bar.
 		local plain = Style.theme.text

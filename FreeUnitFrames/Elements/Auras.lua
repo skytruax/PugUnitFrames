@@ -88,6 +88,7 @@ local function PlaceIcon(frame, button, slot)
 	button.cooldown:ClearAllPoints()
 	button.cooldown:SetAllPoints(button.icon)
 	Style.SetFont(button.count, size >= 20 and -1 or -3)
+	button.count:SetTextColor(Style.theme.text[1], Style.theme.text[2], Style.theme.text[3])
 	-- Icons on the plate itself let the mouse through, so a click there still picks the unit.
 	button:EnableMouse(side ~= "inside")
 end

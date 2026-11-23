@@ -13,7 +13,9 @@
   curseforge/gallery/06-looks.png      the three themes and three bar textures
   curseforge/gallery/07-arrange.png    moving frames, and the commands
   curseforge/gallery/08-logo.png       the emblem and the name, large
-  curseforge/web/*.jpg                 the same eight at 1280 x 720, a fraction of the size: what
+  curseforge/gallery/09-in-play.png    the simulator's picture of a fight (docs/sim-screenshot.png,
+                                       which tools/sim/run.sh writes) with a headline and its note
+  curseforge/web/*.jpg                 the same nine at 1280 x 720, a fraction of the size: what
                                        the description page loads, so it opens quickly
   docs/banner.png                      the README header
   docs/social.png                      for GitHub's Settings > Social preview
@@ -23,8 +25,9 @@
 
     python3 tools/make_listing.py --placeholders   # with drawn stand-ins for the spell icons
 
-Every picture is an illustration built from the addon's own textures, colours and layout numbers,
-and says so on the picture: the frames are drawn here the way Frame.lua lays them out. The spell
+Every picture but one is an illustration built from the addon's own textures, colours and layout
+numbers, and says so on the picture: the frames are drawn here the way Frame.lua lays them out.
+The one is 09-in-play, whose frames the addon's own code drew in the simulator. The spell
 icons and raid marks on them are the game's own, as they are in the game, where the addon hands
 whatever icon the game names straight back to the game to draw. Those are Blizzard's: they are
 fetched by tools/game_icons.py when the pictures are built and credited on each picture.
@@ -63,14 +66,14 @@ def note():
 # ---------------------------------------------------------------------------
 # The addon's look, as Style.lua and Defaults.lua have it (theme Slate)
 # ---------------------------------------------------------------------------
-# name -> back, edge, trough, text, quiet (0-255), tone: the three themes of Style.lua
+# name -> back, edge, text, quiet (0-255), tone, shade, veil: the three themes of Style.lua
 THEMES = {
-    "Slate": dict(back=(13, 15, 18, 230), edge=(0, 0, 0, 255), trough=(36, 38, 43, 255), text=(242, 242, 237, 255),
-                  quiet=(161, 168, 176, 255), tone=0.84),
-    "Night": dict(back=(8, 10, 20, 235), edge=(3, 3, 8, 255), trough=(23, 28, 46, 255), text=(230, 237, 255, 255),
-                  quiet=(140, 158, 199, 255), tone=0.78),
-    "Hearth": dict(back=(26, 18, 13, 230), edge=(5, 3, 0, 255), trough=(51, 38, 28, 255), text=(255, 245, 224, 255),
-                   quiet=(199, 173, 138, 255), tone=0.92),
+    "Slate": dict(back=(13, 15, 18, 230), edge=(0, 0, 0, 255), text=(242, 242, 237, 255),
+                  quiet=(161, 168, 176, 255), tone=0.84, shade=0.70, veil=(0.00, 0.00, 0.00)),
+    "Night": dict(back=(8, 10, 20, 235), edge=(3, 3, 8, 255), text=(230, 237, 255, 255),
+                  quiet=(140, 158, 199, 255), tone=0.78, shade=0.74, veil=(0.02, 0.05, 0.16)),
+    "Hearth": dict(back=(26, 18, 13, 230), edge=(5, 3, 0, 255), text=(255, 245, 224, 255),
+                   quiet=(199, 173, 138, 255), tone=0.92, shade=0.66, veil=(0.15, 0.08, 0.03)),
 }
 SLATE = THEMES["Slate"]
 TEXT, QUIET = SLATE["text"], SLATE["quiet"]
@@ -82,7 +85,9 @@ CLASS = {
 }
 POWER = {"MANA": (0.27, 0.53, 0.93), "RAGE": (0.83, 0.24, 0.22), "ENERGY": (0.94, 0.82, 0.31), "FOCUS": (0.92, 0.56, 0.27)}
 HOSTILE = (0.84, 0.29, 0.24)
+GONE = (0.42, 0.43, 0.45)  # the bar of someone dead or offline
 CAST = (0.93, 0.74, 0.28)
+EASY = (185, 185, 185, 255)  # the level of a creature far below the player: the game's grey, lifted as Texts.lua lifts it
 HEAL = (0.45, 0.92, 0.55)
 THREAT = (0.90, 0.22, 0.18)
 THREAT_TEXT = (242, 108, 96, 255)
@@ -98,10 +103,22 @@ def art(name):
     return Image.open(os.path.join(ART, name + ".tga")).convert("RGBA")
 
 
-def bar_fill(width, height, colour, alpha=255, texture="Bar-Smooth"):
-    """A piece of one of the addon's bar textures at this size, in this colour (0-255 per channel)."""
+def readable(colour):
+    """A very light colour taken down far enough for light lettering to stand out on it, as
+    Style.Readable does (colour as 0-255 per channel)."""
+    light = (0.30 * colour[0] + 0.59 * colour[1] + 0.11 * colour[2]) / 255
+    if light > 0.62:
+        return tuple(round(channel * 0.62 / light) for channel in colour)
+    return tuple(colour)
+
+
+def bar_fill(width, height, colour, alpha=255, texture="Bar-Smooth", share=1.0):
+    """A piece of one of the addon's bar textures at this size, in this colour (0-255 per channel).
+    `share` is how full the bar is: the game shows that much of the picture, from its empty end."""
     width, height = max(1, round(width)), max(1, round(height))
-    grey = np.asarray(art(texture).convert("L").resize((width, height), Image.BILINEAR), np.float32) / 255
+    picture = art(texture).convert("L")
+    picture = picture.crop((0, 0, max(1, round(picture.width * min(1.0, max(0.0, share)))), picture.height))
+    grey = np.asarray(picture.resize((width, height), Image.BILINEAR), np.float32) / 255
     rgba = np.empty((height, width, 4), np.float32)
     rgba[..., :3] = grey[..., None] * np.asarray(colour, np.float32)
     rgba[..., 3] = alpha
@@ -114,8 +131,8 @@ def rect(canvas, x0, y0, x1, y1, fill):
         canvas.alpha_composite(Image.new("RGBA", (x1 - x0, y1 - y0), fill), (x0, y0))
 
 
-def label(canvas, xy, string, size, fill=TEXT, weight="Bold", anchor="lm"):
-    """Text with the soft one-pixel shadow the addon gives its lettering."""
+def label(canvas, xy, string, size, fill=TEXT, weight="SemiBold", anchor="lm"):
+    """Text in the addon's own font (Inter SemiBold), with the soft one-pixel shadow it gives its lettering."""
     offset = max(1, round(size * 0.09))
     draw = ImageDraw.Draw(canvas)
     font = brand.font(size, weight)
@@ -186,7 +203,20 @@ def cast_bar(canvas, left, top, k, width, height, spell, done, icon, shield=Fals
     bar_w = left + w - px - bar_left
     colour = (0.86, 0.24, 0.20) if interrupted else CAST
     share = 1.0 if interrupted else done
-    canvas.alpha_composite(bar_fill(bar_w * share, square, toned(colour, tone), texture=texture), (bar_left, top + px))
+    # Behind the fill, the cast colour under the theme's veil, as the empty part of a health bar is.
+    trough = tuple(round(channel * (1 - theme["shade"]) + 255 * veil * theme["shade"])
+                   for channel, veil in zip(toned(CAST, tone), theme["veil"]))
+    canvas.alpha_composite(bar_fill(bar_w, square, trough, texture=texture), (bar_left, top + px))
+    canvas.alpha_composite(bar_fill(bar_w * share, square, toned(colour, tone), texture=texture, share=share), (bar_left, top + px))
+    if not interrupted and 0 < share < 1:  # the bright edge on the end of the fill, cut off at the bar's ends
+        glow = art("Spark").resize((max(2, round(max(8, height) * k)), square), Image.LANCZOS)
+        glow.putalpha(glow.getchannel("A").point(lambda v: int(v * 0.75)))
+        lit = Image.new("RGBA", (bar_w, square), (0, 0, 0, 0))
+        over(lit, glow, round(bar_w * share - glow.width / 2), 0)
+        box = (bar_left, top + px, bar_left + bar_w, top + px + square)
+        under = np.asarray(canvas.crop(box), np.float32)  # the edge is added to what is under it, as in the game
+        under[..., :3] = np.clip(under[..., :3] + np.asarray(lit.getchannel("A"), np.float32)[..., None], 0, 255)
+        canvas.paste(Image.fromarray(under.astype(np.uint8), "RGBA"), box[:2])
     label(canvas, (bar_left + 4 * k, top + h / 2), "Interrupted" if interrupted else spell, font_size * k, theme["text"])
     if shield and not interrupted:
         canvas.alpha_composite(art("Mark-Shield").resize((square, square), Image.LANCZOS), (left + w - px - square - round(2 * k), top + px))
@@ -196,20 +226,25 @@ def cast_bar(canvas, left, top, k, width, height, spell, done, icon, shield=Fals
 def frame(canvas, left, top, k, width, height, power_height, name, colour, share, power=None, power_share=1.0,
           level=None, right=None, sub=None, leader=False, dead=False, faded=False, heal=0.0, threat=False,
           cast=None, cast_height=16, auras=(), aura_size=20, aura_side="right", narrow=False, font_size=11,
-          theme=SLATE, texture="Bar-Smooth", lit=None, shield=False, points=0, mark=None, raid_mark=None, shadow=False):
+          theme=SLATE, texture="Bar-Smooth", lit=None, shield=False, points=0, mark=None, raid_mark=None, shadow=False,
+          level_colour=None):
     """Draws a frame with its top left corner at (left, top). k is how many picture pixels one
     of the addon's units takes. Returns the frame's bottom edge in the picture."""
     left, top = round(left), round(top)
     px = max(1, round(k))  # the one-pixel edge
     w, h = round(width * k), round(height * k)
     layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
-    BACK, EDGE, TROUGH, TEXT, QUIET, tone = theme["back"], theme["edge"], theme["trough"], theme["text"], theme["quiet"], theme["tone"]
+    BACK, EDGE, TEXT, QUIET, tone = theme["back"], theme["edge"], theme["text"], theme["quiet"], theme["tone"]
+    left_over = 1 - theme["shade"]  # how much of a bar's colour shows in its empty part
 
     def toned(colour):
         return tuple(round(255 * channel * tone) for channel in colour)
 
-    def bar_fill(width, height, colour, alpha=255):
-        return globals()["bar_fill"](width, height, colour, alpha, texture)
+    def dimmed(colour):
+        return tuple(round(channel * left_over + 255 * veil * theme["shade"]) for channel, veil in zip(colour, theme["veil"]))
+
+    def bar_fill(width, height, colour, alpha=255, share=1.0):
+        return globals()["bar_fill"](width, height, colour, alpha, texture, share)
 
     if shadow and not faded:
         shadow_under(canvas, (left, top, left + w, top + h))
@@ -225,22 +260,26 @@ def frame(canvas, left, top, k, width, height, power_height, name, colour, share
     health_top = top + px
     health_bottom = top + h - (power_h + 2 * px if power_h > 0 else px)
     bar_w = bar_right - bar_left
-    rect(layer, bar_left, health_top, bar_right, health_bottom, TROUGH)
+    # The empty part of the bar is the bar's own colour, darkened; grey for someone dead.
+    painted = readable(toned(colour))
     shown = 0.0 if dead else share
+    layer.alpha_composite(bar_fill(bar_w, health_bottom - health_top, dimmed(toned(GONE) if dead else painted)), (bar_left, health_top))
     if shown > 0:
-        layer.alpha_composite(bar_fill(bar_w * shown, health_bottom - health_top, toned(colour)), (bar_left, health_top))
+        layer.alpha_composite(bar_fill(bar_w * shown, health_bottom - health_top, painted, share=shown), (bar_left, health_top))
     if heal > 0 and not dead:
         reach = min(heal, 1 - shown)
         if reach > 0:
             layer.alpha_composite(bar_fill(bar_w * reach, health_bottom - health_top, tuple(round(255 * c) for c in HEAL), 140),
                                   (bar_left + round(bar_w * shown), health_top))
     if power_h > 0:
-        rect(layer, bar_left, top + h - px - power_h, bar_right, top + h - px, TROUGH)
+        ran_on = toned(POWER[power]) if power else toned(GONE)
+        layer.alpha_composite(bar_fill(bar_w, power_h, dimmed(ran_on)), (bar_left, top + h - px - power_h))
         if power and power_share > 0:
-            layer.alpha_composite(bar_fill(bar_w * power_share, power_h, toned(POWER[power])), (bar_left, top + h - px - power_h))
+            layer.alpha_composite(bar_fill(bar_w * power_share, power_h, ran_on, share=power_share), (bar_left, top + h - px - power_h))
 
     middle = (health_top + health_bottom) / 2
     size, pad = font_size * k, 4 * k
+    name_size = size + (k if not narrow and height >= 40 else 0)  # on a tall plate the name is a size larger
     if narrow:
         if right:
             label(layer, (left + w / 2, middle - size * 0.55), name, size, TEXT, anchor="mm")
@@ -250,9 +289,9 @@ def frame(canvas, left, top, k, width, height, power_height, name, colour, share
     else:
         x = bar_left + pad
         if level:
-            label(layer, (x, middle), level, size, TEXT)
-            x += ImageDraw.Draw(layer).textlength(level, font=brand.font(size)) + 3 * k
-        label(layer, (x, middle), name, size, TEXT)
+            label(layer, (x, middle), level, name_size, level_colour or TEXT)
+            x += ImageDraw.Draw(layer).textlength(level, font=brand.font(name_size, "SemiBold")) + 3 * k
+        label(layer, (x, middle), name, name_size, TEXT)
         if right and sub:
             label(layer, (bar_right - pad, middle - size * 0.5), right, size, TEXT, anchor="rm")
             label(layer, (bar_right - pad, middle + size * 0.62), sub, size * 0.82, QUIET, "SemiBold", "rm")
@@ -270,9 +309,9 @@ def frame(canvas, left, top, k, width, height, power_height, name, colour, share
         picture = art("Mark-" + which).resize((size_px, size_px), Image.LANCZOS)
         if where == "center":
             layer.alpha_composite(picture, (round(left + w / 2 - size_px / 2), round(top + h / 2 - size_px / 2)))
-        else:
-            small = round(size_px * 0.72)
-            layer.alpha_composite(picture.resize((small, small), Image.LANCZOS), (round(left), round(top + h - small / 2)))
+        else:  # on the top edge, beside the place of the leader's mark
+            small = round(max(10, min(16, height * 0.36)) * k)
+            over(layer, picture.resize((small, small), Image.LANCZOS), left + small + 2 * k, top - small / 2)
 
     if leader:
         crown = round(max(10, min(16, height * 0.36)) * k)
@@ -363,7 +402,8 @@ def stage(canvas, cx, cy, k):
           leader=True, cast=("Holy Light", 0.62, "Holy Light"), shadow=True)
     left, top = at(-74, -34)
     frame(canvas, left, top, k, 232, 46, 9, "Hogger", HOSTILE, 0.42, "RAGE", 0.35, level="11+", right="279  42%", sub="35",
-          auras=[BLEED, CURSE, POISON, MAGIC] + BUFFS[:2], aura_size=22, aura_side="above", raid_mark=8, points=3, shadow=True)
+          auras=[BLEED, CURSE, POISON, MAGIC] + BUFFS[:2], aura_size=22, aura_side="above", raid_mark=8, points=3, shadow=True,
+          level_colour=EASY)
 
     # Raid: narrow frames of 82 x 40, five to a column.
     for index, (name, cls, share) in enumerate(RAID):
@@ -607,7 +647,8 @@ def frames():
     small_caps(canvas, (x0 + 610 + round(232 * k) / 2, bottom + 26), "Player", anchor="mm")
 
     bottom = frame(canvas, x0 + 1010, y0 + 436, k, 232, 46, 9, "Hogger", HOSTILE, 0.42, "RAGE", 0.35, level="11+", right="279  42%",
-                   sub="35", auras=[BLEED, CURSE, POISON, MAGIC] + BUFFS, aura_size=22, aura_side="above", points=3, raid_mark=8)
+                   sub="35", auras=[BLEED, CURSE, POISON, MAGIC] + BUFFS, aura_size=22, aura_side="above", points=3, raid_mark=8,
+                   level_colour=EASY)
     small_caps(canvas, (x0 + 1010 + round(232 * k) / 2, bottom + 26), "Target", anchor="mm")
 
     frame(canvas, x0 + 1010 + round(232 * k) + 16, y0 + 458, k, 124, 28, 4, "Halla", CLASS["PALADIN"], 0.71, "MANA", 0.58, right="71%")
@@ -663,7 +704,7 @@ def combat():
     small_caps(canvas, (left, top - round(25 * k) - 26), "Debuffs, rimmed by kind")
     bottom = frame(canvas, left, top, k, 232, 46, 9, "Hogger", HOSTILE, 0.42, "RAGE", 0.35, level="11+", right="279  42%", sub="35",
                    auras=[BLEED, CURSE, POISON, MAGIC], aura_size=22, aura_side="above", raid_mark=8,
-                   cast=("Enrage", 0.48, "Enrage"), shield=True, threat=True)
+                   cast=("Enrage", 0.48, "Enrage"), shield=True, threat=True, level_colour=EASY)
     small_caps(canvas, (left, bottom + 34), "A shield: this cast cannot be interrupted")
     small_caps(canvas, (left, bottom + 72), "The red outline: it is on you", THREAT_TEXT)
     return canvas
@@ -779,6 +820,42 @@ def arrange():
 # ---------------------------------------------------------------------------
 # The description page
 # ---------------------------------------------------------------------------
+SIM_NOTE = ("Drawn by the addon's own code in a simulator of the game's interface, over a painted city. Not a screenshot of the game. "
+            "Spell icons and raid marks \u00a9 Blizzard Entertainment.")
+
+
+def in_play():
+    """The simulator's picture of the middle of a fight (tools/sim/run.sh writes docs/sim-screenshot.png),
+    with a headline in its open sky and the line that says what it is. Every frame in it was drawn
+    by the addon's code, not by this script."""
+    path = os.path.join(DOCS, "sim-screenshot.png")
+    canvas = Image.open(path).convert("RGBA")
+    if canvas.size != (W, H):
+        raise SystemExit("%s is %dx%d, not %dx%d: run tools/sim/run.sh first" % ((os.path.relpath(path, ROOT),) + canvas.size + (W, H)))
+    y, x = np.mgrid[0:H, 0:W].astype(np.float32)
+    # A soft shade behind the headline, in the sky's own blue, and a darker strip for the small print.
+    shade = np.zeros((H, W, 4), np.float32)
+    shade[..., :3] = (8, 30, 70)
+    shade[..., 3] = np.clip(1 - np.hypot((x - 1290) / 640, (y - 190) / 200), 0, 1) ** 1.3 * 0.46 * 255
+    canvas.alpha_composite(Image.fromarray(shade.astype(np.uint8), "RGBA"))
+    foot = np.zeros((H, W, 4), np.float32)
+    foot[..., :3] = (8, 30, 70)
+    foot[..., 3] = np.clip((y - (H - 0.11 * H)) / (0.11 * H), 0, 1) ** 1.4 * 0.82 * 255
+    canvas.alpha_composite(Image.fromarray(foot.astype(np.uint8), "RGBA"))
+
+    cx = 1290
+    canvas.alpha_composite(logo().resize((56, 56), Image.LANCZOS), (cx - 196, 62))
+    brand.shadow_text(canvas, (cx - 122, 91), TITLE, 30, WHITE, "Bold", "lm", spread=6)
+    halo = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+    brand.headline(halo, cx, 186, [("This is the addon ", (0, 0, 0, 200)), ("drawing.", (0, 0, 0, 200))], 78)
+    canvas.alpha_composite(halo.filter(ImageFilter.GaussianBlur(9)))
+    brand.headline(canvas, cx, 184, [("This is the addon ", WHITE), ("drawing.", GOLD)], 78)
+    brand.shadow_text(canvas, (cx, 262), "Its own code, running beside Blizzard's interface in a simulator.", 30, (238, 240, 248, 255),
+                      "Medium", spread=6)
+    brand.shadow_text(canvas, (W / 2, H - 26), SIM_NOTE, 18, (206, 210, 224, 255), "Medium", spread=4, strength=0.9)
+    return canvas
+
+
 WEB = os.path.join(OUT, "web")
 
 
@@ -815,6 +892,7 @@ PICTURES = {
     "looks": (looks, os.path.join(GALLERY, "06-looks.png")),
     "arrange": (arrange, os.path.join(GALLERY, "07-arrange.png")),
     "logo-picture": (logo_picture, os.path.join(GALLERY, "08-logo.png")),
+    "in-play": (in_play, os.path.join(GALLERY, "09-in-play.png")),
     "banner": (banner, os.path.join(DOCS, "banner.png")),
     "social": (social, os.path.join(DOCS, "social.png")),
     "web": (web_copies, WEB),

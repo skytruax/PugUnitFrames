@@ -7,6 +7,7 @@ _G.FreeUnitFrames = ns
 ns.name = ADDON
 ns.version = C_AddOns.GetAddOnMetadata(ADDON, "Version") or "dev"
 ns.ART = "Interface\\AddOns\\" .. ADDON .. "\\Art\\"
+ns.FONTS = "Interface\\AddOns\\" .. ADDON .. "\\Fonts\\"
 
 local L = ns.L
 
@@ -46,6 +47,11 @@ local function Record(text)
 			ns.Print("|cffff4040" .. L["Something went wrong inside Free Unit Frames, so a frame may not be updating. Type /freeuf status to see the error."] .. "|r")
 		end
 	end
+end
+
+-- Keeps a problem that is not a Lua error (a file the game would not load, say) with the errors.
+function ns.Report(text)
+	Record(tostring(text))
 end
 
 local function OnError(message)

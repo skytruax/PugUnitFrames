@@ -43,6 +43,10 @@
 #                          default: <addon>/tests/sim/screenshot.lua when it exists
 #       --size WxH         screenshot size in pixels            (default 1600x1200)
 #       --crop WxH+X+Y     crop the screenshot
+#       --ui-scale N       UIParent scale for the screenshot (2 draws every UI unit as 2 pixels)
+#       --fonts DIR        draw text with the font files in DIR. The simulator reads no font from an
+#                          addon's folder and has none of the game's: it falls back to the DejaVu
+#                          files of its image, and DIR (holding files of those names) takes their place
 #       --filter NAME      render only the frame subtree whose name contains NAME
 #       --settle SECONDS   simulated seconds to run after login in phase 1 (default 3, 0 = off)
 #       --class NAME       player class (default Paladin)   --race NAME   player race
@@ -57,6 +61,7 @@
 #
 # Environment
 #   SIM_IMAGE              image to use (default simlab/wow-ui-sim-forever:0.1.41, see build-image.sh)
+#   SIM_CPUSET             processors the containers may use, as docker's --cpuset-cpus takes them (e.g. 17 or 12-15)
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -71,6 +76,8 @@ run_shot=1
 scenario=""
 size="1600x1200"
 crop=""
+ui_scale=""
+fonts_dir=""
 filter=""
 settle="3"
 class=""
@@ -92,6 +99,8 @@ while [[ $# -gt 0 ]]; do
     --scenario) [[ $# -ge 2 ]] || die "$1 needs a value"; scenario="$2"; shift 2 ;;
     --size) [[ $# -ge 2 ]] || die "$1 needs a value"; size="$2"; shift 2 ;;
     --crop) [[ $# -ge 2 ]] || die "$1 needs a value"; crop="$2"; shift 2 ;;
+    --ui-scale) [[ $# -ge 2 ]] || die "$1 needs a value"; ui_scale="$2"; shift 2 ;;
+    --fonts) [[ $# -ge 2 ]] || die "$1 needs a value"; fonts_dir="$2"; shift 2 ;;
     --filter) [[ $# -ge 2 ]] || die "$1 needs a value"; filter="$2"; shift 2 ;;
     --settle) [[ $# -ge 2 ]] || die "$1 needs a value"; settle="$2"; shift 2 ;;
     --class) [[ $# -ge 2 ]] || die "$1 needs a value"; class="$2"; shift 2 ;;
@@ -136,6 +145,11 @@ warnings=()
 [[ $toc_match -eq 1 ]] || warnings+=("no TOC named $addon_name.toc: the client only loads a TOC whose name matches its folder")
 grep -Eqs '^## *Interface:.*\b16001\b' "${tocs[@]}" || warnings+=("no TOC lists '## Interface: 16001': the Forever client will flag the addon as out of date")
 [[ "$size" =~ ^([0-9]+)x([0-9]+)$ ]] || die "--size must look like 1600x1200"
+if [[ -n "$fonts_dir" ]]; then
+  [[ -d "$fonts_dir" ]] || die "--fonts: not a directory: $fonts_dir"
+  fonts_dir="$(cd "$fonts_dir" && pwd -P)"
+  [[ "$fonts_dir" != *:* ]] || die "--fonts: a path with a colon cannot be mounted"
+fi
 width="${BASH_REMATCH[1]}"; height="${BASH_REMATCH[2]}"
 [[ "$settle" =~ ^[0-9]+$ ]] || die "--settle must be a whole number of seconds"
 case "$siminput" in auto|on|off) ;; *) die "--siminput must be auto, on or off" ;; esac
@@ -215,6 +229,8 @@ sim() {
     -v "$addon_dir:/addons/$addon_name:ro")
   args+=("${with_mounts[@]}")
   [[ "$mount_out" == "out" ]] && args+=(-v "$out_dir:/out")
+  [[ -n "${SIM_CPUSET:-}" ]] && args+=(--cpuset-cpus "$SIM_CPUSET")
+  [[ -n "$fonts_dir" ]] && args+=(-v "$fonts_dir:/usr/share/fonts/truetype/dejavu:ro")
   [[ $solo -eq 1 ]] && args+=(-e WOW_SIM_NO_PARTY=1)
   local kv
   for kv in "${extra_env[@]}"; do args+=(-e "$kv"); done
@@ -273,6 +289,7 @@ if [[ $run_shot -eq 1 ]]; then
     [[ -n "$scenario_code" ]] && shot_args+=("--exec-lua=$scenario_code")
     shot_args+=(screenshot --png -o /out/screenshot.png --width "$width" --height "$height")
     [[ -n "$crop" ]] && shot_args+=(--crop "$crop")
+    [[ -n "$ui_scale" ]] && shot_args+=(--ui-scale "$ui_scale")
     [[ -n "$filter" ]] && shot_args+=(--filter "$filter")
     rc=0
     sim out "${shot_args[@]}" > "$out_dir/screenshot.log" 2>&1 || rc=$?

@@ -1,7 +1,8 @@
 local ADDON, ns = ...
 
 -- The cast bar, under the plate: the spell's icon, its name, a timer that fills for a cast and
--- drains for a channel, and a shield while it cannot be interrupted.
+-- drains for a channel with a bright edge where the fill ends, and a shield while it cannot be
+-- interrupted.
 local Frame, Style, Sealed = ns.Frame, ns.Style, ns.Sealed
 local L = ns.L
 
@@ -15,6 +16,7 @@ CastBar.events = {
 
 local INTERRUPT_HOLD = 0.7 -- seconds an interrupted cast stays up, in red
 local INTERRUPTED = { 0.86, 0.24, 0.20 }
+local SPARK_ALPHA = 0.75
 
 function CastBar.Wanted(cfg)
 	return cfg.castbar
@@ -28,6 +30,17 @@ function CastBar.Create(frame)
 	cast.icon = cast:CreateTexture(nil, "ARTWORK")
 	cast.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) -- trims the icon's own border
 	cast.bar = CreateFrame("StatusBar", nil, cast)
+	cast.trough = cast.bar:CreateTexture(nil, "BACKGROUND")
+	cast.trough:SetAllPoints(cast.bar)
+	-- The bright edge rides the end of the fill: it is pinned to the edge of the bar's own fill
+	-- texture, which the game moves, so nothing here has to know how far the cast is. What of
+	-- its glow would reach past the bar is cut off.
+	cast.bar:SetClipsChildren(true)
+	cast.spark = cast.bar:CreateTexture(nil, "ARTWORK", nil, 1)
+	cast.spark:SetTexture(ns.ART .. "Spark")
+	cast.spark:SetBlendMode("ADD")
+	cast.spark:SetAlpha(SPARK_ALPHA)
+	cast.shadow = Frame.MakeShadow(frame, cast)
 	cast.text = cast.bar:CreateFontString(nil, "OVERLAY")
 	cast.text:SetWordWrap(false)
 	cast.text:SetJustifyH("LEFT")
@@ -65,6 +78,16 @@ function CastBar.Layout(frame, cfg, on)
 	cast.bar:SetPoint("TOPLEFT", cast.icon, "TOPRIGHT", pixel, 0)
 	cast.bar:SetPoint("BOTTOMRIGHT", cast, "BOTTOMRIGHT", -pixel, pixel)
 	cast.bar:SetStatusBarTexture(Style.texture)
+	-- Behind the fill, the cast colour darkened, as the empty part of a health bar is.
+	cast.trough:SetTexture(Style.texture)
+	cast.trough:SetVertexColor(Style.Veiled(Style.Toned(Style.CAST)))
+
+	local fill = cast.bar:GetStatusBarTexture()
+	cast.spark:ClearAllPoints()
+	cast.spark:SetPoint("TOP", fill, "TOPRIGHT")
+	cast.spark:SetPoint("BOTTOM", fill, "BOTTOMRIGHT")
+	cast.spark:SetWidth(math.max(8, height))
+	Frame.LayoutShadow(cast.shadow, cast)
 
 	Style.SetFont(cast.text, height >= 14 and -1 or -3)
 	cast.text:SetTextColor(theme.text[1], theme.text[2], theme.text[3])
@@ -89,6 +112,7 @@ function CastBar.Update(frame, unit, event)
 		cast.id = id
 		cast.held = false
 		cast.bar:SetStatusBarColor(Style.Toned(Style.CAST))
+		cast.spark:Show()
 		cast:Show()
 		return
 	end
@@ -101,6 +125,7 @@ function CastBar.Update(frame, unit, event)
 		cast.bar:SetStatusBarColor(Style.Toned(INTERRUPTED))
 		cast.text:SetText(L["Interrupted"])
 		cast.shield:SetAlpha(0)
+		cast.spark:Hide()
 		ns.After(INTERRUPT_HOLD, function()
 			if cast.held then
 				cast.held = false

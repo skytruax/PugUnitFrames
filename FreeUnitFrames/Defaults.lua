@@ -36,20 +36,24 @@ local function Choice(...) return { type = "choice", choices = { ... } } end
 Defaults.GENERAL_SPEC = {
 	theme = Choice("slate", "night", "hearth"),
 	texture = Choice("smooth", "flat", "glass"),
+	font = Choice("inter", "game"), -- the lettering: the addon's own font, or the game's
 	fontSize = Number(8, 18, 1),
 	outline = Bool(),      -- outlined text instead of a soft shadow
+	shadows = Bool(),      -- a soft shadow under every plate
 	smooth = Bool(),       -- bars glide to a new value instead of jumping
 	farAlpha = Number(0.2, 0.9, 0.05), -- how see-through a group member out of range becomes
 	locked = Bool(),
 	tooltips = Choice("always", "calm", "never"), -- the game's unit tooltip when the mouse is over a frame; calm = out of combat
 }
-Defaults.GENERAL_ORDER = { "theme", "texture", "fontSize", "outline", "smooth", "farAlpha", "tooltips" }
+Defaults.GENERAL_ORDER = { "theme", "texture", "font", "fontSize", "outline", "shadows", "smooth", "farAlpha", "tooltips" }
 
 Defaults.GENERAL = {
 	theme = "slate",
 	texture = "smooth",
+	font = "inter",
 	fontSize = 11,
 	outline = false,
+	shadows = true,
 	smooth = true,
 	farAlpha = 0.45,
 	locked = true,

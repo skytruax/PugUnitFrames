@@ -23,8 +23,14 @@
   <a href="#developing">Developing</a>
 </p>
 
-<p align="center"><sub>The picture above is an illustration built from the addon's own artwork, not a screenshot. The
-spell icons and raid marks in it are Blizzard's, and its title lettering is LifeCraft, a typeface by Eliot Truelove.</sub></p>
+<p align="center">
+  <img src="docs/demo.gif" alt="A fight on the frames, moment by moment: the pull, the tank taking the hits, a party member poisoned while the player heals, the heal landing as a cast is interrupted, and the target nearly dead" width="900">
+</p>
+
+<p align="center"><sub>The moving picture is the addon's own code drawing a fight in a simulator of the game's interface, over a
+painted city (<a href="#developing">how</a>). The picture at the top is an illustration built from the addon's own artwork.
+Neither is a screenshot of the game. The spell icons and raid marks in them are Blizzard's, and the title lettering is
+LifeCraft, a typeface by Eliot Truelove.</sub></p>
 
 ---
 
@@ -67,9 +73,10 @@ error it caught: please open an issue with that text.
   <tr>
     <td width="50%" valign="top">
       <img src="curseforge/web/06-looks.jpg" alt="The same frames in the themes Slate, Night and Hearth, with smooth, flat and glass bars">
-      <b>Three looks, three textures.</b> Slate, Night and Hearth, all drawn for this addon. Health
-      coloured by class, by friend or foe, by how much is left, or plain; numbers exact, short, as
-      a percentage, or as what is missing.
+      <b>Three looks, three textures.</b> Slate, Night and Hearth, all drawn for this addon, lettered
+      in Inter (which the addon brings with it; the game's own font is one setting away), with a
+      soft shadow under every plate. Health coloured by class, by friend or foe, by how much is
+      left, or plain; numbers exact, short, as a percentage, or as what is missing.
     </td>
     <td width="50%" valign="top">
       <img src="curseforge/web/07-arrange.jpg" alt="Green handles on the frames of a game screen, one being dragged, and the list of commands">
@@ -87,7 +94,7 @@ German, Spanish and French.
 A click on a frame targets the unit, a right click opens its menu, and addons that bind spells to
 clicks on unit frames find these frames where they look for them.
 
-<sub>The pictures on this page are illustrations, not screenshots, drawn by <code>tools/make_listing.py</code>
+<sub>These six pictures are illustrations, not screenshots, drawn by <code>tools/make_listing.py</code>
 from the addon's own textures and layout numbers. The spell icons and raid marks in them are Blizzard's.</sub>
 
 ## Install
@@ -149,6 +156,8 @@ FreeUnitFrames/        the addon: what goes into Interface/AddOns
 tools/
   tests/               the model of the client and the scenarios run against it
   sim/                 the simulator run: Blizzard's real interface code, in Docker
+    run.sh demo.sh     the tests and the picture; the moving demo
+    scene_art.py       what a picture needs that the simulator lacks: icons, raid marks, a world, the font
   make_art.py          draws every texture the addon ships
   make_listing.py      draws the banner, the logo and the store pictures
   game_icons.py        fetches the game's own spell icons and raid marks those pictures show
@@ -162,18 +171,22 @@ Two test suites, neither needing the game:
 pip install lupa==2.8
 python3 tools/tests/run.py           # a model of the client that seals values; also checks the source
 tools/sim/lab/build-image.sh         # once: fetches the simulator and builds its Docker image
-tools/sim/run.sh                     # Blizzard's interface code with the addon loaded; takes a screenshot
+tools/sim/run.sh                     # Blizzard's interface code with the addon loaded; takes a picture
+tools/sim/demo.sh                    # the same fight, moment by moment: docs/demo.gif
 ```
 
 Neither is the game. The model is written from Blizzard's documentation and the simulator does not
 seal values, so anything that depends on how the live client behaves is confirmed by playing.
 
 <p align="center">
-  <img src="docs/sim-screenshot.png" alt="The frames as the simulator draws them: a party of four, the player with a cast bar, and a hostile elite target" width="820">
+  <img src="docs/sim-screenshot.png" alt="The frames as the simulator draws them in the middle of a fight: a party of four with a threat outline, a removable debuff and a member out of range, a focus casting, the player healing, and a hostile elite target with its debuffs and a cast that cannot be interrupted" width="900">
 </p>
 
-<p align="center"><sub>The addon running beside Blizzard's interface code in the simulator, which has none of the game's
-fonts or spell icons: the lettering is not the game's and the blank squares are icons.</sub></p>
+<p align="center"><sub>The addon's own code drawing beside Blizzard's interface code in the simulator. The simulator has
+none of the game's art and no world, and reads no font from an addon's folder, so the scene
+(<code>tools/sim/tests/sim/screenshot.lua</code>) hands it the game's icons for its spells, the raid marks, a painted city
+and the addon's own font, and answers the game functions the simulator has no handle for: other units' auras, casts
+and power, threat, range. Blizzard's own interface, bare without its art, is put away.</sub></p>
 
 The pictures and textures are drawn by scripts too (`pip install pillow numpy`):
 
@@ -190,5 +203,12 @@ The addon itself ships no icon: it hands whatever the game names back to the gam
 
 ## Licence
 
-MIT. See [LICENSE](LICENSE). The simulator the tests use is a separate project under GPL-3.0
+MIT. See [LICENSE](LICENSE).
+
+The addon brings one thing that is not ours: the typeface its frames are lettered in,
+[Inter](https://github.com/rsms/inter) by the Inter Project Authors, under the SIL Open Font
+License 1.1. The font file is unchanged and its licence is beside it
+([FreeUnitFrames/Fonts](FreeUnitFrames/Fonts)).
+
+The simulator the tests use is a separate project under GPL-3.0
 ([wow-ui-sim](https://github.com/Osso/wow-ui-sim)); nothing of it is part of the addon.

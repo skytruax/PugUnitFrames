@@ -3,12 +3,24 @@ The project does not exist yet: you create it by hand at https://authors.cursefo
 (Create a project > World of Warcraft > Addons). Everything below is ready to paste or upload.
 
 Name
-    Free Unit Frames - PitBull-Style, Lighter, Ready to Play
+    Free Unit Frames - PitBull-Style, but Lighter: Player, Target, Focus, Pet, Party & Raid Frames with Cast Bars, Auras and Threat
 
-    56 characters. It says what you asked for (like PitBull, but better) in two things that are
-    true today: lighter (one small folder, no libraries) and ready to play (no setup). PitBull's
-    own page lists Retail, MoP Classic, Classic and Classic TBC and no Forever (looked at on
-    2026-11-23), so "PitBull-style" is also what a PitBull player on Forever will type.
+    127 characters; the field takes 128. Search matches the name first, so the long form carries
+    what people type (PitBull, unit frames, party, raid, cast bars, auras). A page shows only the
+    first forty or so characters in a list, which is why "Free Unit Frames - PitBull-Style" comes
+    first. The short form, if the long one reads as too much:
+        Free Unit Frames - PitBull-Style, Lighter, Ready to Play          (56 characters)
+
+    The page's address is its own thing: FreeControl's is "free-control" although its name is
+    longer. I have not seen the create form, so look at the address it proposes before you
+    confirm. If it follows the long name, create the project as "Free Unit Frames" (which gives
+    curseforge.com/wow/addons/free-unit-frames) and put the long name in afterwards, on the
+    project's settings page.
+
+    It says what you asked for (like PitBull, but better) in something that is true today:
+    lighter (one small folder, no libraries, no setup). PitBull's own page lists Retail, MoP
+    Classic, Classic and Classic TBC and no Forever (looked at on 2026-11-23), so "PitBull-style"
+    is also what a PitBull player on Forever will type.
 
     Why "Forever" is in the summary and not in the name: CurseForge's Moderation Policies say
     "Names should not contain game name, class name versions, file versions ect...." Other
@@ -16,8 +28,9 @@ Name
     rejected name costs a day.
 
     Why not "better": it is a claim PitBull's players will test against PitBull's options, of
-    which it has far more than a first version does. If you want it said anyway:
-        Free Unit Frames - Like PitBull for Forever, but Better     (also has the game's name in it)
+    which it has far more than a first version does. If you want it said anyway (128 characters,
+    and it has the game's name in it):
+        Free Unit Frames - Like PitBull for Forever, but Better: Player, Target, Focus, Party & Raid Frames, Cast Bars, Auras and Threat
     Without the other addon's name at all:
         Free Unit Frames - Light Player, Target, Party & Raid Frames
 
@@ -41,14 +54,16 @@ Logo
 Description
     curseforge/description.html, pasted into the editor's source view (the "<>" button).
     It is built from description.md by: python3 tools/make_listing.py description
-    Its pictures are seven of the gallery pictures at a smaller size (curseforge/web/, loaded from
-    GitHub), so there is nothing to upload for them. The "?v=" on each link is there so that a
+    Its pictures are stored on GitHub, as FreeControl's are: the moving demo (docs/demo.gif) and
+    seven of the gallery pictures at a smaller size (curseforge/web/). The page loads them from
+    there, so there is nothing to upload for them. The "?v=" on each link is there so that a
     changed picture is fetched afresh: raise it in description.md when the pictures change.
 
 Images, in this order
-    your own screenshots from the game first, then curseforge/gallery/01-hero.png to
-    08-logo.png (1920 x 1080 each). They are illustrations and say so on the picture, with
-    the game's own spell icons and raid marks on the frames, credited to Blizzard on each one.
+    your own screenshots from the game first, then curseforge/gallery/01-hero.png, 09-in-play.png,
+    and 02-frames.png to 08-logo.png (1920 x 1080 each). 09-in-play is the addon's own code
+    drawing a fight in the simulator; the others are illustrations. Each says on the picture what
+    it is, and credits the game's spell icons and raid marks on the frames to Blizzard.
 
 File: the first one goes up by hand
     dist/FreeUnitFrames-0.1.0.zip   (tools/package.sh builds it; dist/ is not in the repository)

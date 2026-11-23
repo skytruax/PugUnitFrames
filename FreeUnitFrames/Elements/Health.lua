@@ -13,8 +13,13 @@ end
 
 function Health.Create(frame)
 	local bar = CreateFrame("StatusBar", nil, frame.body)
-	bar.trough = bar:CreateTexture(nil, "BACKGROUND")
+	-- The empty part of the bar is the bar's own colour, darkened: the colour laid down once more
+	-- with the theme's dark veil over it. One over the other takes no arithmetic, so it works
+	-- with a colour the game has sealed, which could not be made darker by multiplying.
+	bar.trough = bar:CreateTexture(nil, "BACKGROUND", nil, 0)
 	bar.trough:SetAllPoints(bar)
+	bar.veil = bar:CreateTexture(nil, "BACKGROUND", nil, 1)
+	bar.veil:SetAllPoints(bar)
 
 	-- Healing on its way is a second bar that starts where the health ends and uses the same
 	-- scale, so its length is the heal's size. Whatever would run past full health is cut off.
@@ -32,7 +37,8 @@ function Health.Layout(frame, cfg)
 	bar:SetPoint("TOPLEFT", frame.body, "TOPLEFT", frame.barLeft, -pixel)
 	bar:SetPoint("BOTTOMRIGHT", frame.body, "BOTTOMRIGHT", -frame.barRight, above)
 	bar:SetStatusBarTexture(Style.texture)
-	bar.trough:SetColorTexture(theme.trough[1], theme.trough[2], theme.trough[3], theme.trough[4])
+	bar.trough:SetTexture(Style.texture)
+	bar.veil:SetColorTexture(theme.veil[1], theme.veil[2], theme.veil[3], theme.shade)
 
 	local heal, fill = bar.heal, bar:GetStatusBarTexture()
 	heal:ClearAllPoints()
@@ -44,12 +50,19 @@ function Health.Layout(frame, cfg)
 	heal:SetShown(cfg.heals and true or false)
 end
 
+-- The bar and the empty part behind it take the same colour (which may be sealed numbers: they
+-- are only handed on).
+local function Colour(bar, r, g, b)
+	bar:SetStatusBarColor(r, g, b)
+	bar.trough:SetVertexColor(r, g, b)
+end
+
 local function Paint(bar, unit, cfg)
-	if cfg.color == "health" and Sealed.HealthShareToBarColor(bar, unit, Style.healthCurve) then
+	if cfg.color == "health" and Sealed.HealthShareToBarColor(bar, unit, Style.healthCurve, bar.trough) then
 		return
 	end
 	if cfg.color == "plain" then
-		bar:SetStatusBarColor(Style.Toned(Style.theme.plain))
+		Colour(bar, Style.Toned(Style.theme.plain))
 		return
 	end
 	if cfg.color == "class" and UnitIsPlayer(unit) then
@@ -57,13 +70,13 @@ local function Paint(bar, unit, cfg)
 		if r then
 			if plain then
 				local tone = Style.theme.tone
-				r, g, b = r * tone, g * tone, b * tone
+				r, g, b = Style.Readable(r * tone, g * tone, b * tone)
 			end
-			bar:SetStatusBarColor(r, g, b)
+			Colour(bar, r, g, b)
 			return
 		end
 	end
-	bar:SetStatusBarColor(Style.ReactionColor(unit))
+	Colour(bar, Style.Readable(Style.ReactionColor(unit)))
 end
 
 function Health.Update(frame, unit, event)
@@ -74,6 +87,8 @@ function Health.Update(frame, unit, event)
 		bar:SetValue(0)
 		bar.heal:SetMinMaxValues(0, 1)
 		bar.heal:SetValue(0)
+		-- All of the bar is its empty part now: grey, whoever it was.
+		bar.trough:SetVertexColor(Style.Toned(Style.REACTION.gone))
 		return
 	end
 	-- A bar glides to a new value of the same unit. When the frame has just been pointed at

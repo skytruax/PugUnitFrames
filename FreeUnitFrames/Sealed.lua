@@ -50,11 +50,15 @@ function Sealed.HealthToBar(bar, unit, smooth)
 end
 
 -- Colours a bar by how full the unit's health is, through a colour curve (Style.lua builds them:
--- red when nearly empty, through yellow, to green when full).
-function Sealed.HealthShareToBarColor(bar, unit, colorCurve)
+-- red when nearly empty, through yellow, to green when full). `also`, when given, is a texture
+-- that takes the same colour (the empty part of the bar, behind it).
+function Sealed.HealthShareToBarColor(bar, unit, colorCurve, also)
 	local color = UnitHealthPercent(unit, true, colorCurve)
 	if not IsPlainNil(color) and canaccesstable(color) then
 		bar:SetStatusBarColor(color:GetRGB())
+		if also then
+			also:SetVertexColor(color:GetRGB())
+		end
 		return true
 	end
 	return false

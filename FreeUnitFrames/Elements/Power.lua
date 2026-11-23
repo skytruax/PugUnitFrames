@@ -22,7 +22,7 @@ function Power.Create(frame)
 end
 
 function Power.Layout(frame, cfg, on)
-	local bar, pixel, theme = frame.power, frame.pixel, Style.theme
+	local bar, pixel = frame.power, frame.pixel
 	bar:SetShown(on)
 	if not on then
 		return
@@ -32,7 +32,14 @@ function Power.Layout(frame, cfg, on)
 	bar:SetPoint("BOTTOMRIGHT", frame.body, "BOTTOMRIGHT", -frame.barRight, pixel)
 	bar:SetHeight(frame.powerHeight)
 	bar:SetStatusBarTexture(Style.texture)
-	bar.trough:SetColorTexture(theme.trough[1], theme.trough[2], theme.trough[3], theme.trough[4])
+	bar.trough:SetTexture(Style.texture)
+end
+
+-- The bar in a colour, and the empty part behind it in the same colour, darkened as the theme
+-- darkens the empty part of a health bar.
+local function Colour(bar, r, g, b)
+	bar:SetStatusBarColor(r, g, b)
+	bar.trough:SetVertexColor(Style.Veiled(r, g, b))
 end
 
 function Power.Update(frame, unit, event)
@@ -40,11 +47,12 @@ function Power.Update(frame, unit, event)
 	if not UnitIsConnected(unit) then
 		bar:SetMinMaxValues(0, 1)
 		bar:SetValue(0)
+		Colour(bar, Style.Toned(Style.REACTION.gone))
 		return
 	end
 	-- Which power the unit runs on is never sealed; how much of it there is can be.
 	local powerType, token = UnitPowerType(unit)
-	bar:SetStatusBarColor(Style.PowerColor(token))
+	Colour(bar, Style.PowerColor(token))
 	Sealed.PowerToBar(bar, unit, powerType, event ~= nil and ns.db.smooth)
 end
 

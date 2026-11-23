@@ -52,20 +52,31 @@ def scale(points):
 # ---------------------------------------------------------------------------
 # Bar fills
 # ---------------------------------------------------------------------------
-def bar(name, shade):
-    """shade(t) gives the brightness (0-1) at height t, 0 at the top and 1 at the bottom."""
+def bar(name, shade, along=None):
+    """shade(t) gives the brightness (0-1) at height t, 0 at the top and 1 at the bottom.
+    along(u), when given, scales it along the bar, u being 0 at the empty end and 1 at the full one."""
     width, height = 256, 32
     image = Image.new("RGBA", (width, height))
     for y in range(height):
-        value = max(0, min(255, round(255 * shade(y / (height - 1)))))
         for x in range(width):
+            level = shade(y / (height - 1)) * (along(x / (width - 1)) if along else 1.0)
+            value = max(0, min(255, round(255 * level)))
             image.putpixel((x, y), (value, value, value, 255))
     save_tga(image, name)
 
 
 def smooth(t):
-    # Lit from above: a little brighter under the top edge, easing darker towards the bottom.
-    return 0.98 - 0.26 * t ** 1.4 + 0.02 * math.exp(-((t - 0.08) / 0.07) ** 2)
+    # Lit from above: a bright lip under the top edge, a full body, and a darker foot, so a bar
+    # reads as a solid thing with light on it and not as a painted stripe.
+    lip = 0.05 * math.exp(-((t - 0.10) / 0.09) ** 2)
+    foot = 0.10 * max(0.0, (t - 0.80) / 0.20) ** 2
+    return 0.95 - 0.22 * t ** 1.5 + lip - foot
+
+
+def deepening(u):
+    # A bar is a touch deeper in tone towards its empty end. The game shows the part of the picture
+    # that matches how full the bar is, so a bar that runs low is left with the deeper part.
+    return 0.86 + 0.14 * u ** 0.8
 
 
 def flat(_t):
@@ -77,6 +88,45 @@ def glass(t):
     if t < 0.46:
         return 1.0 - 0.10 * (t / 0.46)
     return 0.74 - 0.14 * ((t - 0.46) / 0.54)
+
+
+# ---------------------------------------------------------------------------
+# The shadow under a plate, and the bright edge of a bar's fill
+# ---------------------------------------------------------------------------
+SHADOW_SIZE = 64    # the plate is the middle half of the picture: 16 texels of shadow on every side
+SHADOW_PLATE = 16
+
+
+def shadow():
+    """A soft dark cushion, black with only its alpha changing. Frame.lua lays it under a plate in
+    nine pieces (corners, sides, middle), so it keeps its shape whatever the plate's size."""
+    n, edge = SHADOW_SIZE * SS, SHADOW_PLATE * SS
+    mask = Image.new("L", (n, n), 0)
+    ImageDraw.Draw(mask).rounded_rectangle([edge, edge, n - edge - 1, n - edge - 1], radius=2 * SS, fill=255)
+    # Two blurs: a tight one that hugs the plate and a wide one that fades out, as a real shadow
+    # does. Raised a little, so the shadow is still there half-way out; it ends before the
+    # picture's edge, or the pieces would show their seams.
+    tight = np.asarray(mask.filter(ImageFilter.GaussianBlur(2.6 * SS)), np.float32)
+    wide = np.asarray(mask.filter(ImageFilter.GaussianBlur(5.2 * SS)), np.float32)
+    level = np.clip(1.9 * (0.35 * tight + 0.65 * wide) - 14, 0, 255)
+    alpha = Image.fromarray(level.astype(np.uint8), "L")
+    image = Image.new("RGBA", (n, n), (0, 0, 0, 0))
+    image.putalpha(alpha)
+    save_tga(image.resize((SHADOW_SIZE, SHADOW_SIZE), Image.LANCZOS), "Shadow")
+
+
+def spark():
+    """The bright edge where a bar's fill ends: a thin white line with a soft glow to both sides,
+    fading out towards the top and the bottom. It is added to what is under it, not painted over it."""
+    size = 32
+    xs = np.arange(size, dtype=np.float32) - (size - 1) / 2
+    ys = np.linspace(-1, 1, size, dtype=np.float32)
+    across = 0.85 * np.exp(-(xs / 1.1) ** 2) + 0.42 * np.exp(-(xs / 4.6) ** 2)
+    down = 1.0 - 0.38 * np.abs(ys) ** 2.2
+    alpha = np.clip(np.outer(down, across), 0, 1)
+    image = Image.new("RGBA", (size, size), (255, 255, 255, 0))
+    image.putalpha(Image.fromarray((alpha * 255).astype(np.uint8), "L"))
+    save_tga(image, "Spark")
 
 
 # ---------------------------------------------------------------------------
@@ -200,9 +250,11 @@ def emblem(size, ss=None):
 
 def main():
     os.makedirs(ART, exist_ok=True)
-    bar("Bar-Smooth", smooth)
+    bar("Bar-Smooth", smooth, deepening)
     bar("Bar-Flat", flat)
-    bar("Bar-Glass", glass)
+    bar("Bar-Glass", glass, deepening)
+    shadow()
+    spark()
 
     mark("Mark-Leader", crown, (240, 196, 72, 255))
     mark("Mark-Combat", swords, (226, 92, 70, 255))

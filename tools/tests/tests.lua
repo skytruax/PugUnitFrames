@@ -402,6 +402,7 @@ Test("a party member out of range fades, from two sealed answers", function()
 	-- The event's own payload is sealed too, and is not looked at.
 	M.Fire("UNIT_IN_RANGE_UPDATE", "party1", M.Seal(false))
 	Near(ns.db.farAlpha, Value(button.body.alpha), "out of range")
+	Near(ns.db.farAlpha, Value(button.body.shadow.holder.alpha), "and the plate's shadow fades with it")
 	M.units.party1.rangeChecked = false
 	M.Fire("UNIT_IN_RANGE_UPDATE", "party1", M.Seal(false))
 	Equal(1, Value(button.body.alpha), "a range that could not be checked counts as near")
@@ -1322,6 +1323,151 @@ end)
 ---------------------------------------------------------------------------
 -- Looks and odd corners
 ---------------------------------------------------------------------------
+---------------------------------------------------------------------------
+-- The look: lettering, shadows, and the empty part of a bar
+---------------------------------------------------------------------------
+Test("the frames are lettered in the addon's own font, or the game's when the player says so", function()
+	local ns = Login()
+	local inter = ns.Style.FONTS.inter
+	True(inter:find("FreeUnitFrames\\Fonts\\Inter-SemiBold.ttf", 1, true), "the font is the addon's own file")
+	Equal(inter, FreeUnitFrames_player.texts.name.font[1], "name")
+	Equal(inter, FreeUnitFrames_player.texts.health.font[1], "numbers")
+	Equal(inter, FreeUnitFrames_player.cast.text.font[1], "cast bar")
+
+	ns.db.font = "game"
+	ns.Refresh()
+	Equal(STANDARD_TEXT_FONT, FreeUnitFrames_player.texts.name.font[1], "the game's font on request")
+	Equal(0, #ns.GetProblems())
+end)
+
+Test("where the game's language is written in another script, its own font is used", function()
+	M.locale = "koKR"
+	local ns = Login()
+	Equal("inter", ns.db.font, "the setting is left as it is")
+	Equal(STANDARD_TEXT_FONT, FreeUnitFrames_player.texts.name.font[1])
+	Equal(0, #ns.GetProblems())
+end)
+
+Test("a font file the game cannot read is reported once, and the game's font is used", function()
+	M.unreadableFonts["Interface\\AddOns\\FreeUnitFrames\\Fonts\\Inter-SemiBold.ttf"] = true
+	local ns = Login()
+	Equal(STANDARD_TEXT_FONT, FreeUnitFrames_player.texts.name.font[1], "every text still has a font")
+	Equal(STANDARD_TEXT_FONT, FreeUnitFrames_player.texts.health.font[1])
+	local problems = ns.GetProblems()
+	Equal(1, #problems, "said once, however many texts there are")
+	True(problems[1].text:find("Inter-SemiBold.ttf", 1, true), "and it names the file")
+	ns.Refresh()
+	Equal(1, #ns.GetProblems(), "and not again on the next layout")
+end)
+
+Test("the empty part of a health bar is the bar's own colour under a dark veil", function()
+	local ns = Login()
+	local bar = FreeUnitFrames_player.health
+	local paladin, tone = M.CLASS_COLORS.PALADIN, ns.Style.theme.tone
+	Near(paladin[1] * tone, bar.barColor[1], "the bar")
+	Near(paladin[1] * tone, bar.trough.vertex[1], "the empty part, red")
+	Near(paladin[3] * tone, bar.trough.vertex[3], "the empty part, blue")
+	Equal(ns.Style.texture, bar.trough.texture, "drawn with the bar's texture")
+	Near(ns.Style.theme.shade, bar.veil.color[4], "the veil is as thick as the theme's shade")
+	Equal(ns.Style.theme.veil[3], bar.veil.color[3], "and of the theme's own dark tone")
+	True(bar.veil.sublevel > bar.trough.sublevel, "the veil lies over the colour")
+
+	-- A colour the game seals cannot be darkened by arithmetic: it is handed to both as it came.
+	Target({ name = "Echo", class = "DRUID", isPlayer = true, playerControlled = false, inGroup = false, reaction = 4 })
+	local target = FreeUnitFrames_target.health
+	Sealed(target.trough.vertex[1], "a sealed colour reaches the empty part sealed")
+	Near(M.CLASS_COLORS.DRUID[1], Value(target.trough.vertex[1]))
+
+	ns.db.units.player.color = "health"
+	ns.Refresh()
+	Sealed(bar.trough.vertex[1], "colouring by health reaches it too")
+	Near(Value(bar.barColor[2]), Value(bar.trough.vertex[2]), "the same colour as the bar")
+end)
+
+Test("someone dead or offline has a grey bar, whatever colour they had", function()
+	local ns = Login()
+	Party(2)
+	local frame = PartyButton(ns, 1)
+	M.units.party1.dead = true
+	M.Fire("UNIT_HEALTH", "party1")
+	Near(ns.Style.REACTION.gone[1] * ns.Style.theme.tone, frame.health.trough.vertex[1], "dead")
+	M.units.party1.dead = false
+	M.Fire("UNIT_HEALTH", "party1")
+	Near(M.CLASS_COLORS.WARRIOR[1] * ns.Style.theme.tone, frame.health.trough.vertex[1], "alive again, class colour again")
+end)
+
+Test("the empty part of a power bar is its colour, darkened by the theme's shade", function()
+	local ns = Login()
+	local bar = FreeUnitFrames_player.power
+	local left = 1 - ns.Style.theme.shade
+	Near(bar.barColor[1] * left, bar.trough.vertex[1], "red")
+	Near(bar.barColor[3] * left, bar.trough.vertex[3], "blue")
+
+	-- A theme can darken with a colour of its own: Night's empty bars lean blue.
+	ns.db.theme = "night"
+	ns.Refresh()
+	local night = ns.Style.THEMES.night
+	Near(bar.barColor[3] * (1 - night.shade) + night.veil[3] * night.shade, bar.trough.vertex[3], "under Night's veil")
+	Equal(night.veil[3], FreeUnitFrames_player.health.veil.color[3], "and the health bar wears the same veil")
+end)
+
+Test("every plate has a shadow under it, at the button's own level, and it can be switched off", function()
+	local ns = Login()
+	local frame = FreeUnitFrames_player
+	local shadow = frame.body.shadow
+	Equal(9, #shadow.pieces, "nine pieces")
+	True(shadow.holder:IsShown(), "shown")
+	Equal(frame:GetFrameLevel(), shadow.holder:GetFrameLevel(), "under the threat outline and the plate")
+	True(shadow.holder:GetFrameLevel() < frame.body:GetFrameLevel())
+	Equal(frame, shadow.holder.parent, "a child of the unit button, beside the plate")
+	for index, piece in ipairs(shadow.pieces) do
+		True(piece.texture:find("Shadow", 1, true), "piece " .. index .. " is cut from the shadow picture")
+		Near(ns.Style.theme.shadow, piece.alpha, "at the theme's strength")
+	end
+	-- The corner pieces reach past the plate by the same distance on every side, shifted down.
+	local corner = shadow.pieces[1].anchors[1]
+	Equal("TOPLEFT", corner[1])
+	Equal(frame.body, corner[2])
+	Equal(-ns.Frame.SHADOW_REACH, corner[4], "out to the left")
+	Equal(ns.Frame.SHADOW_REACH - ns.Frame.SHADOW_DROP, corner[5], "up, less the drop")
+	-- The cast bar's own shadow comes and goes with the cast bar.
+	local cast = frame.cast
+	False(cast:IsShown(), "no cast")
+	False(cast.shadow.holder:IsShown(), "so no shadow of a cast bar")
+	Cast("player", { name = "Heal", icon = 3, start = M.now, length = 2, id = 4 })
+	True(cast.shadow.holder:IsShown(), "it comes with the cast bar")
+	M.units.player.cast = nil
+	M.Fire("UNIT_SPELLCAST_STOP", "player")
+	False(cast.shadow.holder:IsShown(), "and goes with it")
+
+	ns.db.shadows = false
+	ns.Refresh()
+	False(shadow.holder:IsShown(), "off")
+	ns.db.shadows = true
+	ns.Refresh()
+	True(shadow.holder:IsShown(), "and on again")
+	Equal(0, #ns.GetProblems())
+end)
+
+Test("a cast bar has a bright edge on the end of its fill, and loses it when interrupted", function()
+	local ns = Login()
+	local cast = FreeUnitFrames_player.cast
+	local spark = cast.spark
+	Equal("ADD", spark.blend, "added to what is under it")
+	Equal(cast.bar:GetStatusBarTexture(), spark.anchors[1][2], "pinned to the fill the game moves")
+	Equal("TOPRIGHT", spark.anchors[1][3], "at its end")
+	Cast("player", { name = "Heal", icon = 3, start = M.now, length = 2, id = 4 })
+	True(spark:IsShown(), "while casting")
+	local r = ns.Style.CAST[1] * ns.Style.theme.tone
+	Near(r * (1 - ns.Style.theme.shade), cast.trough.vertex[1], "behind the fill, the cast colour darkened")
+	M.units.player.cast = nil
+	M.Fire("UNIT_SPELLCAST_INTERRUPTED", "player")
+	False(spark:IsShown(), "an interrupted cast is a full red bar with no edge")
+	M.Advance(1)
+	Cast("player", { name = "Smite", icon = 4, start = M.now, length = 2, id = 6 })
+	True(spark:IsShown(), "and the next cast has it again")
+end)
+
 Test("every theme, texture and text setting can be put on", function()
 	local ns = Login()
 	Target(WithAuras(HOGGER, AURAS))
@@ -1329,6 +1475,8 @@ Test("every theme, texture and text setting can be put on", function()
 		for _, texture in ipairs(ns.Style.TEXTURE_ORDER) do
 			ns.db.theme, ns.db.texture = theme, texture
 			ns.db.outline = not ns.db.outline
+			ns.db.shadows = not ns.db.shadows
+			ns.db.font = ns.db.font == "inter" and "game" or "inter"
 			ns.Refresh()
 			Equal(ns.Style.TEXTURES[texture], FreeUnitFrames_player.health.barTexture.texture)
 		end

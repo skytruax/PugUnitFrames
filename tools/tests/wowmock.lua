@@ -52,6 +52,7 @@ local M = {
 	settings = { categories = {}, opened = nil },
 	tooltip = {},          -- what the tooltip was last asked to show
 	reloads = 0,
+	unreadableFonts = {},  -- [path] = true: a font file the game cannot read
 }
 Mock = M
 
@@ -534,6 +535,7 @@ function Texture:SetTexture(texture) self.texture = texture end
 function Texture:SetColorTexture(r, g, b, a) self.color = { r, g, b, a } end
 function Texture:SetVertexColor(r, g, b, a) self.vertex = { r, g, b, a } end
 function Texture:SetTexCoord(...) self.coords = { ... } end
+function Texture:SetBlendMode(mode) Plain("SetBlendMode", mode) self.blend = mode end
 function Texture:SetSpriteSheetCell(cell, rows, columns)
 	Plain("SetSpriteSheetCell's rows and columns", rows, columns)
 	self.cell = cell
@@ -541,10 +543,21 @@ end
 
 -- FontString ---------------------------------------------------------------
 Inherit(FontString, Region)
+-- A font file the game cannot read is refused (M.unreadableFonts[path]): the text keeps whatever
+-- font it had, which for a fresh one is none.
 function FontString:SetFont(path, size, flags)
 	Plain("SetFont", path, size, flags)
 	assert(type(path) == "string" and type(size) == "number", "SetFont needs a path and a size")
+	if M.unreadableFonts[path] then
+		return false
+	end
 	self.font = { path, size, flags }
+	return true
+end
+function FontString:GetFont()
+	if self.font then
+		return self.font[1], self.font[2], self.font[3]
+	end
 end
 function FontString:SetFontObject(name) Plain("SetFontObject", name) self.fontObject = name end
 function FontString:SetJustifyH(justify) Plain("SetJustifyH", justify) self.justify = justify end
@@ -567,8 +580,8 @@ function FontString:GetText() return self.text end
 
 -- Frame --------------------------------------------------------------------
 Inherit(Frame, Region)
-function Frame:CreateTexture(name, layer)
-	local texture = setmetatable({ widget = "Texture", parent = self, shown = true, anchors = {}, layer = layer }, { __index = Texture })
+function Frame:CreateTexture(name, layer, template, sublevel)
+	local texture = setmetatable({ widget = "Texture", parent = self, shown = true, anchors = {}, layer = layer, sublevel = sublevel or 0 }, { __index = Texture })
 	self.regions[#self.regions + 1] = texture
 	return texture
 end

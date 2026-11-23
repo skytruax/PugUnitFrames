@@ -61,9 +61,11 @@ function Marks.Layout(frame, cfg, on)
 	marks.leader:SetSize(small, small)
 	marks.leader:SetPoint("CENTER", frame.body, "TOPLEFT", small * 0.5, 0)
 
+	-- Resting or in combat: on the top edge beside the leader's mark, clear of a cast bar under
+	-- the plate.
 	marks.state:ClearAllPoints()
 	marks.state:SetSize(small, small)
-	marks.state:SetPoint("CENTER", frame.body, "BOTTOMLEFT", small * 0.5, 0)
+	marks.state:SetPoint("CENTER", frame.body, "TOPLEFT", small * 1.5 + 2, 0)
 
 	marks.center:ClearAllPoints()
 	marks.center:SetSize(big, big)

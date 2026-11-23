@@ -216,6 +216,24 @@ def check_art_is_all_there():
     assert not problems, "\n      ".join(problems)
 
 
+def check_fonts_are_all_there():
+    """Every font file the code names ships in Fonts/ with its licence beside it, and no other does."""
+    named = set()
+    for _name, source in lua_sources():
+        for match in re.finditer(r'FONTS \.\. "([\w.-]+)"', source):
+            named.add(match.group(1))
+    folder = os.path.join(ADDON_DIR, "Fonts")
+    present = {name for name in os.listdir(folder) if name.lower().endswith((".ttf", ".otf"))}
+    problems = ["named in the code but not in Fonts/: " + name for name in sorted(named - present)]
+    problems += ["in Fonts/ but never used: " + name for name in sorted(present - named)]
+    for name in sorted(present):
+        licence = name.split("-")[0] + "-LICENSE.txt"
+        if not os.path.exists(os.path.join(folder, licence)):
+            problems.append("%s ships without its licence (%s)" % (name, licence))
+    assert named, "the code names no font, so this check has stopped checking"
+    assert not problems, "\n      ".join(problems)
+
+
 def check_events_exist():
     """Every event the addon listens for is one the Forever client sends."""
     reference = os.path.join("tools", "sim", "lab", "dl-wowless-wowf-data", "events.yaml")
@@ -262,6 +280,7 @@ CHECKS = [
     ("source: every text has all its translations", check_translations_are_complete),
     ("source: the .toc and the folder agree", check_toc_matches_folder),
     ("source: the art the code names is the art that ships", check_art_is_all_there),
+    ("source: the font the code names ships, with its licence", check_fonts_are_all_there),
     ("source: every event listened for is one the client sends", check_events_exist),
     ("source: nothing names the tools it was made with", check_no_tool_names),
 ]

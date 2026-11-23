@@ -29,8 +29,12 @@ local Style = ns.Style
 Frame.NARROW = 110
 
 -- How far above its button a frame's plate is drawn. The levels in between are for what shows
--- from under the plate (the threat outline).
+-- from under the plate: its shadow at the button's own level, the threat outline over that.
 Frame.BODY_LEVEL = 6
+
+-- The shadow under a plate: how far it shows past the plate, and how far it falls below it.
+Frame.SHADOW_REACH = 10
+Frame.SHADOW_DROP = 3
 
 local GROUP_KINDS = { party = true, raid = true }
 
@@ -216,6 +220,90 @@ function Frame.LayoutEdge(edge, region, pixel, color)
 	right:SetWidth(pixel)
 end
 
+---------------------------------------------------------------------------
+-- Shadows
+---------------------------------------------------------------------------
+-- A soft shadow under a plate. The picture (Art\Shadow, drawn by tools/make_art.py) is a dark
+-- cushion whose middle half is the plate. It is laid down in nine pieces, the corners at their
+-- own size and the sides and the middle stretched between them, so it keeps its shape whatever
+-- the plate's size.
+local SHADOW_ART = ns.ART .. "Shadow"
+local SHADOW_OUT = 16 / 64 -- of the picture: from its edge to where the plate begins
+local SHADOW_IN = 8 / 64   -- and how far under the plate a corner piece reaches
+local NEAR, FAR = SHADOW_OUT + SHADOW_IN, 1 - SHADOW_OUT - SHADOW_IN
+
+-- Makes the shadow of a plate of the unit frame `frame`. The pieces sit on a frame of their own:
+-- a child of the unit button, at the button's own level, so it lies under everything the plate
+-- draws (which is Frame.BODY_LEVEL above). A plate that comes and goes by itself (a cast bar) is
+-- given as `follows`, and its shadow comes and goes with it.
+function Frame.MakeShadow(frame, follows)
+	local holder = CreateFrame("Frame", nil, frame)
+	local pieces = {}
+	for index = 1, 9 do
+		pieces[index] = holder:CreateTexture(nil, "BACKGROUND")
+		pieces[index]:SetTexture(SHADOW_ART)
+	end
+	pieces[1]:SetTexCoord(0, NEAR, 0, NEAR)     -- top left
+	pieces[2]:SetTexCoord(FAR, 1, 0, NEAR)      -- top right
+	pieces[3]:SetTexCoord(0, NEAR, FAR, 1)      -- bottom left
+	pieces[4]:SetTexCoord(FAR, 1, FAR, 1)       -- bottom right
+	pieces[5]:SetTexCoord(NEAR, FAR, 0, NEAR)   -- top
+	pieces[6]:SetTexCoord(NEAR, FAR, FAR, 1)    -- bottom
+	pieces[7]:SetTexCoord(0, NEAR, NEAR, FAR)   -- left
+	pieces[8]:SetTexCoord(FAR, 1, NEAR, FAR)    -- right
+	pieces[9]:SetTexCoord(NEAR, FAR, NEAR, FAR) -- middle
+	local shadow = { holder = holder, pieces = pieces, frame = frame, follows = follows, on = true }
+	if follows then
+		follows:HookScript("OnShow", function()
+			holder:SetShown(shadow.on)
+		end)
+		follows:HookScript("OnHide", function()
+			holder:Hide()
+		end)
+		holder:SetShown(follows:IsShown())
+	end
+	return shadow
+end
+
+-- Lays the shadow around `region`, at the theme's strength, or puts it away when shadows are off.
+function Frame.LayoutShadow(shadow, region)
+	local holder, pieces = shadow.holder, shadow.pieces
+	local strength = Style.shadows and Style.theme.shadow or 0
+	shadow.on = strength > 0
+	holder:SetShown(shadow.on and (not shadow.follows or shadow.follows:IsShown()))
+	if not shadow.on then
+		return
+	end
+	holder:SetFrameLevel(shadow.frame:GetFrameLevel())
+	holder:SetAllPoints(region)
+
+	local reach, drop = Frame.SHADOW_REACH, Frame.SHADOW_DROP
+	local corner = reach * NEAR / SHADOW_OUT
+	for index = 1, 9 do
+		pieces[index]:ClearAllPoints()
+		pieces[index]:SetAlpha(strength)
+	end
+	local topLeft, topRight, bottomLeft, bottomRight = pieces[1], pieces[2], pieces[3], pieces[4]
+	topLeft:SetSize(corner, corner)
+	topLeft:SetPoint("TOPLEFT", region, "TOPLEFT", -reach, reach - drop)
+	topRight:SetSize(corner, corner)
+	topRight:SetPoint("TOPRIGHT", region, "TOPRIGHT", reach, reach - drop)
+	bottomLeft:SetSize(corner, corner)
+	bottomLeft:SetPoint("BOTTOMLEFT", region, "BOTTOMLEFT", -reach, -reach - drop)
+	bottomRight:SetSize(corner, corner)
+	bottomRight:SetPoint("BOTTOMRIGHT", region, "BOTTOMRIGHT", reach, -reach - drop)
+	pieces[5]:SetPoint("TOPLEFT", topLeft, "TOPRIGHT")
+	pieces[5]:SetPoint("BOTTOMRIGHT", topRight, "BOTTOMLEFT")
+	pieces[6]:SetPoint("TOPLEFT", bottomLeft, "TOPRIGHT")
+	pieces[6]:SetPoint("BOTTOMRIGHT", bottomRight, "BOTTOMLEFT")
+	pieces[7]:SetPoint("TOPLEFT", topLeft, "BOTTOMLEFT")
+	pieces[7]:SetPoint("BOTTOMRIGHT", bottomLeft, "TOPRIGHT")
+	pieces[8]:SetPoint("TOPLEFT", topRight, "BOTTOMLEFT")
+	pieces[8]:SetPoint("BOTTOMRIGHT", bottomRight, "TOPRIGHT")
+	pieces[9]:SetPoint("TOPLEFT", topLeft, "BOTTOMRIGHT")
+	pieces[9]:SetPoint("BOTTOMRIGHT", bottomRight, "TOPLEFT")
+end
+
 -- Lays the frame out again from its settings: the plate, then every element in turn. Elements
 -- that have been switched on are made, ones switched off are put away.
 function Frame.Layout(frame)
@@ -228,6 +316,7 @@ function Frame.Layout(frame)
 
 	body.back:SetColorTexture(theme.back[1], theme.back[2], theme.back[3], theme.back[4])
 	Frame.LayoutEdge(body.edge, body, pixel, theme.edge)
+	Frame.LayoutShadow(body.shadow, body)
 
 	-- The space inside the edge is shared out between the portrait, a square at one end, and the
 	-- bars: barLeft and barRight are how far the bars stay from the plate's sides.
@@ -320,6 +409,7 @@ function Frame.Build(frame, kind)
 	body.back = body:CreateTexture(nil, "BACKGROUND")
 	body.back:SetAllPoints(body)
 	body.edge = Frame.MakeEdge(body, "BORDER")
+	body.shadow = Frame.MakeShadow(frame)
 	frame.body = body
 
 	frame:SetScript("OnEvent", OnEvent)
