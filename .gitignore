@@ -9,6 +9,8 @@
 dist/
 .release/
 tools/sim/out/
+# Pictures of the game to draw the frames over (tools/sim/photos.sh): someone else's, never committed
+tools/sim/backdrops/
 tools/sim/lab/dl-wowless-wowf-data/
 __pycache__/
 

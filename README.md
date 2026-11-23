@@ -160,6 +160,7 @@ tools/
   tests/               the model of the client and the scenarios run against it
   sim/                 the simulator run: Blizzard's real interface code, in Docker
     run.sh demo.sh     the tests and the picture; the moving demo
+    photos.sh          the picture over photographs of your own, each marked as a composite
     scene_art.py       what a picture needs that the simulator lacks: icons, raid marks, a world, the font
   make_art.py          draws every texture the addon ships
   make_listing.py      draws the banner, the logo and the store pictures
@@ -176,6 +177,7 @@ python3 tools/tests/run.py           # a model of the client that seals values; 
 tools/sim/lab/build-image.sh         # once: fetches the simulator and builds its Docker image
 tools/sim/run.sh                     # Blizzard's interface code with the addon loaded; takes a picture
 tools/sim/demo.sh                    # the same fight, moment by moment: docs/demo.gif
+tools/sim/photos.sh                  # the same fight over pictures of your own (tools/sim/backdrops/)
 ```
 
 Neither is the game. The model is written from Blizzard's documentation and the simulator does not

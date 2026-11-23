@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """What the simulator needs to draw a scene with. tools/sim/run.sh calls this.
 
-    python3 tools/sim/scene_art.py OUT_DIR FONT_DIR
+    python3 tools/sim/scene_art.py OUT_DIR FONT_DIR [PICTURE]
 
 The simulator has none of the game's art and cannot read a font out of an addon's folder: a spell
 icon or a raid mark comes out as a blank square, there is no world behind the interface, and all
@@ -11,7 +11,8 @@ scratch copy of the addon that run.sh makes, never into the addon you ship:
     OUT_DIR/icons/<spell>.png   the game's own icons for the spells of the scene (tools/game_icons.py
                                 fetches each once from a public mirror into tools/.icon-cache/)
     OUT_DIR/marks.png           the game's sheet of raid marks, put together from its eight marks
-    OUT_DIR/backdrop.png        the painted city of the listing pictures (tools/brand.py), as a world
+    OUT_DIR/backdrop.png        the world behind the frames: the painted city of the listing pictures
+                                (tools/brand.py), or PICTURE, any picture of your own, fitted to the screen
     OUT_DIR/../SimArt.lua       tells the scene (tests/sim/screenshot.lua) what is there
     FONT_DIR/*.ttf              the addon's own font under the names of the image's fallback fonts,
                                 so the simulator letters the frames as the game will
@@ -66,8 +67,18 @@ def marks(out):
     return "marks.png"
 
 
-def backdrop(out):
-    brand.landscape(*SIZE).convert("RGBA").save(os.path.join(out, "backdrop.png"))
+def backdrop(out, source=None):
+    """The world behind the frames. A picture of your own is scaled until it covers the screen and
+    cut to its middle; nothing else is done to it."""
+    if source:
+        picture = Image.open(source).convert("RGB")
+        scale = max(SIZE[0] / picture.width, SIZE[1] / picture.height)
+        picture = picture.resize((max(SIZE[0], round(picture.width * scale)), max(SIZE[1], round(picture.height * scale))), Image.LANCZOS)
+        left, top = (picture.width - SIZE[0]) // 2, (picture.height - SIZE[1]) // 2
+        picture = picture.crop((left, top, left + SIZE[0], top + SIZE[1]))
+    else:
+        picture = brand.landscape(*SIZE)
+    picture.convert("RGBA").save(os.path.join(out, "backdrop.png"))
     return "backdrop.png"
 
 
@@ -78,13 +89,13 @@ def fonts(folder):
 
 
 def main(arguments):
-    if len(arguments) != 2:
+    if len(arguments) not in (2, 3):
         sys.exit(__doc__)
-    out, font_folder = arguments
+    out, font_folder = arguments[:2]
     os.makedirs(out, exist_ok=True)
     listed = icons(out)
     sheet = marks(out)
-    world = backdrop(out)
+    world = backdrop(out, arguments[2] if len(arguments) == 3 else None)
     fonts(font_folder)
 
     lines = ["-- Written by tools/sim/scene_art.py for one run of the simulator.", "FreeUnitFramesSimArt = {",
