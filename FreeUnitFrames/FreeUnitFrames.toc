@@ -1,0 +1,38 @@
+## Interface: 16001
+## Title: Free Unit Frames
+## Notes: Clean, light unit frames: you, your target and its target, focus, pet, party and raid.
+## Notes-deDE: Schlanke, aufgeräumte Einheitenfenster: du, dein Ziel und dessen Ziel, Fokus, Begleiter, Gruppe und Schlachtzug.
+## Notes-esES: Marcos de unidad limpios y ligeros: tú, tu objetivo y el suyo, foco, mascota, grupo y banda.
+## Notes-frFR: Des cadres d'unité sobres et légers : vous, votre cible et la sienne, focalisation, familier, groupe et raid.
+## Version: 0.1.0
+## Author: Sky Truax
+## X-License: MIT
+## X-Website: https://github.com/skytruax/FreeUnitFrames
+## IconTexture: Interface\AddOns\FreeUnitFrames\Art\Logo
+## SavedVariables: FreeUnitFramesDB
+## SavedVariablesPerCharacter: FreeUnitFramesCharDB
+
+Locale.lua
+Core.lua
+Sealed.lua
+Style.lua
+Defaults.lua
+Frame.lua
+Elements\Health.lua
+Elements\Power.lua
+Elements\Texts.lua
+Elements\Portrait.lua
+Elements\Marks.lua
+Elements\Threat.lua
+Elements\Range.lua
+Elements\CastBar.lua
+Elements\Points.lua
+Elements\Totems.lua
+Elements\Auras.lua
+Templates.xml
+Units.lua
+Group.lua
+Blizzard.lua
+Movers.lua
+Profiles.lua
+Options.lua

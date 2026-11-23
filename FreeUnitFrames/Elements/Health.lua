@@ -1,0 +1,88 @@
+local ADDON, ns = ...
+
+-- The health bar, and on it the healing that is on its way.
+local Frame, Style, Sealed = ns.Frame, ns.Style, ns.Sealed
+
+local Health = { name = "Health" }
+
+Health.events = { "UNIT_HEALTH", "UNIT_MAXHEALTH", "UNIT_CONNECTION", "UNIT_FACTION", "UNIT_HEAL_PREDICTION" }
+
+function Health.Wanted()
+	return true
+end
+
+function Health.Create(frame)
+	local bar = CreateFrame("StatusBar", nil, frame.body)
+	bar.trough = bar:CreateTexture(nil, "BACKGROUND")
+	bar.trough:SetAllPoints(bar)
+
+	-- Healing on its way is a second bar that starts where the health ends and uses the same
+	-- scale, so its length is the heal's size. Whatever would run past full health is cut off.
+	bar.heal = CreateFrame("StatusBar", nil, bar)
+	bar:SetClipsChildren(true)
+
+	frame.health = bar
+end
+
+function Health.Layout(frame, cfg)
+	local bar, pixel, theme = frame.health, frame.pixel, Style.theme
+	local above = frame.powerHeight > 0 and frame.powerHeight + 2 * pixel or pixel
+
+	bar:ClearAllPoints()
+	bar:SetPoint("TOPLEFT", frame.body, "TOPLEFT", frame.barLeft, -pixel)
+	bar:SetPoint("BOTTOMRIGHT", frame.body, "BOTTOMRIGHT", -frame.barRight, above)
+	bar:SetStatusBarTexture(Style.texture)
+	bar.trough:SetColorTexture(theme.trough[1], theme.trough[2], theme.trough[3], theme.trough[4])
+
+	local heal, fill = bar.heal, bar:GetStatusBarTexture()
+	heal:ClearAllPoints()
+	heal:SetPoint("TOPLEFT", fill, "TOPRIGHT")
+	heal:SetPoint("BOTTOMLEFT", fill, "BOTTOMRIGHT")
+	heal:SetWidth(frame.barWidth)
+	heal:SetStatusBarTexture(Style.texture)
+	heal:SetStatusBarColor(Style.HEAL[1], Style.HEAL[2], Style.HEAL[3], Style.HEAL[4])
+	heal:SetShown(cfg.heals and true or false)
+end
+
+local function Paint(bar, unit, cfg)
+	if cfg.color == "health" and Sealed.HealthShareToBarColor(bar, unit, Style.healthCurve) then
+		return
+	end
+	if cfg.color == "plain" then
+		bar:SetStatusBarColor(Style.Toned(Style.theme.plain))
+		return
+	end
+	if cfg.color == "class" and UnitIsPlayer(unit) then
+		local r, g, b, plain = Sealed.ClassColor(unit)
+		if r then
+			if plain then
+				local tone = Style.theme.tone
+				r, g, b = r * tone, g * tone, b * tone
+			end
+			bar:SetStatusBarColor(r, g, b)
+			return
+		end
+	end
+	bar:SetStatusBarColor(Style.ReactionColor(unit))
+end
+
+function Health.Update(frame, unit, event)
+	local bar, cfg = frame.health, frame.cfg
+	-- Someone who is dead or has gone offline has an empty bar, whatever number the game still holds.
+	if not UnitIsConnected(unit) or UnitIsDeadOrGhost(unit) then
+		bar:SetMinMaxValues(0, 1)
+		bar:SetValue(0)
+		bar.heal:SetMinMaxValues(0, 1)
+		bar.heal:SetValue(0)
+		return
+	end
+	-- A bar glides to a new value of the same unit. When the frame has just been pointed at
+	-- someone else (no event) it jumps, or it would sweep from the last unit's health to this one's.
+	Sealed.HealthToBar(bar, unit, event ~= nil and ns.db.smooth)
+	Paint(bar, unit, cfg)
+	if cfg.heals then
+		Sealed.IncomingHealsToBar(bar.heal, unit)
+	end
+end
+
+Frame.Register(Health)

@@ -1,0 +1,13 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/ ..\FrameXML\UI.xsd">
+	<!-- The button a party or raid header makes for each member. The header creates these itself,
+	     also in the middle of a fight when someone joins, so this is where we get to dress them.
+	     Which mouse buttons it answers to is said here and not in OnLoad: addon code may not
+	     change that on a protected button during a fight. -->
+	<Button name="FreeUnitFramesGroupButtonTemplate" inherits="SecureUnitButtonTemplate" registerForClicks="LeftButtonUp, RightButtonUp, MiddleButtonUp, Button4Up, Button5Up" virtual="true">
+		<Scripts>
+			<OnLoad>
+				FreeUnitFrames.Group.OnButtonLoad(self)
+			</OnLoad>
+		</Scripts>
+	</Button>
+</Ui>

@@ -1,0 +1,62 @@
+What goes in which field of the CurseForge project form (World of Warcraft > Addons).
+The project does not exist yet: you create it by hand at https://authors.curseforge.com/
+(Create a project > World of Warcraft > Addons). Everything below is ready to paste or upload.
+
+Name
+    Free Unit Frames
+
+    CurseForge search matches a project's name, summary and author, not its description, and puts
+    name matches first. "Unit Frames" is what people type. The game's name and version numbers
+    stay out of it: the naming rule forbids them.
+
+Summary
+    Clean, light unit frames: player, target, target of target, focus, pet, party and raid (10, 20, 40), with auras, cast bars, threat, range and dispel highlights, themes and shareable profiles.
+
+    188 characters; the field takes 256 and asks for one clear sentence. Search matches the
+    summary, so it carries the words people type: unit frames, party, raid, auras, cast bars.
+
+Main category        Unit Frames
+Additional category  Combat, HUDs
+License              MIT License
+Source               https://github.com/skytruax/FreeUnitFrames
+Issues               https://github.com/skytruax/FreeUnitFrames/issues
+
+Logo
+    curseforge/logo.png (400 x 400): the bronze compass ring of FreeControl's emblem with three
+    bars on its disc, so the two addons look like one family.
+
+Description
+    curseforge/description.html, pasted into the editor's source view (the "<>" button).
+    It is built from description.md by: python3 tools/make_listing.py description
+    Its pictures are the seven gallery pictures at a smaller size (curseforge/web/, loaded from
+    GitHub), so there is nothing to upload for them. The "?v=" on each link is there so that a
+    changed picture is fetched afresh: raise it in description.md when the pictures change.
+
+Images, in this order
+    your own screenshots from the game first, then curseforge/gallery/01-hero.png to
+    07-arrange.png (1920 x 1080 each). They are illustrations and say so on the picture.
+
+File: the first one goes up by hand
+    dist/FreeUnitFrames-0.1.0.zip   (tools/package.sh builds it; dist/ is not in the repository)
+    Release type    Release
+    Game version    World of Warcraft: Forever, 1.60.1
+    Changelog       the v0.1.0 section of CHANGELOG.md (markup type: Markdown)
+    A new project, and each new file, is public once CurseForge has reviewed it.
+
+Later versions: by pushing a tag
+    Once the project exists it has an id (the number in its author-console address).
+    1. Put it in FreeUnitFrames/FreeUnitFrames.toc as a line "## X-Curse-Project-ID: <id>".
+    2. Give this repository the upload token as a secret named CF_API_TOKEN. It is the author
+       API token FreeControl's repository already uses (authors.curseforge.com > API tokens);
+       the Core API key you can apply for separately is a different thing and is not needed
+       for any of this. With gh: gh secret set CF_API_TOKEN -R skytruax/FreeUnitFrames
+    3. Push a version tag (git tag -a v0.1.1 -m "Free Unit Frames 0.1.1"; git push origin v0.1.1).
+       The release workflow builds the zip, makes a GitHub release and sends the file to
+       CurseForge with CHANGELOG.md as its changelog.
+
+GitHub
+    docs/social.png goes in the repository's Settings > Social preview (that one cannot be set
+    from the command line).
+
+Relations
+    none. Free Unit Frames needs no other addon.
