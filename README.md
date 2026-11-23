@@ -10,6 +10,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/skytruax/FreeUnitFrames/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/skytruax/FreeUnitFrames?label=release&color=d9a441"></a>
   <a href="https://github.com/skytruax/FreeUnitFrames/actions/workflows/tests.yml"><img alt="Tests" src="https://github.com/skytruax/FreeUnitFrames/actions/workflows/tests.yml/badge.svg"></a>
   <img alt="World of Warcraft: Forever 1.60.1" src="https://img.shields.io/badge/WoW%20Forever-1.60.1-3b82c4">
   <a href="LICENSE"><img alt="Licence: MIT" src="https://img.shields.io/badge/licence-MIT-3fa55b"></a>
@@ -37,9 +38,9 @@ LifeCraft, a typeface by Eliot Truelove.</sub></p>
 ## Status
 
 **0.1.0 is the first version.** It passes both of its test suites (a model of the client that seals
-values the way the game does, and a simulator running Blizzard's real interface code), and it has
-only just started to be played. If something looks wrong in the game, `/freeuf status` lists any
-error it caught: please open an issue with that text.
+values the way the game does, and a simulator running Blizzard's real interface code). Neither is
+the game, and this version comes straight from them, so expect a rough edge. If something looks
+wrong in the game, `/freeuf status` lists any error it caught: please open an issue with that text.
 
 ## What you get
 
@@ -99,8 +100,10 @@ from the addon's own textures and layout numbers. The spell icons and raid marks
 
 ## Install
 
-Copy the `FreeUnitFrames` folder into `World of Warcraft/_forever_/Interface/AddOns/` and start the
-game, or log out and in again if it is running.
+1. Download the zip from the [latest release](https://github.com/skytruax/FreeUnitFrames/releases/latest).
+2. Unzip it into `World of Warcraft\_forever_\Interface\AddOns\`, so that you end up with
+   `...\AddOns\FreeUnitFrames\FreeUnitFrames.toc`.
+3. Start the game, or log out and in again if it is running.
 
 The game's own player, target, focus, pet, party and raid frames and its cast bar step aside for the
 ones this addon draws. Each can be kept: Options > AddOns > Free Unit Frames.
