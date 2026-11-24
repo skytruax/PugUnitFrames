@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/banner.png" alt="Pug Unit Frames: a party of four, the player casting, a hostile target and a corner of a raid" width="100%">
+  <img src="docs/banner.png" alt="Pug Unit Frames: the pug emblem and the name over a party of four, the player casting, a hostile target and a corner of a raid, in a forge hall where a dwarf stands with his hammer" width="100%">
 </p>
 
 <h1 align="center">Pug Unit Frames</h1>
@@ -176,6 +176,7 @@ tools/
     scene_art.py       what a picture needs that the simulator lacks: icons, raid marks, a world, the font
   make_art.py          draws every texture the addon ships
   make_listing.py      draws the banner, the logo and the store pictures
+  forge_hall.py        the dwarf in his forge hall behind the title pictures: a drawing of our own
   game_icons.py        fetches the game's own spell icons and raid marks those pictures show
   brand.py             the look those pictures share with FreeControl's
   sealed_list.py       makes tools/sealed_apis.txt from Blizzard's API documentation

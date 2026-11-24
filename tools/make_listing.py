@@ -5,7 +5,7 @@
     python3 tools/make_listing.py banner     # only the ones named
 
   curseforge/logo.png                  the project avatar: 400 x 400, as CurseForge requires
-  curseforge/gallery/01-hero.png       title picture
+  curseforge/gallery/01-hero.png       title picture: the emblem and the name, the frames, a dwarf in a forge hall
   curseforge/gallery/02-frames.png     the five single frames
   curseforge/gallery/03-groups.png     party and raid, and what they tell you
   curseforge/gallery/04-combat.png     what keeps working in a fight
@@ -40,10 +40,11 @@ import os
 import sys
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # the sibling modules, also under python -I
 import brand  # noqa: E402
+import forge_hall  # noqa: E402
 import game_icons  # noqa: E402
 import make_art  # noqa: E402
 
@@ -427,39 +428,49 @@ def logo(size=400):
     return make_art.emblem(size)
 
 
-def hero(w=W, h=H, k=2.0, title_y=128, title_size=150, tagline_size=46, stage_y=500, note_size=18, city=0.70, chips=()):
-    """The title, the frames in open sky, and the city along the bottom. `city` is how much of
-    the picture's height the drawn scene takes; the rest, above it, is more of its sky."""
-    scene = brand.landscape(w, round(h * city))
-    gap = h - scene.height
-    canvas = Image.new("RGBA", (w, h), (0, 0, 0, 255))
-    if gap > 0:
-        # Carry the scene's top edge upward, smoothed sideways so its grain does not streak, and
-        # a little deeper towards the top of the picture.
-        strip = scene.convert("RGB").crop((0, 0, w, 8)).resize((max(2, w // 48), 1), Image.BOX).resize((w, 1), Image.BICUBIC)
-        sky = np.asarray(strip.resize((w, gap), Image.NEAREST)).astype(np.float32)
-        deepen = np.linspace(0.84, 1.0, gap, dtype=np.float32)[:, None, None]
-        sky = sky * deepen + brand.noise((w, gap), 1.6, 5)
-        canvas.paste(Image.fromarray(np.clip(sky, 0, 255).astype(np.uint8), "RGB"), (0, 0))
-    canvas.alpha_composite(scene, (0, gap))
+def hero(w=W, h=H, k=2.0, title_y=128, title_size=150, tagline_size=46, stage_y=500, note_size=18, chips=(),
+         eye=0.36, figure=0.30, stand=0.88):
+    """The emblem and the title, the frames, and behind them a dwarf in a forge hall (tools/forge_hall.py:
+    a drawing of our own). `eye` is how far down the picture the hall's far end with its furnace
+    lies, `figure` how tall the dwarf is as a share of the height, `stand` where his feet are: they
+    are chosen so the furnace shows between the title and the frames and the dwarf stands under them."""
+    canvas = forge_hall.hall(w, h, eye=eye, figure=figure, stand=stand)
 
     y, x = np.mgrid[0:h, 0:w].astype(np.float32)
-    shade = np.clip(1 - np.hypot((x - w / 2) / (0.66 * w), (y - stage_y) / (0.42 * h)), 0, 1) ** 1.2 * 0.40
-    scrim = np.zeros((h, w, 4), np.float32)
-    scrim[..., :3] = (8, 30, 70)
-    scrim[..., 3] = shade * 255
-    canvas.alpha_composite(Image.fromarray(scrim.astype(np.uint8), "RGBA"))  # keeps the frames readable
-    foot = np.zeros((h, w, 4), np.float32)  # and a darker strip along the bottom, for the small print
-    foot[..., :3] = (8, 30, 70)
-    foot[..., 3] = np.clip((y - (h - 0.13 * h)) / (0.13 * h), 0, 1) ** 1.4 * 0.80 * 255
-    canvas.alpha_composite(Image.fromarray(foot.astype(np.uint8), "RGBA"))
+
+    def veil(colour, strength):
+        layer = np.zeros((h, w, 4), np.float32)
+        layer[..., :3] = colour
+        layer[..., 3] = np.clip(strength, 0, 1) * 255
+        canvas.alpha_composite(Image.fromarray(layer.astype(np.uint8), "RGBA"))
+
+    # Darker behind the lettering at the top and behind the small print at the foot.
+    veil((8, 5, 8), np.clip(1 - y / (title_y + title_size * 1.25), 0, 1) ** 1.3 * 0.72)
+    veil((8, 5, 8), np.clip((y - (h - 0.13 * h)) / (0.13 * h), 0, 1) ** 1.4 * 0.80)
 
     stage(canvas, w / 2 + 66 * k, stage_y, k)
-    brand.title_text(canvas, (w / 2, title_y), TITLE, title_size * 1.22)
-    brand.shadow_text(canvas, (w / 2, title_y + title_size * 0.76), TAGLINE, tagline_size, (238, 240, 248, 255), "SemiBold", spread=7)
+
+    # The emblem and the name side by side, the pair of them centred.
+    size = title_size * 1.22
+    path = brand.title_font_path()
+    face = ImageFont.truetype(path, round(size)) if path else brand.font(size * 0.86, "Black")
+    name_width = face.getlength(TITLE)
+    badge = round(title_size * 1.30)
+    gap = title_size * 0.14
+    left = (w - (badge + gap + name_width)) / 2
+    emblem = make_art.emblem(badge)
+    pad = round(badge * 0.2)  # room for the shadow to fade out in, or its edge would show as a box
+    shade = Image.new("L", (badge + 2 * pad, badge + 2 * pad), 0)
+    shade.paste(emblem.getchannel("A").point(lambda v: int(v * 0.70)), (pad, pad))
+    shadow = Image.new("RGBA", shade.size, (0, 0, 0, 255))
+    shadow.putalpha(shade.filter(ImageFilter.GaussianBlur(badge * 0.04)))
+    over(canvas, shadow, left - pad, title_y - badge / 2 - pad + badge * 0.05)
+    over(canvas, emblem, left, title_y - badge / 2)
+    brand.title_text(canvas, (left + badge + gap + name_width / 2, title_y), TITLE, size)
+    brand.shadow_text(canvas, (w / 2, title_y + title_size * 0.85), TAGLINE, tagline_size, (244, 240, 232, 255), "SemiBold", spread=7)
     if chips:
-        brand.pills(canvas, w / 2, h - 96, chips, 28, 58, (8, 10, 20, 150), (255, 255, 255, 76))
-    brand.shadow_text(canvas, (w / 2, h - 26), note(), note_size, (206, 210, 224, 255), "Medium", spread=4, strength=0.9)
+        brand.pills(canvas, w / 2, h - 96, chips, 28, 58, (8, 10, 20, 170), (255, 255, 255, 76))
+    brand.shadow_text(canvas, (w / 2, h - 26), note(), note_size, (214, 210, 204, 255), "Medium", spread=4, strength=0.9)
     return canvas
 
 
@@ -469,11 +480,11 @@ def gallery_hero():
 
 
 def banner():
-    return hero(1600, 600, 1.22, 74, 92, 29, 352, note_size=15, city=0.56)
+    return hero(1600, 600, 1.22, 74, 92, 29, 352, note_size=15, eye=0.42, figure=0.265, stand=0.925)
 
 
 def social():
-    return hero(1280, 640, 1.0, 84, 100, 28, 372, note_size=14, city=0.56)
+    return hero(1280, 640, 1.0, 84, 100, 28, 372, note_size=14, eye=0.42, figure=0.285, stand=0.935)
 
 
 def logo_picture(w=W, h=H):
