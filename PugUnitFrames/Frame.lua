@@ -38,6 +38,25 @@ Frame.SHADOW_DROP = 3
 
 local GROUP_KINDS = { party = true, raid = true }
 
+-- What a click on a unit frame does, as attributes of the secure button (Units.lua sets them on
+-- the single frames, Group.lua has the game set them on each member's button).
+--
+-- A plain click targets the unit and a right click opens its menu. With Shift, Ctrl or Alt held
+-- the game does not let "target" through: its own click handler (SecureUnitButton_OnClick) only
+-- lets a click target or open the menu when Blizzard's click bindings list that very click, and
+-- they list the plain ones. A click the player has bound to a spell there, or in an addon like
+-- Clique, is cast as bound. Any other click with a key held would do nothing at all, so it is
+-- made to target as well, by the one-line macro players write for that themselves: over a unit
+-- frame the unit under the mouse is the frame's unit.
+Frame.CLICKS = {
+	["type1"] = "target",
+	["*type1"] = "macro",
+	["*macrotext1"] = "/target [@mouseover,exists]",
+	["*type2"] = "togglemenu",
+	-- The game's ping key pings the unit of a frame that says it takes pings.
+	["ping-receiver"] = true,
+}
+
 local elements = {} -- in the order their files load, which is the order they are laid out in
 local frames = {}   -- every unit frame built so far
 
@@ -317,6 +336,9 @@ function Frame.Layout(frame)
 	body.back:SetColorTexture(theme.back[1], theme.back[2], theme.back[3], theme.back[4])
 	Frame.LayoutEdge(body.edge, body, pixel, theme.edge)
 	Frame.LayoutShadow(body.shadow, body)
+	-- How see-through every frame is. (Being out of range fades the plate on top of this, and a
+	-- frame that fades when nothing is going on does it in Elements\Fade.lua.)
+	frame:SetAlpha(ns.db.alpha)
 
 	-- The space inside the edge is shared out between the portrait, a square at one end, and the
 	-- bars: barLeft and barRight are how far the bars stay from the plate's sides.
@@ -411,6 +433,14 @@ function Frame.Build(frame, kind)
 	body.edge = Frame.MakeEdge(body, "BORDER")
 	body.shadow = Frame.MakeShadow(frame)
 	frame.body = body
+
+	-- The game's ping key asks the frame under the mouse three things (is it pingable, may the
+	-- ping wheel open over it, whom does it stand for). Blizzard's own unit frames answer through
+	-- this mixin, which reads the frame's unit; with it and the "ping-receiver" attribute ours
+	-- are pinged like the game's.
+	if PingableType_UnitFrameMixin then
+		Mixin(frame, PingableType_UnitFrameMixin)
+	end
 
 	frame:SetScript("OnEvent", OnEvent)
 	frame:HookScript("OnShow", OnShow)

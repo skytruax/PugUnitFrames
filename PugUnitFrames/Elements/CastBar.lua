@@ -17,13 +17,45 @@ CastBar.events = {
 local INTERRUPT_HOLD = 0.7 -- seconds an interrupted cast stays up, in red
 local INTERRUPTED = { 0.86, 0.24, 0.20 }
 local SPARK_ALPHA = 0.75
+local LOOK_AGAIN = 0.25    -- seconds between looks at a cast that is on show
 
 function CastBar.Wanted(cfg)
 	return cfg.castbar
 end
 
+-- The bar and its shadow, fully there (they are made see-through when a cast's time is up).
+local function Solid(cast)
+	for _, region in ipairs(cast.fading) do
+		region:SetAlpha(1)
+	end
+end
+
+-- A cast bar goes away when the game says the cast has ended. It does not always say so (a party
+-- member out of sight; players report a hunter's Aimed Shot standing on the party frames for
+-- good, the game's own included). So a bar that is up is looked at again a few times a second:
+-- it is put away if the unit is plainly not casting, and unseen once the cast's time has run out.
+local function LookAgain(cast)
+	local frame = cast.frame
+	if cast.held or not frame.unit or not frame.active.CastBar then
+		return
+	end
+	if not Sealed.CastTimeLeftToAlpha(cast.fading, frame.unit) then
+		cast:Hide()
+	end
+end
+
+local function OnUpdate(cast, elapsed)
+	cast.since = cast.since + elapsed
+	if cast.since >= LOOK_AGAIN then
+		cast.since = 0
+		ns.Try(LookAgain, cast)
+	end
+end
+
 function CastBar.Create(frame)
 	local cast = CreateFrame("Frame", nil, frame.body)
+	cast.frame = frame
+	cast.since = 0
 	cast.back = cast:CreateTexture(nil, "BACKGROUND")
 	cast.back:SetAllPoints(cast)
 	cast.edge = Frame.MakeEdge(cast, "BORDER")
@@ -49,6 +81,8 @@ function CastBar.Create(frame)
 	cast.shield:SetAlpha(0)
 	-- What Sealed.CastToParts draws on.
 	cast.parts = { bar = cast.bar, text = cast.text, icon = cast.icon, shield = cast.shield }
+	cast.fading = { cast, cast.shadow.holder }
+	cast:SetScript("OnUpdate", OnUpdate)
 	cast:Hide()
 	frame.cast = cast
 end
@@ -111,6 +145,8 @@ function CastBar.Update(frame, unit, event)
 	if casting then
 		cast.id = id
 		cast.held = false
+		cast.since = 0
+		Solid(cast)
 		cast.bar:SetStatusBarColor(Style.Toned(Style.CAST))
 		cast.spark:Show()
 		cast:Show()
@@ -120,6 +156,7 @@ function CastBar.Update(frame, unit, event)
 	if event == "UNIT_SPELLCAST_INTERRUPTED" and cast:IsShown() and not cast.held then
 		-- Leave it up for a moment, full and red, so the interrupt is seen.
 		cast.held = true
+		Solid(cast)
 		cast.bar:SetMinMaxValues(0, 1)
 		cast.bar:SetValue(1)
 		cast.bar:SetStatusBarColor(Style.Toned(INTERRUPTED))

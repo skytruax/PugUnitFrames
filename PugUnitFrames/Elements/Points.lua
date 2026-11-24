@@ -8,7 +8,9 @@ local Frame, Style, Sealed = ns.Frame, ns.Style, ns.Sealed
 
 local Points = { name = "Points" }
 
-Points.playerEvents = { "UNIT_POWER_UPDATE", "UNIT_MAXPOWER" }
+-- The game's own combo points listen for all three: the frequent one is what makes a point show
+-- the moment it is gained.
+Points.playerEvents = { "UNIT_POWER_UPDATE", "UNIT_POWER_FREQUENT", "UNIT_MAXPOWER" }
 Points.worldEvents = { "PLAYER_TARGET_CHANGED" }
 
 local COUNT = 5

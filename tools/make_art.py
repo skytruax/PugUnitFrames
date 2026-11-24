@@ -203,6 +203,53 @@ def shield(draw):
     draw.polygon(scale([(32, 6), (54, 14), (54, 32), (32, 58), (10, 32), (10, 14)]), fill=255)
 
 
+# The part someone plays in a group.
+def tank(draw):
+    # A kite shield: flat across the top, drawn in to a point.
+    draw.polygon(scale([(11, 8), (53, 8), (53, 30), (32, 58), (11, 30)]), fill=255)
+
+
+def healer(draw):
+    draw.rectangle(scale([(25, 8), (39, 56)]), fill=255)
+    draw.rectangle(scale([(8, 25), (56, 39)]), fill=255)
+
+
+def damage(draw):
+    # One sword, point up and to the right.
+    draw.polygon(scale([(52, 6), (58, 12), (26, 44), (20, 38)]), fill=255)
+    draw.polygon(scale([(12, 32), (16, 28), (36, 48), (32, 52)]), fill=255)
+    draw.polygon(scale([(8, 50), (14, 56), (22, 48), (16, 42)]), fill=255)
+
+
+def pennant(draw):
+    # A flag on its staff, for someone marked for fighting other players. White: the game tints
+    # it with the colour of the side its bearer fights for.
+    draw.rectangle(scale([(12, 6), (18, 58)]), fill=255)
+    draw.polygon(scale([(18, 8), (56, 14), (42, 24), (56, 34), (18, 40)]), fill=255)
+
+
+def face(mouth):
+    """A round face with two eyes and the mouth drawn by mouth(draw): a hunter's pet's mood."""
+    def shape(draw):
+        draw.ellipse(scale([(6, 6), (58, 58)]), fill=255)
+        for x in (22, 42):
+            draw.ellipse(scale([(x - 4, 20), (x + 4, 30)]), fill=0)
+        mouth(draw)
+    return shape
+
+
+def smile(draw):
+    draw.arc(scale([(18, 20), (46, 48)]), 25, 155, fill=0, width=5 * SS)
+
+
+def level(draw):
+    draw.line(scale([(21, 42), (43, 42)]), fill=0, width=5 * SS)
+
+
+def frown(draw):
+    draw.arc(scale([(18, 38), (46, 66)]), 205, 335, fill=0, width=5 * SS)
+
+
 # ---------------------------------------------------------------------------
 # The emblem: the bronze compass ring the Free addons share, with a pug looking out of it
 # ---------------------------------------------------------------------------
@@ -333,6 +380,13 @@ def main():
     mark("Mark-Waiting", dots, (236, 190, 86, 255))
     mark("Mark-Resurrect", rising, (250, 236, 170, 255))
     mark("Mark-Shield", shield, (176, 184, 196, 255))
+    mark("Mark-Tank", tank, (122, 164, 226, 255))
+    mark("Mark-Healer", healer, (104, 214, 122, 255))
+    mark("Mark-Damage", damage, (226, 108, 84, 255))
+    mark("Mark-PvP", pennant, (255, 255, 255, 255))
+    mark("Mood-Happy", face(smile), (104, 214, 122, 255))
+    mark("Mood-Content", face(level), (236, 190, 86, 255))
+    mark("Mood-Unhappy", face(frown), (226, 84, 70, 255))
 
     save_tga(emblem(64), "Logo")  # the icon in the game's addon list
     print("art written to", ART)

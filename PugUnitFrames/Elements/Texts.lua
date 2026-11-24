@@ -13,6 +13,9 @@ Texts.events = {
 	"UNIT_NAME_UPDATE", "UNIT_LEVEL", "UNIT_CLASSIFICATION_CHANGED", "UNIT_FACTION", "UNIT_CONNECTION",
 	"UNIT_HEALTH", "UNIT_MAXHEALTH", "UNIT_POWER_UPDATE", "UNIT_MAXPOWER", "UNIT_DISPLAYPOWER",
 }
+-- On the frames a player watches closely the power number moves with every tick, as the bar
+-- under it does (Power.lua); without this it would only follow in steps.
+Texts.closeEvents = { "UNIT_POWER_FREQUENT" }
 
 local NARROW = Frame.NARROW
 local PAD = 4
@@ -106,12 +109,13 @@ function Texts.Layout(frame, cfg, on)
 	else
 		texts.name:SetPoint("LEFT", health, "LEFT", PAD, 0)
 	end
-	local levelRoom = cfg.level and Style.fontSize * 2 or 0
+	local levelRoom = cfg.level and Style.fontSize * 2.5 or 0
 	texts.name:SetWidth(math.max(10, frame.barWidth * (1 - numbers) - 2 * PAD - levelRoom))
 end
 
--- "60", "62+" for an elite, "??" for something too far above the player to tell.
-local CLASSIFICATION_SUFFIX = { elite = "+", rareelite = "+", worldboss = "+", rare = "" }
+-- "60", "62+" for an elite, "62R" for a rare one and "62R+" for one that is both, "??" for
+-- something too far above the player to tell.
+local CLASSIFICATION_SUFFIX = { elite = "+", rareelite = "R+", worldboss = "+", rare = "R" }
 
 -- How far the game's difficulty colours are lifted towards white. As they come, the red of a
 -- deadly fight is the red of the hostile bar it is written on, and the grey of an easy one is
@@ -145,7 +149,9 @@ local function StatusOf(unit)
 end
 
 local HEALTH_EVENTS = { UNIT_HEALTH = true, UNIT_MAXHEALTH = true, UNIT_CONNECTION = true }
-local POWER_EVENTS = { UNIT_POWER_UPDATE = true, UNIT_MAXPOWER = true, UNIT_DISPLAYPOWER = true, UNIT_CONNECTION = true }
+local POWER_EVENTS = {
+	UNIT_POWER_UPDATE = true, UNIT_POWER_FREQUENT = true, UNIT_MAXPOWER = true, UNIT_DISPLAYPOWER = true, UNIT_CONNECTION = true,
+}
 local IDENTITY_EVENTS = { UNIT_NAME_UPDATE = true, UNIT_LEVEL = true, UNIT_CLASSIFICATION_CHANGED = true, UNIT_FACTION = true }
 
 function Texts.Update(frame, unit, event)
@@ -169,7 +175,8 @@ function Texts.Update(frame, unit, event)
 		end
 	end
 	if (all or POWER_EVENTS[event]) and cfg.powerText ~= "none" then
-		if status then
+		-- No number for a power bar that has been put away for having nothing to show (Power.lua).
+		if status or frame.powerGone then
 			texts.power:SetText("")
 		else
 			Sealed.PowerToText(texts.power, unit, (UnitPowerType(unit)), cfg.powerText)

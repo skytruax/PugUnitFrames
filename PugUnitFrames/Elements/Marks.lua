@@ -1,14 +1,16 @@
 local ADDON, ns = ...
 
--- Small marks on the plate's rim: the raid mark, the group leader's, resting, in combat, a
--- resurrection on its way, and the answer to a ready check.
+-- Small marks on the plate's rim: the raid mark, the group leader's, resting, in combat, the
+-- part someone plays in the group (tank, healer, damage), a flag for someone marked for fighting
+-- other players, a resurrection on its way, and the answer to a ready check.
 local Frame, Sealed = ns.Frame, ns.Sealed
 
 local Marks = { name = "Marks" }
 
-Marks.events = { "UNIT_FLAGS", "INCOMING_RESURRECT_CHANGED" }
+-- UNIT_FACTION is also what the game sends when a unit's flag for fighting players goes up or down.
+Marks.events = { "UNIT_FLAGS", "UNIT_FACTION", "INCOMING_RESURRECT_CHANGED" }
 Marks.worldEvents = {
-	"RAID_TARGET_UPDATE", "PARTY_LEADER_CHANGED", "GROUP_ROSTER_UPDATE", "PLAYER_UPDATE_RESTING",
+	"RAID_TARGET_UPDATE", "PARTY_LEADER_CHANGED", "GROUP_ROSTER_UPDATE", "PLAYER_ROLES_ASSIGNED", "PLAYER_UPDATE_RESTING",
 	"PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "READY_CHECK", "READY_CHECK_CONFIRM", "READY_CHECK_FINISHED",
 }
 
@@ -16,6 +18,12 @@ local ART = ns.ART
 local RAID_MARKS = "Interface\\TargetingFrame\\UI-RaidTargetingIcons" -- the game's own sheet of eight
 local READY_ART = { ready = ART .. "Mark-Ready", notready = ART .. "Mark-NotReady", waiting = ART .. "Mark-Waiting" }
 local READY_LINGER = 6 -- seconds the answers stay up after a ready check ends
+local ROLE_ART = { TANK = ART .. "Mark-Tank", HEALER = ART .. "Mark-Healer", DAMAGER = ART .. "Mark-Damage" }
+
+-- The flag is white and takes the colour of the side its bearer fights for; amber for someone
+-- who is everybody's enemy (a free-for-all area), or whose side the game does not name.
+local SIDE = { Alliance = { 0.36, 0.58, 0.96 }, Horde = { 0.90, 0.26, 0.21 } }
+local NO_SIDE = { 0.95, 0.74, 0.25 }
 
 function Marks.Wanted(cfg)
 	return cfg.marks
@@ -33,6 +41,9 @@ function Marks.Create(frame)
 	marks.leader = holder:CreateTexture(nil, "OVERLAY")
 	marks.leader:SetTexture(ART .. "Mark-Leader")
 	marks.state = holder:CreateTexture(nil, "OVERLAY")  -- resting or in combat
+	marks.role = holder:CreateTexture(nil, "OVERLAY")   -- tank, healer or damage
+	marks.pvp = holder:CreateTexture(nil, "OVERLAY")    -- marked for fighting other players
+	marks.pvp:SetTexture(ART .. "Mark-PvP")
 	marks.center = holder:CreateTexture(nil, "OVERLAY") -- ready check answer or resurrection
 	frame.marks = marks
 end
@@ -67,6 +78,21 @@ function Marks.Layout(frame, cfg, on)
 	marks.state:SetSize(small, small)
 	marks.state:SetPoint("CENTER", frame.body, "TOPLEFT", small * 1.5 + 2, 0)
 
+	-- The part played in the group: third along the top edge. A narrow frame has its raid mark
+	-- there, so on one of those it sits in the bottom left corner instead.
+	marks.role:ClearAllPoints()
+	marks.role:SetSize(small, small)
+	if cfg.width < Frame.NARROW then
+		marks.role:SetPoint("BOTTOMLEFT", frame.body, "BOTTOMLEFT", 2 * frame.pixel, 2 * frame.pixel)
+	else
+		marks.role:SetPoint("CENTER", frame.body, "TOPLEFT", small * 2.5 + 4, 0)
+	end
+
+	-- The flag rides the top right corner.
+	marks.pvp:ClearAllPoints()
+	marks.pvp:SetSize(small, small)
+	marks.pvp:SetPoint("CENTER", frame.body, "TOPRIGHT", -small * 0.5, 0)
+
 	marks.center:ClearAllPoints()
 	marks.center:SetSize(big, big)
 	marks.center:SetPoint("CENTER", frame.body, "CENTER")
@@ -83,6 +109,30 @@ local function ShowState(frame, unit)
 	else
 		state:Hide()
 	end
+end
+
+local function ShowRole(frame, unit)
+	local role = frame.marks.role
+	local art = ROLE_ART[Sealed.Role(unit) or ""]
+	if art then
+		role:SetTexture(art)
+		role:Show()
+	else
+		role:Hide()
+	end
+end
+
+local function ShowPvP(frame, unit)
+	local pvp = frame.marks.pvp
+	if UnitIsPVPFreeForAll(unit) then
+		pvp:SetVertexColor(NO_SIDE[1], NO_SIDE[2], NO_SIDE[3])
+		pvp:SetAlpha(1)
+		return
+	end
+	local color = SIDE[UnitFactionGroup(unit) or ""] or NO_SIDE
+	pvp:SetVertexColor(color[1], color[2], color[3])
+	-- Whether the flag is up can be sealed (for a creature, or a player outside the group).
+	Sealed.PvPToAlpha(pvp, unit)
 end
 
 local function ShowCenter(frame, unit)
@@ -104,6 +154,8 @@ function Marks.Update(frame, unit, event)
 	Sealed.RaidMarkToTexture(marks.raid, unit)
 	Sealed.LeaderToAlpha(marks.leader, unit)
 	ShowState(frame, unit)
+	ShowRole(frame, unit)
+	ShowPvP(frame, unit)
 	ShowCenter(frame, unit)
 	if event == "READY_CHECK_FINISHED" then
 		-- The game forgets the answers a few seconds after the check ends; look again then.

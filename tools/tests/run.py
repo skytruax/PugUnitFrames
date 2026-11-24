@@ -240,7 +240,7 @@ def check_events_exist():
     if not os.path.exists(os.path.join(ROOT, reference)):
         raise Skipped("the client's event list has not been fetched (tools/sim/lab/build-image.sh does that)")
     known = set(re.findall(r"^([A-Z][A-Z0-9_]+):", read(reference), re.M))
-    not_events = {"ANCHOR_BOTTOMRIGHT"}  # a tooltip anchor, not an event
+    not_events = {"ANCHOR_BOTTOMRIGHT", "IN_OUT"}  # a tooltip anchor and an animation's easing, not events
     problems = []
     for name, source in lua_sources():
         for match in re.finditer(r'"([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+)"', source):

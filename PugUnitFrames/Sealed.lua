@@ -41,6 +41,14 @@ PERCENT:SetType(Enum.LuaCurveType.Linear)
 PERCENT:AddPoint(0, 0)
 PERCENT:AddPoint(1, 100)
 
+-- Turns a length of time into "is there any": 1 while some is left, 0 when none is. A span of
+-- time (a cast, a totem's life) can be put through it by the game, and what comes out, sealed or
+-- not, is an alpha: something drawn with it is there while the time runs and gone when it is up.
+local TIME_LEFT = C_CurveUtil.CreateCurve()
+TIME_LEFT:SetType(Enum.LuaCurveType.Step)
+TIME_LEFT:AddPoint(0, 0)
+TIME_LEFT:AddPoint(0.001, 1)
+
 ---------------------------------------------------------------------------
 -- Health
 ---------------------------------------------------------------------------
@@ -51,11 +59,14 @@ end
 
 -- Colours a bar by how full the unit's health is, through a colour curve (Style.lua builds them:
 -- red when nearly empty, through yellow, to green when full). `also`, when given, is a texture
--- that takes the same colour (the empty part of the bar, behind it).
+-- that takes the same colour (the empty part of the bar, behind it); `bar` may be left out when
+-- only that texture is to be coloured. Returns whether the game gave a colour.
 function Sealed.HealthShareToBarColor(bar, unit, colorCurve, also)
 	local color = UnitHealthPercent(unit, true, colorCurve)
 	if not IsPlainNil(color) and canaccesstable(color) then
-		bar:SetStatusBarColor(color:GetRGB())
+		if bar then
+			bar:SetStatusBarColor(color:GetRGB())
+		end
 		if also then
 			also:SetVertexColor(color:GetRGB())
 		end
@@ -96,12 +107,35 @@ function Sealed.IncomingHealsToBar(bar, unit)
 	bar:SetValue(amount)
 end
 
+-- What is soaking up damage before the unit's health does (a priest's shield), as a bar that
+-- shares the health bar's scale: as long as the shield is large against maximum health.
+function Sealed.AbsorbsToBar(bar, unit)
+	bar:SetMinMaxValues(0, UnitHealthMax(unit))
+	bar:SetValue(UnitGetTotalAbsorbs(unit))
+end
+
 ---------------------------------------------------------------------------
 -- Power (mana, rage, energy, focus)
 ---------------------------------------------------------------------------
 function Sealed.PowerToBar(bar, unit, powerType, smooth)
 	bar:SetMinMaxValues(0, UnitPowerMax(unit, powerType))
 	bar:SetValue(UnitPower(unit, powerType), smooth and EASE_OUT or IMMEDIATE)
+end
+
+-- Whether the unit plainly has none of a power: true only when the game says so in a number
+-- this addon may read. The most a unit can hold is sealed for anything a player does not
+-- control; how much it holds now is sealed only when the unit has that power at all, so an
+-- unsealed nought there means there is none to show. Anything sealed counts as "has some".
+function Sealed.HasNoPower(unit, powerType)
+	local most = UnitPowerMax(unit, powerType)
+	if not issecretvalue(most) then
+		return most == 0
+	end
+	local now = UnitPower(unit, powerType)
+	if not issecretvalue(now) then
+		return now == 0
+	end
+	return false
 end
 
 function Sealed.PowerToText(text, unit, powerType, style)
@@ -164,6 +198,32 @@ end
 -- Shows a mark while the unit leads its group.
 function Sealed.LeaderToAlpha(region, unit)
 	region:SetAlphaFromBoolean(UnitIsGroupLeader(unit), 1, 0)
+end
+
+-- Shows a mark while the unit is flagged for fighting other players.
+function Sealed.PvPToAlpha(region, unit)
+	region:SetAlphaFromBoolean(UnitIsPVP(unit), 1, 0)
+end
+
+-- The part a group member has taken: "TANK", "HEALER" or "DAMAGER", or nil for none. The game
+-- seals it for anyone outside the group, who then counts as having none.
+function Sealed.Role(unit)
+	local role = UnitGroupRolesAssigned(unit)
+	if issecretvalue(role) or role == "NONE" then
+		return nil
+	end
+	return role
+end
+
+-- Shows a region while two unit names stand for the same creature (a group member who is the
+-- player's target). The game answers nothing for pairs it will not compare.
+function Sealed.SameUnitToAlpha(region, unit, other)
+	local same = UnitIsUnit(unit, other)
+	if IsPlainNil(same) then
+		region:SetAlpha(0)
+		return
+	end
+	region:SetAlphaFromBoolean(same, 1, 0)
 end
 
 ---------------------------------------------------------------------------
@@ -238,6 +298,26 @@ function Sealed.CastToParts(parts, unit)
 	return true, castBarID
 end
 
+-- Looks at a cast that is on show again: returns false if the unit is plainly not casting any
+-- more, and otherwise makes the regions see-through once the cast's time is up. The game does not
+-- always say that a cast has ended (a party member out of sight; players report a hunter's Aimed
+-- Shot staying up for good, on the game's own frames too), and a bar that waited for the word
+-- would then stand there until the next cast.
+function Sealed.CastTimeLeftToAlpha(regions, unit)
+	local duration = UnitCastingDuration(unit)
+	if IsPlainNil(duration) then
+		duration = UnitChannelDuration(unit)
+		if IsPlainNil(duration) then
+			return false
+		end
+	end
+	local alpha = duration:EvaluateRemainingDuration(TIME_LEFT)
+	for _, region in ipairs(regions) do
+		region:SetAlpha(alpha)
+	end
+	return true
+end
+
 ---------------------------------------------------------------------------
 -- Auras (buffs and debuffs)
 ---------------------------------------------------------------------------
@@ -298,16 +378,31 @@ end
 -- Totems
 ---------------------------------------------------------------------------
 -- Draws totem slot `slot` on an icon button (button.icon, button.cooldown), visible while a
--- totem stands there.
+-- totem stands there with time left on it. Returns whether one does, or nil when the game will
+-- not say (in a fight everything about a totem is sealed).
+--
+-- "Is there a totem" alone is not enough. In a fight the game answers yes for the slot of every
+-- element the shaman has learnt, standing or not, and an empty one differs only in having no
+-- time on it: the game's own totem frame shows a slot only when its time is above nought, and
+-- players of another addon met black squares that stayed until the fight ended. So the time
+-- left decides as well, through a curve when it may not be looked at.
 function Sealed.TotemToButton(button, slot)
-	local standing, _, _, _, icon = GetTotemInfo(slot)
+	local standing, _, _, length, icon = GetTotemInfo(slot)
 	if IsPlainNil(standing) then
 		button:SetAlpha(0)
-		return
+		return false
 	end
+	local duration = GetTotemDuration(slot)
 	button.icon:SetTexture(icon)
-	button.cooldown:SetCooldownFromDurationObject(GetTotemDuration(slot), true)
-	button:SetAlphaFromBoolean(standing, 1, 0)
+	button.cooldown:SetCooldownFromDurationObject(duration, true)
+	if not issecretvalue(standing) and not issecretvalue(length) then
+		local up = standing and length > 0
+		button:SetAlpha(up and 1 or 0)
+		return up
+	end
+	local left = duration:EvaluateRemainingDuration(TIME_LEFT)
+	button:SetAlpha(C_CurveUtil.EvaluateColorValueFromBoolean(standing, left, 0))
+	return nil
 end
 
 ---------------------------------------------------------------------------

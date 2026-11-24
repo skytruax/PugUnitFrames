@@ -16,16 +16,28 @@ local headers = {} -- party = ..., raid = ...
 
 local MAX_RAID = 40
 local RAID_GROUPS = "1,2,3,4,5,6,7,8"
+local ROLE_ORDER = "TANK,HEALER,DAMAGER,NONE"
 
 -- Runs in the game's restricted environment for every button a header makes. It has no access
--- to this addon: the sizes come from attributes on the header.
+-- to this addon: the sizes come from attributes on the header, and what a click does (Frame.CLICKS)
+-- is written into the snippet below.
 local INITIAL_CONFIG = [[
 	local header = self:GetParent()
 	self:SetWidth(header:GetAttribute("pug-width"))
 	self:SetHeight(header:GetAttribute("pug-height"))
-	self:SetAttribute("*type1", "target")
-	self:SetAttribute("*type2", "togglemenu")
 ]]
+do
+	local names = {}
+	for name in pairs(Frame.CLICKS) do
+		names[#names + 1] = name
+	end
+	table.sort(names)
+	for _, name in ipairs(names) do
+		local value = Frame.CLICKS[name]
+		INITIAL_CONFIG = INITIAL_CONFIG .. ("\tself:SetAttribute(%q, %s)\n"):format(name,
+			type(value) == "string" and ("%q"):format(value) or tostring(value))
+	end
+end
 
 function Group.Get(kind)
 	return headers[kind]
@@ -121,6 +133,9 @@ local function Configure(header, kind)
 		header:SetAttribute("showRaid", false)
 		header:SetAttribute("showSolo", cfg.showSolo)
 		header:SetAttribute("showPlayer", cfg.showPlayer)
+		-- By the part each member has taken: tanks first, then healers, then everyone else.
+		header:SetAttribute("groupBy", cfg.byRole and "ASSIGNEDROLE" or nil)
+		header:SetAttribute("groupingOrder", cfg.byRole and ROLE_ORDER or nil)
 	else
 		header:SetAttribute("showRaid", true)
 		header:SetAttribute("showParty", false)

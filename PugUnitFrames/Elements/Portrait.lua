@@ -12,10 +12,7 @@ function Portrait.Wanted(cfg)
 end
 
 function Portrait.Create(frame)
-	local picture = frame.body:CreateTexture(nil, "ARTWORK")
-	-- The game draws these round, on a square; cutting the rim off leaves a square face.
-	picture:SetTexCoord(0.14, 0.86, 0.14, 0.86)
-	frame.portrait = picture
+	frame.portrait = frame.body:CreateTexture(nil, "ARTWORK")
 end
 
 function Portrait.Layout(frame, cfg, on)
@@ -25,6 +22,13 @@ function Portrait.Layout(frame, cfg, on)
 		return
 	end
 	local square = cfg.height - 2 * pixel
+	-- The game draws these round, on a square; cutting the rim off leaves a square face. Mirrored,
+	-- the face looks the other way (towards the bars, say, when it stands at the right end).
+	if cfg.mirror then
+		picture:SetTexCoord(0.86, 0.14, 0.14, 0.86)
+	else
+		picture:SetTexCoord(0.14, 0.86, 0.14, 0.86)
+	end
 	picture:ClearAllPoints()
 	picture:SetSize(square, square)
 	if cfg.portrait == "left" then

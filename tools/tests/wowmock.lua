@@ -54,6 +54,14 @@ local M = {
 	reloads = 0,
 	unreadableFonts = {},  -- [path] = true: a font file the game cannot read
 	loadedAddOns = {},     -- [name] = true: another addon that is loaded
+	driven = {},           -- [frame] = the rule the game shows and hides it by (RegisterStateDriver)
+	keyDown = true,        -- the game's "cast on key down" setting, on unless the player changes it
+	modifiers = "",        -- the keys held during a click: "", "shift-", "ctrl-", "alt-"
+	destroyed = {},        -- totem slots sent away by a click, in order
+	macros = {},           -- macro texts run by a click, in order
+	petHappiness = nil,    -- 1 unhappy, 2 content, 3 happy; nil: no pet that has a mood
+	sealComparisons = false, -- whether two unit names being the same creature comes back sealed
+	emptySlotsSayYes = false, -- in a fight, an empty totem slot answers "there is a totem"
 }
 Mock = M
 
@@ -168,7 +176,17 @@ Enum = {
 	UnitAuraSortRule = { Unsorted = 0, Default = 1 },
 	UnitAuraSortDirection = { Normal = 0, Reverse = 1 },
 	ForbiddenAspect = { EventRegistrations = 16, ChangeParent = 1024 },
+	PowerType = { Mana = 0, Rage = 1, Focus = 2, Energy = 3, ComboPoints = 4 },
 }
+
+function Mixin(object, ...)
+	for index = 1, select("#", ...) do
+		for key, value in pairs((select(index, ...))) do
+			object[key] = value
+		end
+	end
+	return object
+end
 
 STANDARD_TEXT_FONT = "Fonts\\FRIZQT__.TTF"
 RAID_TARGET_TEXTURE_ROWS = 4
@@ -392,15 +410,29 @@ C_CurveUtil = {
 }
 
 -- A span of time the game can draw but an addon cannot read. The mock keeps what it stands for.
+local durationSpan = setmetatable({}, { __mode = "k" }) -- [object] = { start =, length =, sealed = }
+local DURATION_METHODS = {}
+-- The time left, put through a curve by the game. What comes out is sealed when the span is of
+-- something the game seals.
+function DURATION_METHODS:EvaluateRemainingDuration(curve)
+	local span = durationSpan[self]
+	assert(type(curve) == "table" and curve.points and not curve.isColor, "EvaluateRemainingDuration needs a number curve")
+	return Through(curve, math.max(0, span.start + span.length - M.now), span.sealed)
+end
 local DURATION = {
-	__index = function(_, key) error("this model's duration objects have no '" .. tostring(key) .. "'", 2) end,
+	__index = function(_, key)
+		local method = DURATION_METHODS[key]
+		if not method then
+			error("this model's duration objects have no '" .. tostring(key) .. "'", 2)
+		end
+		return method
+	end,
 	__tostring = function() return "LuaDurationObject" end,
 }
-local durationSpan = setmetatable({}, { __mode = "k" }) -- [object] = { start =, length = }
 
-local function Duration(start, length)
+local function Duration(start, length, sealed)
 	local object = setmetatable({}, DURATION)
-	durationSpan[object] = { start = start, length = length }
+	durationSpan[object] = { start = start, length = length, sealed = sealed and true or false }
 	return object
 end
 
@@ -671,15 +703,26 @@ function Frame:GetCenter()
 	return left + width / 2, bottom + height / 2
 end
 
+-- Giving a frame a script for the mouse switches its mouse on, as the game does (the simulator,
+-- which runs the game's own widget code, showed it: an EnableMouse(false) before such a script
+-- is undone by it).
+local MOUSE_SCRIPTS = { OnEnter = true, OnLeave = true, OnMouseDown = true, OnMouseUp = true }
+
 function Frame:SetScript(script, fn)
 	Forbid(self)
 	assert(fn == nil or type(fn) == "function", "SetScript needs a function or nil")
 	self.scripts[script] = fn
+	if fn and MOUSE_SCRIPTS[script] then
+		self.mouse = true
+	end
 end
 function Frame:GetScript(script) return self.scripts[script] end
 function Frame:HookScript(script, fn)
 	Forbid(self)
 	assert(type(fn) == "function", "HookScript needs a function")
+	if MOUSE_SCRIPTS[script] then
+		self.mouse = true
+	end
 	local before = self.scripts[script]
 	self.scripts[script] = function(...)
 		if before then
@@ -720,6 +763,39 @@ function Frame:SetAttribute(name, value)
 end
 function Frame:GetAttribute(name) return self.attributes[name] end
 
+-- Animations: only what makes a frame pulse.
+local AnimationGroup, Animation = {}, {}
+AnimationGroup.__index = function(_, key)
+	return AnimationGroup[key] or error("this model's animation groups have no '" .. tostring(key) .. "'", 2)
+end
+Animation.__index = function(_, key)
+	return Animation[key] or error("this model's animations have no '" .. tostring(key) .. "'", 2)
+end
+local LOOPS = { NONE = true, REPEAT = true, BOUNCE = true }
+function Frame:CreateAnimationGroup()
+	local group = setmetatable({}, AnimationGroup)
+	rawset(group, "owner", self)
+	rawset(group, "animations", {})
+	rawset(group, "playing", false)
+	return group
+end
+function AnimationGroup:SetLooping(kind) assert(LOOPS[kind], "SetLooping needs NONE, REPEAT or BOUNCE") rawset(self, "looping", kind) end
+function AnimationGroup:CreateAnimation(kind)
+	assert(kind == "Alpha", "this model only has Alpha animations")
+	local animation = setmetatable({}, Animation)
+	rawset(animation, "kind", kind)
+	local animations = rawget(self, "animations")
+	animations[#animations + 1] = animation
+	return animation
+end
+function AnimationGroup:Play() rawset(self, "playing", true) end
+function AnimationGroup:Stop() rawset(self, "playing", false) end
+function AnimationGroup:IsPlaying() return rawget(self, "playing") end
+function Animation:SetFromAlpha(alpha) Plain("SetFromAlpha", alpha) rawset(self, "from", alpha) end
+function Animation:SetToAlpha(alpha) Plain("SetToAlpha", alpha) rawset(self, "to", alpha) end
+function Animation:SetDuration(seconds) Plain("SetDuration", seconds) rawset(self, "seconds", seconds) end
+function Animation:SetSmoothing(kind) Plain("SetSmoothing", kind) rawset(self, "smoothing", kind) end
+
 -- StatusBar ----------------------------------------------------------------
 Inherit(StatusBar, Frame)
 function StatusBar:SetStatusBarTexture(texture)
@@ -739,6 +815,12 @@ function StatusBar:SetValue(value, interpolation)
 	self.value, self.interpolation, self.timer = value, interpolation, nil
 end
 function StatusBar:GetValue() return self.value end
+function StatusBar:SetOrientation(orientation)
+	Plain("SetOrientation", orientation)
+	assert(orientation == "HORIZONTAL" or orientation == "VERTICAL", "SetOrientation needs HORIZONTAL or VERTICAL")
+	self.orientation = orientation
+end
+function StatusBar:SetReverseFill(reverse) Plain("SetReverseFill", reverse) self.reverseFill = reverse and true or false end
 function StatusBar:GetMinMaxValues() return self.low, self.high end
 function StatusBar:SetStatusBarColor(r, g, b, a) self.barColor = { r, g, b, a } end
 function StatusBar:SetTimerDuration(duration, interpolation, direction)
@@ -752,8 +834,22 @@ Inherit(Cooldown, Frame)
 function Cooldown:SetReverse(reverse) Plain("SetReverse", reverse) self.reverse = reverse end
 function Cooldown:SetDrawEdge(draw) self.drawEdge = draw end
 function Cooldown:SetHideCountdownNumbers(hide) Plain("SetHideCountdownNumbers", hide) self.hideNumbers = hide end
+-- Takes the name of one of the game's font objects.
+local GAME_FONTS = { NumberFontNormalSmall = true }
+function Cooldown:SetCountdownFont(name)
+	Plain("SetCountdownFont", name)
+	assert(GAME_FONTS[name], "this model has no font object '" .. tostring(name) .. "'")
+	self.countdownFont = name
+end
 function Cooldown:SetCooldownFromDurationObject(duration, clearIfZero)
 	Guard(self, "SetCooldownFromDurationObject")
+	-- The sweep of a secure button is the button's business: set on a cooldown that sits
+	-- directly on a protected frame, this is refused in a fight (the simulator, which runs the
+	-- game's own widget rules, refused exactly that and nothing one step further away).
+	if self.parent and self.parent.protected and M.combat and insecure() then
+		M.blocked[#M.blocked + 1] = "SetCooldownFromDurationObject"
+		error("a cooldown on a protected frame cannot be set by addon code in combat", 2)
+	end
 	Plain("SetCooldownFromDurationObject's clearIfZero", clearIfZero)
 	assert(IsDuration(duration), "SetCooldownFromDurationObject needs a duration object")
 	self.duration = duration
@@ -770,6 +866,28 @@ function Button:Click(mouseButton)
 	if self.scripts.OnClick then
 		self.scripts.OnClick(self, mouseButton or "LeftButton", false)
 	end
+end
+
+-- A click of the mouse as the player makes it: the press, then the release, each handed to the
+-- button only if it takes that half of a click of that button, is on screen and takes the mouse.
+-- `modifiers` is "", "shift-", "ctrl-" or "alt-". The game's handlers run as the game's own code.
+function M.Press(button, mouseButton, modifiers)
+	mouseButton = mouseButton or "LeftButton"
+	M.modifiers = modifiers or ""
+	M.clicked = nil
+	for _, down in ipairs({ true, false }) do
+		local half = down and "Down" or "Up"
+		local takes = false
+		for _, registered in ipairs(button.clicks or { "LeftButtonUp" }) do
+			if registered == mouseButton .. half or registered == "Any" .. half then
+				takes = true
+			end
+		end
+		if takes and button.mouse ~= false and button:IsVisible() and button.scripts.OnClick then
+			M.Secure(button.scripts.OnClick, button, mouseButton, down)
+		end
+	end
+	M.modifiers = ""
 end
 
 Inherit(CheckButton, Button)
@@ -792,11 +910,56 @@ local CLASSES = { Frame = Frame, StatusBar = StatusBar, Cooldown = Cooldown, But
 ---------------------------------------------------------------------------
 -- Templates and CreateFrame
 ---------------------------------------------------------------------------
-function SecureUnitButton_OnClick(self, mouseButton)
-	M.clicked = { frame = self, button = mouseButton, unit = self:GetAttribute("unit") }
+-- An attribute as a secure button looks it up for a click: with the keys held and the button,
+-- then with "any keys", then with "any button", then bare (SecureButton_GetModifiedAttribute).
+local function ClickAttribute(self, name, mouseButton)
+	local prefix = M.modifiers
+	local suffix = mouseButton == "RightButton" and "2" or "1"
+	local attributes = self.attributes
+	local value = attributes[prefix .. name .. suffix]
+	if value == nil then value = attributes["*" .. name .. suffix] end
+	if value == nil then value = attributes[prefix .. name .. "*"] end
+	if value == nil then value = attributes["*" .. name .. "*"] end
+	if value == nil then value = attributes[name] end
+	return value
 end
 
-local PROTECTED_TEMPLATES = { SecureUnitButtonTemplate = true, SecureGroupHeaderTemplate = true }
+-- What Blizzard's SecureUnitButton_OnClick does with a click. "target" and the menu only go
+-- through for a click that Blizzard's click bindings list, and those list the plain left click
+-- and the plain right click: with a key held, such a click does nothing. Other actions (a macro)
+-- are not held back.
+function SecureUnitButton_OnClick(self, mouseButton, down)
+	if down then
+		return
+	end
+	local kind = ClickAttribute(self, "type", mouseButton)
+	local listed = M.modifiers == ""
+	if (kind == "target" or kind == "menu" or kind == "togglemenu") and not listed then
+		return
+	end
+	M.clicked = { frame = self, button = mouseButton, unit = self:GetAttribute("unit"), action = kind }
+	if kind == "macro" then
+		M.clicked.macro = ClickAttribute(self, "macrotext", mouseButton)
+		M.macros[#M.macros + 1] = M.clicked.macro
+	end
+end
+
+-- What Blizzard's SecureActionButton_OnClick does: it acts on the press or on the release of a
+-- click, as the "cast on key down" setting says, and passes over the other.
+function SecureActionButton_OnClick(self, mouseButton, down)
+	if (down and true or false) ~= M.keyDown then
+		return
+	end
+	local kind = ClickAttribute(self, "type", mouseButton)
+	if kind == "destroytotem" then
+		local slot = ClickAttribute(self, "totem-slot", mouseButton)
+		assert(type(slot) == "number", "destroytotem needs a totem-slot")
+		M.destroyed[#M.destroyed + 1] = slot
+		M.totems[slot] = nil
+	end
+end
+
+local PROTECTED_TEMPLATES = { SecureUnitButtonTemplate = true, SecureGroupHeaderTemplate = true, SecureActionButtonTemplate = true }
 
 local function IsTemplate(template, wanted)
 	while template do
@@ -827,7 +990,8 @@ function CreateFrame(kind, name, parent, template)
 
 	if template then
 		assert(template == "CooldownFrameTemplate" or template == "UICheckButtonTemplate" or template == "UIPanelButtonTemplate"
-			or template == "SecureUnitButtonTemplate" or template == "SecureGroupHeaderTemplate" or M.templateScripts[template],
+			or template == "SecureUnitButtonTemplate" or template == "SecureGroupHeaderTemplate"
+			or template == "SecureActionButtonTemplate" or M.templateScripts[template],
 			"this model has no template '" .. tostring(template) .. "'")
 		for protected in pairs(PROTECTED_TEMPLATES) do
 			if IsTemplate(template, protected) then
@@ -836,6 +1000,10 @@ function CreateFrame(kind, name, parent, template)
 		end
 		if IsTemplate(template, "SecureUnitButtonTemplate") then
 			frame.scripts.OnClick = SecureUnitButton_OnClick
+			frame.clicks = { "LeftButtonUp" }
+		end
+		if template == "SecureActionButtonTemplate" then
+			frame.scripts.OnClick = SecureActionButton_OnClick
 			frame.clicks = { "LeftButtonUp" }
 		end
 		if template == "UICheckButtonTemplate" then
@@ -887,6 +1055,7 @@ function RegisterUnitWatch(frame)
 	if frame.protected and M.combat and insecure() then
 		error("RegisterUnitWatch on a protected frame in combat", 2)
 	end
+	assert(not M.driven[frame], "a frame shown by a rule was also put under a unit watch")
 	M.watched[frame] = true
 	M.Secure(function()
 		if Exists(frame:GetAttribute("unit")) then frame:Show() else frame:Hide() end
@@ -900,11 +1069,44 @@ function UnregisterUnitWatch(frame)
 	M.watched[frame] = nil
 end
 
--- Shows and hides the watched frames with their units, as the game does a moment after a change.
+-- A frame shown and hidden by a rule, written as macro conditions. This model knows the one rule
+-- the addon uses.
+local RULES = {
+	["[group] hide; show"] = function() return M.partySize == 0 and M.raidSize == 0 end,
+}
+
+local function FollowRule(frame)
+	if RULES[M.driven[frame]]() then frame:Show() else frame:Hide() end
+end
+
+function RegisterStateDriver(frame, state, rule)
+	if frame.protected and M.combat and insecure() then
+		error("RegisterStateDriver on a protected frame in combat", 2)
+	end
+	assert(state == "visibility", "this model only drives visibility")
+	assert(RULES[rule], "this model does not know the rule '" .. tostring(rule) .. "'")
+	assert(not M.watched[frame], "a frame under a unit watch was also given a rule")
+	M.driven[frame] = rule
+	M.Secure(FollowRule, frame)
+end
+
+function UnregisterStateDriver(frame, state)
+	if frame.protected and M.combat and insecure() then
+		error("UnregisterStateDriver on a protected frame in combat", 2)
+	end
+	assert(state == "visibility", "this model only drives visibility")
+	M.driven[frame] = nil
+end
+
+-- Shows and hides the watched frames with their units and the ruled ones by their rules, as the
+-- game does a moment after a change.
 function M.UpdateUnitWatch()
 	M.Secure(function()
 		for frame in pairs(M.watched) do
 			if Exists(frame:GetAttribute("unit")) then frame:Show() else frame:Hide() end
+		end
+		for frame in pairs(M.driven) do
+			FollowRule(frame)
 		end
 	end)
 end
@@ -929,6 +1131,25 @@ local function HeaderUnits(header)
 		end
 	elseif header:GetAttribute("showSolo") then
 		units[#units + 1] = "player"
+	end
+	-- Grouped by the part each member has taken, in the order the header was given; within a
+	-- part, in the order they stood.
+	if header:GetAttribute("groupBy") == "ASSIGNEDROLE" then
+		local order, place = {}, {}
+		local index = 0
+		for role in header:GetAttribute("groupingOrder"):gmatch("[^,]+") do
+			index = index + 1
+			order[role] = index
+		end
+		for position, unit in ipairs(units) do
+			place[unit] = { order[M.units[unit] and M.units[unit].role or "NONE"] or index + 1, position }
+		end
+		table.sort(units, function(a, b)
+			if place[a][1] ~= place[b][1] then
+				return place[a][1] < place[b][1]
+			end
+			return place[a][2] < place[b][2]
+		end)
 	end
 	return units
 end
@@ -988,12 +1209,19 @@ function M.Fire(event, ...)
 	end
 end
 
+-- The game announces a fight before it locks protected frames and seals what a fight seals, and
+-- announces its end after it has let go again: a handler of either event may still change them.
 function M.SetCombat(combat)
 	if M.combat == combat then
 		return
 	end
-	M.combat = combat
-	M.Fire(combat and "PLAYER_REGEN_DISABLED" or "PLAYER_REGEN_ENABLED")
+	if combat then
+		M.Fire("PLAYER_REGEN_DISABLED")
+		M.combat = true
+	else
+		M.combat = false
+		M.Fire("PLAYER_REGEN_ENABLED")
+	end
 end
 
 -- Lets `seconds` pass: frames on screen get their OnUpdate, and timers that have come due run.
@@ -1074,6 +1302,65 @@ function UnitReaction(token, other) local unit = Unit(token, "UnitReaction") Pla
 function UnitIsTapDenied(token) local unit = Unit(token, "UnitIsTapDenied") return unit ~= nil and (unit.tapped or false) end
 function UnitCanAttack(attacker, token) local unit = Unit(token, "UnitCanAttack") return unit ~= nil and (unit.canAttack or false) end
 function UnitAffectingCombat(token) local unit = Unit(token, "UnitAffectingCombat") return unit ~= nil and (unit.combat or false) end
+function UnitPlayerControlled(token) local unit = Unit(token, "UnitPlayerControlled") return unit ~= nil and (unit.playerControlled or false) end
+-- Marked for fighting other players: sealed like the rest of who a unit is; the side it fights
+-- for and "everyone's enemy" are not.
+function UnitIsPVP(token)
+	local unit = Unit(token, "UnitIsPVP")
+	if not unit then
+		return false
+	end
+	return SealIf(not (unit.playerControlled or unit.inGroup), unit.pvp or false)
+end
+function UnitIsPVPFreeForAll(token) local unit = Unit(token, "UnitIsPVPFreeForAll") return unit ~= nil and (unit.freeForAll or false) end
+function UnitFactionGroup(token) local unit = Unit(token, "UnitFactionGroup") return unit and unit.faction end
+-- The part taken in a group: sealed for anyone outside it.
+function UnitGroupRolesAssigned(token)
+	local unit = Unit(token, "UnitGroupRolesAssigned")
+	if not unit then
+		return "NONE"
+	end
+	return SealIf(not (unit.playerControlled or unit.inGroup), unit.role or "NONE")
+end
+-- Whether two unit names stand for the same creature. This model tells creatures apart by name.
+function UnitIsUnit(token, other)
+	local unit, second = Unit(token, "UnitIsUnit"), Unit(other, "UnitIsUnit")
+	return SealIf(M.sealComparisons, unit ~= nil and second ~= nil and unit.name == second.name)
+end
+function UnitGUID(token)
+	local unit = Unit(token, "UnitGUID")
+	if not unit then
+		return nil
+	end
+	return SealIf(not (unit.playerControlled or unit.inGroup), "GUID-" .. unit.name)
+end
+C_PetInfo = {
+	GetPetHappiness = function()
+		if M.petHappiness then
+			return M.petHappiness, 100, 0
+		end
+	end,
+}
+
+-- What Blizzard's own unit frames answer the ping key with, mixed into a frame.
+PingableType_UnitFrameMixin = {
+	GetIsPingable = function() return true end,
+	GetAllowRadialWheel = function() return true end,
+	GetTargetInfo = function(self) return { guid = UnitGUID(self.unit or self:GetAttribute("unit")) } end,
+}
+
+-- The ping key pressed with the mouse over a frame: whom the ping is for, or nil when the frame
+-- does not take pings and the ping falls through to the world behind it.
+function M.PingOver(frame)
+	if not frame:GetAttribute("ping-receiver") or not frame.GetIsPingable then
+		return nil
+	end
+	return M.Secure(function()
+		if frame:GetIsPingable() then
+			return frame:GetTargetInfo().guid
+		end
+	end)
+end
 function UnitHasIncomingResurrection(token) local unit = Unit(token, "UnitHasIncomingResurrection") return unit ~= nil and (unit.resurrecting or false) end
 function GetReadyCheckStatus(token) Unit(token, "GetReadyCheckStatus") return M.readyCheck[token] end
 function UnitPowerType(token)
@@ -1130,16 +1417,40 @@ function UnitGetIncomingHeals(token)
 	return Seal(unit.incomingHeals)
 end
 
--- Power.
+-- What is soaking up damage for the unit: always sealed (SecretReturns).
+function UnitGetTotalAbsorbs(token) local unit = Unit(token, "UnitGetTotalAbsorbs") return Seal(unit and unit.absorb or 0) end
+
+-- Power. A unit has the power it runs on, and a druid in a form has mana besides (mana, manaMax);
+-- `powerless` is something that runs on a power in name only. Asked for a power it does not
+-- have, the game answers a plain nought: how much there is is sealed "unless the subject unit
+-- does not have a power of this type".
+local function PowerOf(unit, powerType)
+	if unit.powerless then
+		return 0, 0, false
+	elseif powerType == nil or powerType == unit.powerType then
+		return unit.power, unit.powerMax, true
+	elseif powerType == 0 and unit.manaMax then
+		return unit.mana or 0, unit.manaMax, true
+	end
+	return 0, 0, false
+end
 function UnitPower(token, powerType)
 	local unit = Unit(token, "UnitPower")
 	Plain("UnitPower", powerType)
-	return SealIf(unit ~= nil and PowerSealed(unit), unit and unit.power or 0)
+	if not unit then
+		return 0
+	end
+	local now, _, has = PowerOf(unit, powerType)
+	return SealIf(has and not M.plainPower[powerType or unit.powerType], now)
 end
 function UnitPowerMax(token, powerType)
 	local unit = Unit(token, "UnitPowerMax")
 	Plain("UnitPowerMax", powerType)
-	return SealIf(unit ~= nil and (PowerSealed(unit) or not unit.playerControlled), unit and unit.powerMax or 0)
+	if not unit then
+		return 0
+	end
+	local _, most, has = PowerOf(unit, powerType)
+	return SealIf((has and not M.plainPower[powerType or unit.powerType]) or not unit.playerControlled, most)
 end
 function UnitPowerPercent(token, powerType, unmodified, curve)
 	local unit = Unit(token, "UnitPowerPercent")
@@ -1209,7 +1520,7 @@ function UnitCastingDuration(token)
 	if not cast or cast.channel then
 		return nil
 	end
-	return Duration(cast.start, cast.length)
+	return Duration(cast.start, cast.length, CastSealed(token))
 end
 function UnitChannelDuration(token)
 	local unit = Unit(token, "UnitChannelDuration")
@@ -1217,7 +1528,7 @@ function UnitChannelDuration(token)
 	if not cast or not cast.channel then
 		return nil
 	end
-	return Duration(cast.start, cast.length)
+	return Duration(cast.start, cast.length, CastSealed(token))
 end
 function UnitCastingInfo(token)
 	local unit = Unit(token, "UnitCastingInfo")
@@ -1247,14 +1558,16 @@ function GetTotemInfo(slot)
 	local totem = M.totems[slot]
 	local s = M.combat
 	if not totem then
-		return SealIf(s, false), SealIf(s, ""), SealIf(s, 0), SealIf(s, 0), SealIf(s, 0)
+		-- In a fight the game answers "there is a totem" for the slot of every element the shaman
+		-- has learnt, standing or not (M.emptySlotsSayYes); an empty one has no time on it.
+		return SealIf(s, s and M.emptySlotsSayYes or false), SealIf(s, ""), SealIf(s, 0), SealIf(s, 0), SealIf(s, 0)
 	end
 	return SealIf(s, true), SealIf(s, totem.name or "Totem"), SealIf(s, totem.start), SealIf(s, totem.length), SealIf(s, totem.icon)
 end
 function GetTotemDuration(slot)
 	Plain("GetTotemDuration", slot)
 	local totem = M.totems[slot]
-	return Duration(totem and totem.start or 0, totem and totem.length or 0)
+	return Duration(totem and totem.start or 0, totem and totem.length or 0, M.combat)
 end
 
 ---------------------------------------------------------------------------
@@ -1313,7 +1626,7 @@ C_UnitAuras = {
 		if not aura then
 			return nil
 		end
-		return Duration(M.now, aura.length or 0)
+		return Duration(M.now, aura.length or 0, M.combat)
 	end,
 	GetAuraApplicationDisplayCount = function(token, id, minimum, maximum)
 		Unit(token, "GetAuraApplicationDisplayCount")
@@ -1347,6 +1660,7 @@ GameTooltip = {
 		Plain("GameTooltip:SetUnitAuraByAuraInstanceID", unit, id)
 		M.tooltip.unit, M.tooltip.aura = unit, id
 	end,
+	SetTotem = function(self, slot) Plain("GameTooltip:SetTotem", slot) M.tooltip.totem = slot end,
 	Hide = function() M.tooltip = {} end,
 }
 function GameTooltip_SetDefaultAnchor(tooltip, owner) M.tooltip = { owner = owner } end
@@ -1433,6 +1747,15 @@ for _, name in ipairs({ "PlayerFrame", "TargetFrame", "ComboFrame", "FocusFrame"
 	frame.events = { PLAYER_ENTERING_WORLD = true }
 	local bar = CreateFrame("StatusBar", name .. "HealthBar", frame)
 	bar.events = { UNIT_HEALTH = true }
+end
+-- The target frame is one of the game's unit buttons, hidden until there is a target, and plays
+-- the sound of losing one as it goes.
+TargetFrame.attributes.unit = "target"
+TargetFrame.shown = false
+TargetFrame.scripts.OnHide = function()
+	if not IsTargetLoose() then
+		M.sounds[#M.sounds + 1] = SOUNDKIT.INTERFACE_SOUND_LOST_TARGET_UNIT
+	end
 end
 -- The target frame's secure aura rows may not have their events touched by an addon.
 local rows = CreateFrame("Frame", "TargetFrameAuraRows", TargetFrame)

@@ -15,6 +15,8 @@ Auras.events = { "UNIT_AURA" }
 local GAP = 2
 local SIDE_GAP = 4          -- between the plate and icons beside it
 local LIGHT_WIDTH = 2       -- pixels of the removable-debuff light along the plate's rim
+local PULSE = 0.55          -- seconds for that light to dim, and again to come back
+local PULSE_LOW = 0.35      -- how far it dims
 
 function Auras.Wanted(cfg)
 	return cfg.buffs > 0 or cfg.debuffs > 0 or (cfg.dispel and true or false)
@@ -87,7 +89,12 @@ local function PlaceIcon(frame, button, slot)
 	button.icon:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", -pixel, pixel)
 	button.cooldown:ClearAllPoints()
 	button.cooldown:SetAllPoints(button.icon)
-	Style.SetFont(button.count, size >= 20 and -1 or -3)
+	-- The time left as a number on the icon, written by the game itself, for those who want it.
+	button.cooldown:SetHideCountdownNumbers(not ns.db.auraTimers)
+	button.cooldown:SetCountdownFont(Style.TIMER_FONT)
+	-- The count of stacks is always outlined: on a bright icon (Inner Fire, a paladin's seal)
+	-- light figures with only a soft shadow cannot be read.
+	Style.SetFont(button.count, size >= 20 and -1 or -3, true)
 	button.count:SetTextColor(Style.theme.text[1], Style.theme.text[2], Style.theme.text[3])
 	-- Icons on the plate itself let the mouse through, so a click there still picks the unit.
 	button:EnableMouse(side ~= "inside")
@@ -100,13 +107,25 @@ function Auras.Create(frame)
 	local holder = CreateFrame("Frame", nil, frame.body)
 	holder:SetAllPoints(frame.body)
 	holder:SetFrameLevel(frame.body:GetFrameLevel() + 7)
+	-- The light for a debuff the player can remove: four lines along the plate's rim, on a frame
+	-- of their own so that they can pulse together. A steady line is easy to miss in a fight; one
+	-- that breathes is not.
+	local lamp = CreateFrame("Frame", nil, holder)
+	lamp:SetAllPoints(holder)
+	lamp:Hide()
 	local light = {}
 	for i = 1, 4 do
-		light[i] = holder:CreateTexture(nil, "OVERLAY")
+		light[i] = lamp:CreateTexture(nil, "OVERLAY")
 		light[i]:SetColorTexture(1, 1, 1, 1)
-		light[i]:Hide()
 	end
-	frame.auras = { holder = holder, icons = {}, light = light }
+	local pulse = lamp:CreateAnimationGroup()
+	pulse:SetLooping("BOUNCE")
+	local dim = pulse:CreateAnimation("Alpha")
+	dim:SetFromAlpha(1)
+	dim:SetToAlpha(PULSE_LOW)
+	dim:SetDuration(PULSE)
+	dim:SetSmoothing("IN_OUT")
+	frame.auras = { holder = holder, icons = {}, light = light, lamp = lamp, pulse = pulse }
 end
 
 function Auras.Layout(frame, cfg, on)
@@ -131,8 +150,9 @@ function Auras.Layout(frame, cfg, on)
 	local top, bottom, left, right = auras.light[1], auras.light[2], auras.light[3], auras.light[4]
 	for i = 1, 4 do
 		auras.light[i]:ClearAllPoints()
-		auras.light[i]:Hide()
 	end
+	auras.pulse:Stop()
+	auras.lamp:Hide()
 	top:SetPoint("TOPLEFT", body, "TOPLEFT")
 	top:SetPoint("TOPRIGHT", body, "TOPRIGHT")
 	top:SetHeight(width)
@@ -180,7 +200,7 @@ local function Draw(frame, unit)
 	if cfg.buffs > 0 then
 		-- Buffs start on a fresh row.
 		slot = math.ceil(slot / cfg.auraPerRow) * cfg.auraPerRow
-		DrawBlock(frame, unit, Sealed.AuraIDs(unit, "HELPFUL", cfg.buffs), slot, nil)
+		DrawBlock(frame, unit, Sealed.AuraIDs(unit, cfg.myBuffs and "HELPFUL|PLAYER" or "HELPFUL", cfg.buffs), slot, nil)
 	end
 	for index = auras.used + 1, #auras.icons do
 		auras.icons[index]:Hide()
@@ -190,10 +210,18 @@ local function Draw(frame, unit)
 	if cfg.dispel then
 		-- "RAID" on a harmful aura means: one the player can remove.
 		local id = Sealed.AuraIDs(unit, "HARMFUL|RAID", 1)[1]
-		local lit = id ~= nil and Sealed.AuraKindToColor(auras.light, unit, id, Style.debuffKindCurve)
-		for i = 1, 4 do
-			auras.light[i]:SetShown(lit and true or false)
+		local lit = id ~= nil and Sealed.AuraKindToColor(auras.light, unit, id, Style.debuffKindCurve) or false
+		if lit ~= auras.lamp:IsShown() then
+			auras.lamp:SetShown(lit)
+			if lit then
+				auras.pulse:Play()
+			else
+				auras.pulse:Stop()
+			end
 		end
+	elseif auras.lamp:IsShown() then
+		auras.pulse:Stop()
+		auras.lamp:Hide()
 	end
 end
 

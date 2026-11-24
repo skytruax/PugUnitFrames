@@ -106,7 +106,12 @@ Style.THREAT = {
 
 Style.CAST = { 0.93, 0.74, 0.28 }
 Style.HEAL = { 0.45, 0.92, 0.55, 0.55 } -- healing on its way, drawn past the end of the health bar
+Style.ABSORB = { 0.84, 0.93, 1.00, 0.92 } -- a shield that soaks up damage: a pale band along the top of the health bar
 Style.POINT = { 0.96, 0.78, 0.25 }      -- a combo point
+
+-- The time left on an icon is written by the game, in one of its own fonts: small figures of even
+-- width with an outline, the one its own aura icons use.
+Style.TIMER_FONT = "NumberFontNormalSmall"
 
 ---------------------------------------------------------------------------
 -- Curves: the game colours by a sealed number through one of these, see Sealed.lua
@@ -149,24 +154,51 @@ Style.shadows = true
 
 -- Whether the game can read a font file. It refuses one it cannot: by an error on some clients,
 -- by answering no on others, and on some by quietly leaving the text without a font, which
--- would be an error the first time anything is written with it. So the file is tried once, on a
--- piece of text nobody sees, and the answer kept.
-local readable = {}
+-- would be an error the first time anything is written with it. So the file is tried on a piece
+-- of text nobody sees, and a yes is kept.
+--
+-- A no is not kept at once. Just after logging in or reloading the game can need a few seconds
+-- before it has a font file ready (players of another addon were told "font could not be
+-- loaded" for a font that was fine, now and then). So a file that is refused is tried again a
+-- few times, the game's own font is used in the meantime, and only when the last try fails is
+-- it reported and given up for the session.
+local RETRY_AFTER = { 1, 3, 8 } -- seconds from one try to the next
+local readable = {}             -- [font] = true once read, false once given up
+local tries = {}                -- [font] = failed tries so far
 local tryout
 
+local function TryToRead(font)
+	tryout = tryout or CreateFrame("Frame")
+	-- A fresh text has no font yet, so one that has a font afterwards got it from this file.
+	local text = tryout:CreateFontString()
+	local ran, answer = pcall(text.SetFont, text, font, 12, "")
+	return ran and answer ~= false and text:GetFont() ~= nil, ran and "the game would not take it" or tostring(answer)
+end
+
 local function CanRead(font)
-	if readable[font] == nil then
-		tryout = tryout or CreateFrame("Frame")
-		-- A fresh text has no font yet, so one that has a font afterwards got it from this file.
-		local text = tryout:CreateFontString()
-		local ran, answer = pcall(text.SetFont, text, font, 12, "")
-		readable[font] = ran and answer ~= false and text:GetFont() ~= nil
-		if not readable[font] then
-			ns.Report(("The font %s could not be loaded (%s). The game's own font is used instead."):format(
-				font, ran and "the game would not take it" or tostring(answer)))
-		end
+	if readable[font] ~= nil then
+		return readable[font]
 	end
-	return readable[font]
+	local ok, why = TryToRead(font)
+	if ok then
+		readable[font] = true
+		return true
+	end
+	local failed = (tries[font] or 0) + 1
+	tries[font] = failed
+	local wait = RETRY_AFTER[failed]
+	if not wait then
+		readable[font] = false
+		ns.Report(("The font %s could not be loaded (%s). The game's own font is used instead."):format(font, why))
+		return false
+	end
+	-- Tried again in a moment; if it can be read by then, every frame is lettered anew.
+	ns.After(wait, function()
+		if readable[font] == nil and CanRead(font) then
+			ns.Refresh()
+		end
+	end)
+	return false
 end
 
 -- Reads the look out of the settings. Frames pick it up on their next Frame.Layout.
@@ -185,10 +217,12 @@ function Style.Apply()
 	Style.font = font
 end
 
--- Sets a font string to the font in use at the base size plus `delta`.
-function Style.SetFont(text, delta)
-	text:SetFont(Style.font, math.max(6, Style.fontSize + (delta or 0)), Style.fontFlags)
-	if Style.fontFlags == "" then
+-- Sets a font string to the font in use at the base size plus `delta`. `outlined` gives it an
+-- outline whatever the setting says (small figures on a picture, which need one to be read).
+function Style.SetFont(text, delta, outlined)
+	local flags = outlined and "OUTLINE" or Style.fontFlags
+	text:SetFont(Style.font, math.max(6, Style.fontSize + (delta or 0)), flags)
+	if flags == "" then
 		text:SetShadowColor(0, 0, 0, 0.9)
 		text:SetShadowOffset(1, -1)
 	else

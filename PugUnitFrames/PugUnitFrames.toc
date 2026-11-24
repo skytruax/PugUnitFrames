@@ -30,6 +30,9 @@ Elements\CastBar.lua
 Elements\Points.lua
 Elements\Totems.lua
 Elements\Auras.lua
+Elements\Mood.lua
+Elements\Highlight.lua
+Elements\Fade.lua
 Templates.xml
 Units.lua
 Group.lua

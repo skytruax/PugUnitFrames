@@ -99,13 +99,19 @@ wrong in the game, `/pug status` lists any error it caught: please open an issue
   </tr>
 </table>
 
-Also in there: raid icons, the leader's crown, resting, in combat, ready-check answers and a
-resurrection on its way; combo points on the target for rogues and druids and totems under the
-player for shamans; party frames when you are alone, if you like to see yourself there; English,
+Also in there: raid icons, the leader's crown, a mark for tank, healer and damage, a flag on anyone
+marked for fighting players, resting, in combat, ready-check answers and a resurrection on its way;
+shields as a band along the top of the health bar; combo points on the target for rogues and
+druids, a druid's mana under the form's bar, a hunter's pet's mood, and totems under the player for
+shamans, sent away with a right click; party frames when you are alone, if you like to see yourself
+there, in order of role if you like; a player frame that fades when nothing is going on; English,
 German, Spanish and French.
 
-A click on a frame targets the unit, a right click opens its menu, and addons that bind spells to
-clicks on unit frames find these frames where they look for them.
+A click on a frame targets the unit, with Shift, Ctrl or Alt held as well, and a right click opens
+its menu. The game's ping key pings whoever a frame shows. Addons that bind spells to clicks on
+unit frames find these frames where they look for them. With a controller, the menu the game opens
+on your target works as it does without the addon: the game's own target frame, which that menu
+belongs to, is set aside unseen and not hidden.
 
 <sub>These six pictures are illustrations, not screenshots, drawn by <code>tools/make_listing.py</code>
 from the addon's own textures and layout numbers. The spell icons and raid marks in them are Blizzard's.</sub>
@@ -172,6 +178,7 @@ tools/
   tests/               the model of the client and the scenarios run against it
   sim/                 the simulator run: Blizzard's real interface code, in Docker
     run.sh demo.sh     the tests and the picture; the moving demo
+    menu.sh            opens the target's menu the way the game's controller mode does
     photos.sh          the picture over photographs of your own, each marked as a composite
     scene_art.py       what a picture needs that the simulator lacks: icons, raid marks, a world, the font
   make_art.py          draws every texture the addon ships
@@ -189,6 +196,7 @@ pip install lupa==2.8
 python3 tools/tests/run.py           # a model of the client that seals values; also checks the source
 tools/sim/lab/build-image.sh         # once: fetches the simulator and builds its Docker image
 tools/sim/run.sh                     # Blizzard's interface code with the addon loaded; takes a picture
+tools/sim/menu.sh                    # the controller's menu on the target: does it stay open?
 tools/sim/demo.sh                    # the same fight, moment by moment: docs/demo.gif
 tools/sim/photos.sh                  # the same fight over pictures of your own (tools/sim/backdrops/)
 ```

@@ -62,6 +62,10 @@ Shim(_G, "GetTotemDuration", function(slot)
 	return duration
 end)
 
+-- Nothing comes back when there is no pet that has a mood, which is the simulator's case.
+C_PetInfo = C_PetInfo or {}
+Shim(C_PetInfo, "GetPetHappiness", function() end)
+
 Shim(_G, "UnitHealthMissing", function(unit)
 	return UnitHealthMax(unit) - UnitHealth(unit)
 end)

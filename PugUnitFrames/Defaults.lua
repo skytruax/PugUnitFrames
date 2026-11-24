@@ -42,10 +42,15 @@ Defaults.GENERAL_SPEC = {
 	shadows = Bool(),      -- a soft shadow under every plate
 	smooth = Bool(),       -- bars glide to a new value instead of jumping
 	farAlpha = Number(0.2, 0.9, 0.05), -- how see-through a group member out of range becomes
+	alpha = Number(0.2, 1, 0.05),      -- how solid every frame is drawn
+	auraTimers = Bool(),   -- the time left on buff and debuff icons as a number, not only as a sweep
 	locked = Bool(),
 	tooltips = Choice("always", "calm", "never"), -- the game's unit tooltip when the mouse is over a frame; calm = out of combat
+	hideAll = Bool(),      -- the game's own frames stay hidden also where ours for them is switched off
 }
-Defaults.GENERAL_ORDER = { "theme", "texture", "font", "fontSize", "outline", "shadows", "smooth", "farAlpha", "tooltips" }
+Defaults.GENERAL_ORDER = {
+	"theme", "texture", "font", "fontSize", "outline", "shadows", "smooth", "alpha", "farAlpha", "auraTimers", "tooltips",
+}
 
 Defaults.GENERAL = {
 	theme = "slate",
@@ -56,11 +61,15 @@ Defaults.GENERAL = {
 	shadows = true,
 	smooth = true,
 	farAlpha = 0.45,
+	alpha = 1,
+	auraTimers = false,
 	locked = true,
 	tooltips = "always",
+	hideAll = false,
 }
 
--- Which of the game's own frames step aside. Each is only hidden while ours for it is enabled.
+-- Which of the game's own frames step aside. Each is only hidden while ours for it is enabled,
+-- unless the player asks for all of them to stay hidden regardless (hideAll, above).
 Defaults.HIDE_ORDER = { "player", "target", "focus", "pet", "party", "raid", "castbar" }
 Defaults.HIDE = { player = true, target = true, focus = true, pet = true, party = true, raid = true, castbar = true }
 
@@ -73,24 +82,34 @@ Defaults.UNIT_SPEC = {
 	height = Number(14, 160, 1),
 	scale = Number(0.5, 2, 0.05),
 	powerHeight = Number(0, 30, 1),   -- 0: no power bar
+	hideNoPower = Bool(),             -- no power bar for something that has no power to show
 	color = Choice("class", "reaction", "health", "plain"), -- what colours the health bar
+	invert = Bool(),                  -- a dark bar, with the colour where health is missing
+	fill = Choice("right", "left", "up"), -- which way the bars fill
 	healthText = Choice("none", "value", "short", "percent", "both", "max", "deficit"),
 	powerText = Choice("none", "value", "short", "percent", "max"),
 	name = Bool(),
 	level = Bool(),
 	portrait = Choice("none", "left", "right"),
+	mirror = Bool(),                  -- the portrait turned to look the other way
 	buffs = Number(0, 32, 1),         -- how many buff icons at most; 0: none
 	debuffs = Number(0, 32, 1),
 	auraSize = Number(10, 44, 1),
 	auraPerRow = Number(1, 20, 1),
 	auraSide = Choice("below", "above", "right", "left", "inside"),
+	myBuffs = Bool(),                 -- of the buffs, only the ones the player cast
 	myDebuffs = Bool(),               -- of the debuffs, only the ones the player put there
 	castbar = Bool(),
 	castHeight = Number(6, 30, 1),
 	threat = Bool(),                  -- an outline while the unit is being attacked
 	range = Bool(),                   -- fade a group member who is out of range
 	heals = Bool(),                   -- healing on its way, past the end of the health bar
-	marks = Bool(),                   -- raid mark, leader, resting, in combat
+	absorbs = Bool(),                 -- shields that soak up damage, as a band along the top of the health bar
+	marks = Bool(),                   -- raid mark, leader, role, PvP flag, resting, in combat
+	happiness = Bool(),               -- a hunter's pet: how it feels
+	highlight = Bool(),               -- a bright line around the group member the player has targeted
+	calm = Number(0.1, 1, 0.05),      -- how solid the frame is drawn outside a fight with no target; 1: always in full
+	hideInGroup = Bool(),             -- the player's frame stays away while in a party or raid
 	dispel = Bool(),                  -- light the frame up in the colour of a debuff the player can remove
 	points = Bool(),                  -- combo points on the target
 	totems = Bool(),                  -- the player's totems
@@ -99,6 +118,7 @@ Defaults.UNIT_SPEC = {
 	spacing = Number(0, 40, 1),
 	showPlayer = Bool(),              -- the player among the party
 	showSolo = Bool(),                -- the party frames with only the player on them, when not in a group
+	byRole = Bool(),                  -- party: tanks first, then healers, then the rest
 	perColumn = Number(1, 40, 1),     -- raid: members before the next column starts
 	columnGrowth = Choice("right", "left", "down", "up"),
 	columnSpacing = Number(0, 60, 1),
@@ -106,13 +126,32 @@ Defaults.UNIT_SPEC = {
 	scaleMid = Number(0.5, 2, 0.05),   -- raid: ... with up to 20
 }
 
--- The order the options page lists them in.
-Defaults.UNIT_ORDER = {
-	"enabled", "width", "height", "scale", "powerHeight", "color", "healthText", "powerText", "name", "level", "portrait",
-	"buffs", "debuffs", "myDebuffs", "auraSize", "auraPerRow", "auraSide", "castbar", "castHeight",
-	"threat", "range", "heals", "marks", "dispel", "points", "totems",
-	"growth", "spacing", "showPlayer", "showSolo", "perColumn", "columnGrowth", "columnSpacing", "scaleSmall", "scaleMid",
+-- The options page shows a frame's settings a section at a time, in this order (it has the
+-- sections' names).
+Defaults.UNIT_SECTIONS = {
+	{ key = "frame", keys = {
+		"enabled", "width", "height", "scale", "calm", "hideInGroup",
+		"growth", "spacing", "showPlayer", "showSolo", "byRole", "perColumn", "columnGrowth", "columnSpacing", "scaleSmall", "scaleMid",
+	} },
+	{ key = "bars", keys = {
+		"color", "invert", "fill", "powerHeight", "hideNoPower", "heals", "absorbs", "castbar", "castHeight", "points", "totems",
+	} },
+	{ key = "text", keys = {
+		"name", "level", "healthText", "powerText", "portrait", "mirror",
+		"marks", "happiness", "threat", "range", "highlight", "dispel",
+	} },
+	{ key = "icons", keys = {
+		"buffs", "myBuffs", "debuffs", "myDebuffs", "auraSize", "auraPerRow", "auraSide",
+	} },
 }
+
+-- Every setting of a frame, in the order of the sections.
+Defaults.UNIT_ORDER = {}
+for _, section in ipairs(Defaults.UNIT_SECTIONS) do
+	for _, key in ipairs(section.keys) do
+		Defaults.UNIT_ORDER[#Defaults.UNIT_ORDER + 1] = key
+	end
+end
 
 Defaults.UNITS = {
 	player = {
@@ -120,29 +159,34 @@ Defaults.UNITS = {
 		color = "class", healthText = "both", powerText = "value", name = true, level = true, portrait = "none",
 		buffs = 0, debuffs = 0, myDebuffs = false, auraSize = 22, auraPerRow = 9, auraSide = "above",
 		castbar = true, castHeight = 16, threat = true, heals = true, marks = true, totems = true,
+		invert = false, fill = "right", mirror = false, myBuffs = false, absorbs = true, calm = 1, hideInGroup = false,
 	},
 	target = {
 		enabled = true, x = 290, y = -210, width = 232, height = 46, scale = 1, powerHeight = 9,
 		color = "class", healthText = "both", powerText = "value", name = true, level = true, portrait = "none",
 		buffs = 9, debuffs = 18, myDebuffs = false, auraSize = 22, auraPerRow = 9, auraSide = "above",
 		castbar = true, castHeight = 16, marks = true, points = true,
+		invert = false, fill = "right", mirror = false, myBuffs = false, absorbs = true, hideNoPower = true,
 	},
 	targettarget = {
 		enabled = true, x = 476, y = -219, width = 124, height = 28, scale = 1, powerHeight = 4,
 		color = "class", healthText = "percent", powerText = "none", name = true, level = false, portrait = "none",
 		buffs = 0, debuffs = 0, myDebuffs = false, auraSize = 18, auraPerRow = 6, auraSide = "below", marks = true,
+		invert = false, fill = "right", mirror = false, myBuffs = false, absorbs = true, hideNoPower = true,
 	},
 	focus = {
 		enabled = true, x = -319, y = -130, width = 174, height = 34, scale = 1, powerHeight = 6,
 		color = "class", healthText = "percent", powerText = "none", name = true, level = false, portrait = "none",
 		buffs = 0, debuffs = 6, myDebuffs = false, auraSize = 20, auraPerRow = 8, auraSide = "above",
 		castbar = true, castHeight = 12, marks = true,
+		invert = false, fill = "right", mirror = false, myBuffs = false, absorbs = true, hideNoPower = true,
 	},
 	pet = {
 		enabled = true, x = -476, y = -219, width = 124, height = 28, scale = 1, powerHeight = 4,
 		color = "reaction", healthText = "none", powerText = "none", name = true, level = false, portrait = "none",
 		buffs = 0, debuffs = 0, myDebuffs = false, auraSize = 18, auraPerRow = 6, auraSide = "below",
 		castbar = false, castHeight = 10, threat = true, heals = true, marks = false,
+		invert = false, fill = "right", mirror = false, myBuffs = false, absorbs = true, calm = 1, happiness = true,
 	},
 	party = {
 		enabled = true, x = -620, y = 160, width = 172, height = 40, scale = 1, powerHeight = 6,
@@ -150,6 +194,7 @@ Defaults.UNITS = {
 		buffs = 0, debuffs = 4, myDebuffs = false, auraSize = 20, auraPerRow = 4, auraSide = "right",
 		castbar = false, castHeight = 10, threat = true, range = true, heals = true, marks = true, dispel = true,
 		growth = "down", spacing = 12, showPlayer = false, showSolo = false,
+		invert = false, fill = "right", mirror = false, myBuffs = false, absorbs = true, highlight = true, byRole = false,
 	},
 	raid = {
 		enabled = true, x = -640, y = 250, width = 82, height = 40, scale = 1, powerHeight = 3,
@@ -158,6 +203,7 @@ Defaults.UNITS = {
 		threat = true, range = true, heals = true, marks = true, dispel = true,
 		growth = "down", spacing = 4, perColumn = 5, columnGrowth = "right", columnSpacing = 6,
 		scaleSmall = 1.3, scaleMid = 1.15,
+		invert = false, fill = "right", mirror = false, myBuffs = false, absorbs = true, highlight = true,
 	},
 }
 

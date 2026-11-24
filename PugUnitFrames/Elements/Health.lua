@@ -1,11 +1,13 @@
 local ADDON, ns = ...
 
--- The health bar, and on it the healing that is on its way.
+-- The health bar, and on it the healing that is on its way and the shields that soak up damage.
 local Frame, Style, Sealed = ns.Frame, ns.Style, ns.Sealed
 
 local Health = { name = "Health" }
 
-Health.events = { "UNIT_HEALTH", "UNIT_MAXHEALTH", "UNIT_CONNECTION", "UNIT_FACTION", "UNIT_HEAL_PREDICTION" }
+Health.events = {
+	"UNIT_HEALTH", "UNIT_MAXHEALTH", "UNIT_CONNECTION", "UNIT_FACTION", "UNIT_HEAL_PREDICTION", "UNIT_ABSORB_AMOUNT_CHANGED",
+}
 
 function Health.Wanted()
 	return true
@@ -26,39 +28,98 @@ function Health.Create(frame)
 	bar.heal = CreateFrame("StatusBar", nil, bar)
 	bar:SetClipsChildren(true)
 
+	-- A shield (Power Word: Shield and its like) is a pale band along the top of the bar, on the
+	-- same scale again: as long as the shield is large against full health. It starts at the
+	-- bar's own start and not where the health ends, so it shows on someone at full health too,
+	-- which is when a shield is usually cast.
+	bar.absorb = CreateFrame("StatusBar", nil, bar)
+	bar.absorb:SetFrameLevel(bar.heal:GetFrameLevel() + 1)
+
 	frame.health = bar
+end
+
+-- Gives the bar the room the plate has for it: all of it down to the power bar, or down to the
+-- plate's edge when there is no power bar or it has been put away (Power.lua). The bars are
+-- ordinary frames, so this is done in a fight as well.
+function Health.Fit(frame)
+	local bar, pixel = frame.health, frame.pixel
+	local powered = frame.powerHeight > 0 and not frame.powerGone
+	bar:ClearAllPoints()
+	bar:SetPoint("TOPLEFT", frame.body, "TOPLEFT", frame.barLeft, -pixel)
+	bar:SetPoint("BOTTOMRIGHT", frame.body, "BOTTOMRIGHT", -frame.barRight, powered and frame.powerHeight + 2 * pixel or pixel)
 end
 
 function Health.Layout(frame, cfg)
 	local bar, pixel, theme = frame.health, frame.pixel, Style.theme
-	local above = frame.powerHeight > 0 and frame.powerHeight + 2 * pixel or pixel
+	-- Which way the bar fills: to the right, to the left (a target frame that mirrors the
+	-- player's), or upwards (small raid frames read well that way).
+	local upright, leftward = cfg.fill == "up", cfg.fill == "left"
+	local orientation = upright and "VERTICAL" or "HORIZONTAL"
 
-	bar:ClearAllPoints()
-	bar:SetPoint("TOPLEFT", frame.body, "TOPLEFT", frame.barLeft, -pixel)
-	bar:SetPoint("BOTTOMRIGHT", frame.body, "BOTTOMRIGHT", -frame.barRight, above)
+	Health.Fit(frame)
 	bar:SetStatusBarTexture(Style.texture)
+	bar:SetOrientation(orientation)
+	bar:SetReverseFill(leftward)
 	bar.trough:SetTexture(Style.texture)
 	bar.veil:SetColorTexture(theme.veil[1], theme.veil[2], theme.veil[3], theme.shade)
 
+	-- Turned round, the bar itself is dark and the colour shows where health is missing: the
+	-- colour goes on the part behind the bar, bare, and the bar is the theme's dark tone.
+	bar.inverted = cfg.invert and true or false
+	bar.veil:SetShown(not bar.inverted)
+	if bar.inverted then
+		bar:SetStatusBarColor(Style.Veiled(Style.Toned(theme.plain)))
+	end
+
 	local heal, fill = bar.heal, bar:GetStatusBarTexture()
 	heal:ClearAllPoints()
-	heal:SetPoint("TOPLEFT", fill, "TOPRIGHT")
-	heal:SetPoint("BOTTOMLEFT", fill, "BOTTOMRIGHT")
-	heal:SetWidth(frame.barWidth)
+	if upright then
+		heal:SetPoint("BOTTOMLEFT", fill, "TOPLEFT")
+		heal:SetPoint("BOTTOMRIGHT", fill, "TOPRIGHT")
+		heal:SetHeight(cfg.height)
+	elseif leftward then
+		heal:SetPoint("TOPRIGHT", fill, "TOPLEFT")
+		heal:SetPoint("BOTTOMRIGHT", fill, "BOTTOMLEFT")
+		heal:SetWidth(frame.barWidth)
+	else
+		heal:SetPoint("TOPLEFT", fill, "TOPRIGHT")
+		heal:SetPoint("BOTTOMLEFT", fill, "BOTTOMRIGHT")
+		heal:SetWidth(frame.barWidth)
+	end
 	heal:SetStatusBarTexture(Style.texture)
+	heal:SetOrientation(orientation)
+	heal:SetReverseFill(leftward)
 	heal:SetStatusBarColor(Style.HEAL[1], Style.HEAL[2], Style.HEAL[3], Style.HEAL[4])
 	heal:SetShown(cfg.heals and true or false)
+
+	local absorb = bar.absorb
+	absorb:ClearAllPoints()
+	absorb:SetPoint("TOPLEFT", bar, "TOPLEFT")
+	absorb:SetPoint("TOPRIGHT", bar, "TOPRIGHT")
+	absorb:SetHeight(math.max(2 * pixel, math.floor(cfg.height * 0.10 + 0.5)))
+	absorb:SetStatusBarTexture(Style.TEXTURES.flat)
+	absorb:SetReverseFill(leftward)
+	absorb:SetStatusBarColor(Style.ABSORB[1], Style.ABSORB[2], Style.ABSORB[3], Style.ABSORB[4])
+	absorb:SetShown(cfg.absorbs and true or false)
 end
 
 -- The bar and the empty part behind it take the same colour (which may be sealed numbers: they
--- are only handed on).
+-- are only handed on). A bar turned round keeps its dark tone and only the part behind changes.
 local function Colour(bar, r, g, b)
-	bar:SetStatusBarColor(r, g, b)
+	if not bar.inverted then
+		bar:SetStatusBarColor(r, g, b)
+	end
 	bar.trough:SetVertexColor(r, g, b)
 end
 
 local function Paint(bar, unit, cfg)
-	if cfg.color == "health" and Sealed.HealthShareToBarColor(bar, unit, Style.healthCurve, bar.trough) then
+	-- Someone else's kill is grey whatever colours the bar otherwise: there is nothing in it for
+	-- the player, and the game's own target frame says so the same way.
+	if not UnitIsPlayer(unit) and UnitIsTapDenied(unit) then
+		Colour(bar, Style.Toned(Style.REACTION.tapped))
+		return
+	end
+	if cfg.color == "health" and Sealed.HealthShareToBarColor(not bar.inverted and bar or nil, unit, Style.healthCurve, bar.trough) then
 		return
 	end
 	if cfg.color == "plain" then
@@ -79,14 +140,18 @@ local function Paint(bar, unit, cfg)
 	Colour(bar, Style.Readable(Style.ReactionColor(unit)))
 end
 
+local function Empty(bar)
+	bar:SetMinMaxValues(0, 1)
+	bar:SetValue(0)
+end
+
 function Health.Update(frame, unit, event)
 	local bar, cfg = frame.health, frame.cfg
 	-- Someone who is dead or has gone offline has an empty bar, whatever number the game still holds.
 	if not UnitIsConnected(unit) or UnitIsDeadOrGhost(unit) then
-		bar:SetMinMaxValues(0, 1)
-		bar:SetValue(0)
-		bar.heal:SetMinMaxValues(0, 1)
-		bar.heal:SetValue(0)
+		Empty(bar)
+		Empty(bar.heal)
+		Empty(bar.absorb)
 		-- All of the bar is its empty part now: grey, whoever it was.
 		bar.trough:SetVertexColor(Style.Toned(Style.REACTION.gone))
 		return
@@ -97,6 +162,9 @@ function Health.Update(frame, unit, event)
 	Paint(bar, unit, cfg)
 	if cfg.heals then
 		Sealed.IncomingHealsToBar(bar.heal, unit)
+	end
+	if cfg.absorbs then
+		Sealed.AbsorbsToBar(bar.absorb, unit)
 	end
 end
 

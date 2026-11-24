@@ -20,19 +20,29 @@ local SETTING_LABELS = {
 	theme = "Theme", texture = "Bar texture", font = "Font", fontSize = "Text size", outline = "Outlined text",
 	shadows = "Shadows under frames",
 	smooth = "Bars glide to a new value", farAlpha = "Out-of-range members fade to", tooltips = "Tooltips on frames",
+	alpha = "Opacity of all frames", auraTimers = "Time left as a number on icons",
 	enabled = "Show this frame", width = "Width", height = "Height", scale = "Scale",
-	powerHeight = "Power bar height", color = "Health colour", healthText = "Health text", powerText = "Power text",
-	name = "Name", level = "Level", portrait = "Portrait",
-	buffs = "Buffs shown", debuffs = "Debuffs shown", myDebuffs = "Only my debuffs",
+	calm = "Out of combat with no target, fade to", hideInGroup = "Hide while in a group",
+	powerHeight = "Power bar height", hideNoPower = "Hide an empty power bar",
+	color = "Health colour", invert = "Dark bar, colour where health is missing", fill = "Bars fill",
+	healthText = "Health text", powerText = "Power text",
+	name = "Name", level = "Level", portrait = "Portrait", mirror = "Mirror the portrait",
+	buffs = "Buffs shown", debuffs = "Debuffs shown", myBuffs = "Only my buffs", myDebuffs = "Only my debuffs",
 	auraSize = "Icon size", auraPerRow = "Icons per row", auraSide = "Icons go",
 	castbar = "Cast bar", castHeight = "Cast bar height",
 	threat = "Outline when attacked", range = "Fade when out of range", heals = "Healing on its way",
-	marks = "Marks (raid icon, leader, combat)", dispel = "Light up debuffs I can remove",
+	absorbs = "Shields on the health bar",
+	marks = "Marks (raid icon, leader, role, PvP, combat)", dispel = "Light up debuffs I can remove",
+	happiness = "Pet's mood", highlight = "Outline the one I have targeted",
 	points = "Combo points", totems = "Totems",
 	growth = "Members go", spacing = "Gap between members", showPlayer = "Include me", showSolo = "Show when alone",
+	byRole = "Tanks first, then healers",
 	perColumn = "Members per column", columnGrowth = "Columns go", columnSpacing = "Gap between columns",
 	scaleSmall = "Size with up to 10 players", scaleMid = "Size with up to 20 players",
 }
+
+-- The sections a frame's settings are shown in (Defaults.UNIT_SECTIONS).
+local SECTION_LABELS = { frame = "Frame", bars = "Bars", text = "Text and marks", icons = "Icons" }
 
 local CHOICE_LABELS = {
 	theme = { slate = "Slate", night = "Night", hearth = "Hearth" },
@@ -40,6 +50,7 @@ local CHOICE_LABELS = {
 	font = { inter = "Inter", game = "The game's font" },
 	tooltips = { always = "Always", calm = "Out of combat", never = "Never" },
 	color = { class = "Class", reaction = "Friend or foe", health = "By health", plain = "Plain" },
+	fill = { right = "To the right", left = "To the left", up = "Upwards" },
 	healthText = { none = "None", value = "Exact (1,234,567)", short = "Short (1234K)", percent = "Percent (87%)", both = "Short and percent", max = "Short / maximum", deficit = "What is missing" },
 	powerText = { none = "None", value = "Exact (1,234,567)", short = "Short (1234K)", percent = "Percent (87%)", max = "Short / maximum" },
 	portrait = { none = "None", left = "Left", right = "Right" },
@@ -49,7 +60,7 @@ local CHOICE_LABELS = {
 }
 
 -- Numbers that are a share of something are shown as a percentage.
-local AS_PERCENT = { scale = true, scaleSmall = true, scaleMid = true, farAlpha = true }
+local AS_PERCENT = { scale = true, scaleSmall = true, scaleMid = true, farAlpha = true, alpha = true, calm = true }
 
 local function SettingLabel(key)
 	return L[SETTING_LABELS[key]]
@@ -257,7 +268,28 @@ local function BuildGeneral(panel)
 		check:SetPoint("TOPLEFT", panel, "TOPLEFT", 16 + column * 160, y - row * ROW)
 		general.controls[#general.controls + 1] = check
 	end
-	y = y - math.ceil(#Defaults.HIDE_ORDER / 4) * ROW - 4
+	y = y - math.ceil(#Defaults.HIDE_ORDER / 4) * ROW
+
+	-- Someone who shows themselves among the party frames wants no player frame at all: neither
+	-- ours nor the game's, which otherwise comes back when ours is switched off.
+	local hideAll = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
+	hideAll:SetSize(24, 24)
+	hideAll.Text:SetFontObject("GameFontHighlight")
+	hideAll.Text:SetText(L["Also where my own frame is switched off"])
+	hideAll:SetScript("OnClick", function(self)
+		ns.Try(function()
+			db().hideAll = self:GetChecked() and true or false
+			ns.Refresh()
+			SyncGeneral()
+		end)
+	end)
+	hideAll.Sync = function(self)
+		self:SetChecked(db().hideAll)
+	end
+	hideAll:SetPoint("TOPLEFT", panel, "TOPLEFT", 16, y)
+	general.controls[#general.controls + 1] = hideAll
+	general.hideAll = hideAll
+	y = y - ROW - 4
 
 	general.reloadNote = panel:CreateFontString(nil, "ARTWORK", "GameFontRedSmall")
 	general.reloadNote:SetPoint("TOPLEFT", 20, y - 4)
@@ -304,7 +336,9 @@ end
 ---------------------------------------------------------------------------
 -- The frames page
 ---------------------------------------------------------------------------
-local frames = { kind = "player", controls = {}, tabs = {} }
+local frames = { kind = "player", section = Defaults.UNIT_SECTIONS[1].key, controls = {}, tabs = {}, sections = {} }
+
+local TABS_Y, SECTIONS_Y, CONTROLS_Y = -44, -74, -112
 
 local function SyncFrames()
 	if not frames.panel then
@@ -314,11 +348,20 @@ local function SyncFrames()
 	for tabKind, tab in pairs(frames.tabs) do
 		tab:SetEnabled(tabKind ~= kind)
 	end
-	-- The controls this kind of frame has, in two columns; the rest are put away.
+	local inSection = {}
+	for _, section in ipairs(Defaults.UNIT_SECTIONS) do
+		frames.sections[section.key]:SetEnabled(section.key ~= frames.section)
+		if section.key == frames.section then
+			for _, key in ipairs(section.keys) do
+				inSection[key] = true
+			end
+		end
+	end
+	-- The controls of this section that this kind of frame has, in two columns; the rest are put away.
 	local shown = {}
 	for _, key in ipairs(Defaults.UNIT_ORDER) do
 		local control = frames.controls[key]
-		if Defaults.UnitSpec(kind, key) then
+		if inSection[key] and Defaults.UnitSpec(kind, key) then
 			shown[#shown + 1] = control
 		else
 			control:Hide()
@@ -327,24 +370,40 @@ local function SyncFrames()
 	local perColumn = math.ceil(#shown / 2)
 	for index, control in ipairs(shown) do
 		local column, row = math.floor((index - 1) / perColumn), (index - 1) % perColumn
-		control:Place(16 + column * COLUMN, -84 - row * ROW)
+		control:Place(16 + column * COLUMN, CONTROLS_Y - row * ROW)
 		control:Show()
 		control:Sync()
 	end
 end
 
+local function TabWidth(label)
+	return math.max(64, #label * 7 + 16)
+end
+
 local function BuildFrames(panel)
 	MakeHeading(panel, L["Frames"], 16, -16)
+	-- Which frame, then which part of its settings.
 	local x = 16
 	for _, kind in ipairs(Defaults.KINDS) do
 		local label = Defaults.Label(kind)
-		local tab = MakeButton(panel, label, math.max(64, #label * 7 + 16), function()
+		local tab = MakeButton(panel, label, TabWidth(label), function()
 			frames.kind = kind
 			SyncFrames()
 		end)
-		tab:Place(x, -44)
+		tab:Place(x, TABS_Y)
 		x = x + tab:GetWidth() + 4
 		frames.tabs[kind] = tab
+	end
+	x = 16
+	for _, section in ipairs(Defaults.UNIT_SECTIONS) do
+		local label = L[SECTION_LABELS[section.key]]
+		local tab = MakeButton(panel, label, TabWidth(label), function()
+			frames.section = section.key
+			SyncFrames()
+		end)
+		tab:Place(x, SECTIONS_Y)
+		x = x + tab:GetWidth() + 4
+		frames.sections[section.key] = tab
 	end
 
 	for _, key in ipairs(Defaults.UNIT_ORDER) do

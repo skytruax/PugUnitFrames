@@ -156,7 +156,7 @@ Test("login builds a secure unit button for each single unit", function()
 		True(frame, kind .. " frame")
 		True(frame:IsProtected(), kind .. " is protected")
 		Equal(kind, frame:GetAttribute("unit"), kind .. " unit")
-		Equal("target", frame:GetAttribute("*type1"), "a click targets")
+		Equal("target", frame:GetAttribute("type1"), "a click targets")
 		Equal("togglemenu", frame:GetAttribute("*type2"), "a right click opens the menu")
 		Equal(SecureUnitButton_OnClick, frame:GetScript("OnClick"), "the secure click handler is still there")
 		True(ClickCastFrames[frame], kind .. " is offered to click-casting addons")
@@ -645,8 +645,9 @@ Test("a party frame lights up in the colour of a debuff the player can remove", 
 	local ns = Login()
 	Party(2)
 	local button = PartyButton(ns, 1)
-	local light = button.auras.light
-	False(light[1]:IsShown(), "nothing to remove")
+	local light, lamp, pulse = button.auras.light, button.auras.lamp, button.auras.pulse
+	False(lamp:IsShown(), "nothing to remove")
+	False(pulse:IsPlaying())
 	M.SetCombat(true)
 	M.units.party1.auras = {
 		{ id = 31, icon = 1, helpful = false, kind = 2 },                  -- a curse the player cannot remove
@@ -654,14 +655,16 @@ Test("a party frame lights up in the colour of a debuff the player can remove", 
 	}
 	M.Fire("UNIT_AURA", "party1")
 	M.Advance(0)
-	True(light[1]:IsShown(), "lit")
+	True(light[1]:IsVisible(), "lit")
+	True(pulse:IsPlaying(), "and breathing, so that it is seen in a fight")
 	Sealed(light[1].vertex[1], "in a sealed colour")
 	Near(0.72, Value(light[1].vertex[1]), "the disease's, not the curse's")
 	Near(0.52, Value(light[4].vertex[2]), "on all four sides")
 	M.units.party1.auras = { { id = 31, icon = 1, helpful = false, kind = 2 } }
 	M.Fire("UNIT_AURA", "party1")
 	M.Advance(0)
-	False(light[1]:IsShown(), "out again")
+	False(light[1]:IsVisible(), "out again")
+	False(pulse:IsPlaying())
 end)
 
 Test("icons on a raid frame let the mouse through, icons beside a frame do not", function()
@@ -724,6 +727,65 @@ Test("a shaman's totems show while they stand, also when the game seals them", f
 	Equal(311, Value(buttons[3].icon.texture))
 end)
 
+Test("in a fight an empty totem slot stays unseen although the game calls it taken, and a totem is gone when its time is up", function()
+	Login("SHAMAN")
+	local buttons = PugUnitFrames_player.totems.buttons
+	M.emptySlotsSayYes = true
+	M.totems[2] = { icon = 310, start = M.now, length = 120 }
+	M.SetCombat(true)
+	M.Fire("PLAYER_TOTEM_UPDATE", 2)
+	Sealed(buttons[1].alpha)
+	Equal(0, Value(buttons[1].alpha), "an empty slot: the game says yes, its time says no")
+	Equal(0, Value(buttons[4].alpha))
+	Equal(1, Value(buttons[2].alpha), "the one that stands")
+	-- Its time runs out and the game sends no word of it.
+	M.Advance(121)
+	Equal(0, Value(buttons[2].alpha), "gone with its time")
+	Equal(0, #M.blocked)
+end)
+
+Test("a right click sends a totem away, whichever half of a click the game acts on, and an empty slot is not in the mouse's way", function()
+	Login("SHAMAN")
+	local totems = PugUnitFrames_player.totems
+	local clicks = totems.clicks
+	True(clicks[1]:IsProtected(), "what is clicked is the game's secure button")
+	False(totems.buttons[1]:IsProtected(), "what is seen is an ordinary frame")
+	Equal(totems.buttons[1], totems.buttons[1].cooldown.parent, "with the sweep on it, not on the secure button")
+	False(clicks[1].mouse, "an empty slot lets the mouse through")
+	M.totems[1] = { icon = 310, start = M.now, length = 120 }
+	M.Fire("PLAYER_TOTEM_UPDATE", 1)
+	True(clicks[1].mouse, "a totem's slot takes it")
+	False(clicks[2].mouse)
+
+	M.Press(clicks[1], "LeftButton")
+	Equal(0, #M.destroyed, "a left click does nothing")
+	M.Press(clicks[1], "RightButton")
+	Equal(1, M.destroyed[1], "with the game acting on the press")
+	Equal(1, #M.destroyed, "once, not on the press and the release both")
+
+	M.keyDown = false
+	M.totems[1] = { icon = 310, start = M.now, length = 120 }
+	M.Fire("PLAYER_TOTEM_UPDATE", 1)
+	M.Press(clicks[1], "RightButton")
+	Equal(2, #M.destroyed, "and with the game acting on the release")
+
+	clicks[1].scripts.OnEnter(clicks[1])
+	Equal(1, M.tooltip.totem, "the mouse over a slot says what stands there")
+
+	-- A fight: nothing readable about the slots and no button may be changed, so all four take
+	-- the mouse from its first moment, and a totem set down in the fight can be sent away.
+	M.SetCombat(true)
+	True(clicks[3].mouse)
+	M.totems[3] = { icon = 311, start = M.now, length = 60 }
+	M.Fire("PLAYER_TOTEM_UPDATE", 3)
+	Equal(1, Value(totems.buttons[3].alpha), "drawn in the fight, sweep and all")
+	M.Press(clicks[3], "RightButton")
+	Equal(3, M.destroyed[3])
+	M.SetCombat(false)
+	False(clicks[3].mouse, "after the fight the empty slots step back")
+	Equal(0, #M.blocked)
+end)
+
 ---------------------------------------------------------------------------
 -- Groups
 ---------------------------------------------------------------------------
@@ -738,7 +800,7 @@ Test("the party header makes a dressed frame for each member", function()
 		Equal("party", button.kind)
 		Equal("party" .. index, button.unit, "the drawing follows the unit the header gave")
 		Equal(ns.db.units.party.width, button:GetWidth(), "sized by the secure snippet")
-		Equal("target", button:GetAttribute("*type1"))
+		Equal("target", button:GetAttribute("type1"))
 		Equal("togglemenu", button:GetAttribute("*type2"))
 		Equal(5, #button.clicks, "all mouse buttons, from the template")
 		Equal("Friend" .. index, button.texts.name.text, "a group member's name is not sealed")
@@ -1225,6 +1287,9 @@ Test("the general page builds and its controls change the settings", function()
 	Equal(ns.L["Lock frames"], page.lock:GetText())
 	page.lock:Click()
 	True(ns.db.locked)
+	page.hideAll:SetChecked(true)
+	page.hideAll:Click()
+	True(ns.db.hideAll, "the game's frames stay hidden also where ours is off")
 	Equal(0, #ns.GetProblems())
 end)
 
@@ -1266,6 +1331,28 @@ Test("the frames page shows each kind of frame the controls it has, and they wor
 	False(page.controls.castbar:IsShown(), "and no cast bars")
 	page.controls.perColumn.children[2]:Click()
 	Equal(6, ns.db.units.raid.perColumn)
+
+	-- A frame's settings come a section at a time.
+	False(page.controls.color:IsShown(), "the bars' settings are on another section")
+	page.sections.bars:Click()
+	True(page.controls.color:IsShown())
+	True(page.controls.absorbs:IsShown())
+	False(page.controls.perColumn:IsShown())
+	page.sections.icons:Click()
+	True(page.controls.myBuffs:IsShown())
+	False(page.controls.color:IsShown())
+	-- Every setting is on exactly one section.
+	local seen = {}
+	for _, section in ipairs(ns.Defaults.UNIT_SECTIONS) do
+		for _, key in ipairs(section.keys) do
+			False(seen[key], key .. " is listed twice")
+			seen[key] = true
+			True(ns.Defaults.UNIT_SPEC[key], key .. " is a setting")
+		end
+	end
+	for key in pairs(ns.Defaults.UNIT_SPEC) do
+		True(seen[key] or key == "x" or key == "y", key .. " has no section")
+	end
 	Equal(0, #ns.GetProblems())
 end)
 
@@ -1359,16 +1446,37 @@ Test("where the game's language is written in another script, its own font is us
 	Equal(0, #ns.GetProblems())
 end)
 
-Test("a font file the game cannot read is reported once, and the game's font is used", function()
+Test("a font file the game cannot read is tried again, then reported once, and the game's font is used", function()
 	M.unreadableFonts["Interface\\AddOns\\PugUnitFrames\\Fonts\\Inter-SemiBold.ttf"] = true
 	local ns = Login()
 	Equal(STANDARD_TEXT_FONT, PugUnitFrames_player.texts.name.font[1], "every text still has a font")
 	Equal(STANDARD_TEXT_FONT, PugUnitFrames_player.texts.health.font[1])
+	Equal(0, #ns.GetProblems(), "not given up at the first refusal: the game may still be loading the file")
+	M.Advance(1)
+	M.Advance(3)
+	Equal(0, #ns.GetProblems(), "nor at the third")
+	M.Advance(8)
 	local problems = ns.GetProblems()
 	Equal(1, #problems, "said once, however many texts there are")
 	True(problems[1].text:find("Inter-SemiBold.ttf", 1, true), "and it names the file")
 	ns.Refresh()
+	M.Advance(30)
 	Equal(1, #ns.GetProblems(), "and not again on the next layout")
+	Equal(STANDARD_TEXT_FONT, PugUnitFrames_player.texts.name.font[1])
+end)
+
+Test("a font the game is slow to have ready is taken up when it arrives, and nothing is reported", function()
+	local inter = "Interface\\AddOns\\PugUnitFrames\\Fonts\\Inter-SemiBold.ttf"
+	M.unreadableFonts[inter] = true
+	local ns = Login()
+	Equal(STANDARD_TEXT_FONT, PugUnitFrames_player.texts.name.font[1], "the game's font in the meantime")
+	M.Advance(1)
+	M.unreadableFonts[inter] = nil
+	M.Advance(3)
+	Equal(inter, PugUnitFrames_player.texts.name.font[1], "the addon's own once the game has it")
+	Equal(inter, PugUnitFrames_player.texts.health.font[1])
+	Equal(0, #ns.GetProblems())
+	False(Printed("went wrong"))
 end)
 
 Test("the empty part of a health bar is the bar's own colour under a dark veil", function()
@@ -1604,4 +1712,471 @@ Test("a narrow frame with no health number still says that someone is dead", fun
 	M.units.raid2.dead = false
 	M.Fire("UNIT_HEALTH", "raid2")
 	Equal("Friend2", button.texts.name.text, "and the name comes back")
+end)
+
+---------------------------------------------------------------------------
+-- What players of unit frames ran into: clicks, pings, a controller's menu
+---------------------------------------------------------------------------
+Test("the game's target frame is set aside and not hidden, so that a controller's target menu has a frame to belong to", function()
+	local ns = Login()
+	local aside = TargetFrame.parent
+	True(aside ~= UIParent and aside:IsVisible(), "it sits on a frame of ours that is on screen")
+	Equal(0, aside.alpha, "see-through")
+	True(aside.scale <= 0.001, "and far too small to be seen or to be in the mouse's way")
+	Equal(nil, next(TargetFrame.events), "its events are gone like the others'")
+	True(ns.Blizzard.IsAway("target"))
+	True(ns.Blizzard.IsKept("target"))
+	False(ns.Blizzard.IsKept("player"), "the others are hidden")
+	False(TargetFrame:IsVisible(), "no target: not there")
+
+	Target(HOGGER)
+	True(TargetFrame:IsVisible(), "with a target it is there, which is what keeps its menu open")
+	Equal(PugUnitFrames_target, TargetFrame.anchors[1][2], "beside ours, where its menu then opens")
+	M.SetCombat(true)
+	Target(nil)
+	False(TargetFrame:IsVisible(), "the game hides it in a fight too")
+	Target(HOGGER)
+	True(TargetFrame:IsVisible())
+	Equal(0, #M.blocked)
+	Equal(0, #ns.GetProblems())
+end)
+
+Test("losing a target sounds once: by the game's frame when it was set aside", function()
+	Login()
+	Target(HOGGER)
+	Target(nil)
+	Equal(2, #M.sounds, "picked, lost")
+	Equal(SOUNDKIT.INTERFACE_SOUND_LOST_TARGET_UNIT, M.sounds[2])
+end)
+
+Test("a target frame of the game's that may not be given a new parent is hidden like the rest, and we play its sound", function()
+	TargetFrame.aspects[Enum.ForbiddenAspect.ChangeParent] = true
+	local ns = Login()
+	False(ns.Blizzard.IsKept("target"))
+	True(ns.Blizzard.IsAway("target"))
+	Equal(UIParent, TargetFrame.parent, "left where it was")
+	Target(HOGGER)
+	False(TargetFrame:IsShown())
+	Target(nil)
+	Equal(SOUNDKIT.INTERFACE_SOUND_LOST_TARGET_UNIT, M.sounds[2], "ours")
+	Equal(2, #M.sounds)
+	Equal(0, #ns.GetProblems())
+end)
+
+Test("the game's frames can stay hidden also where ours is switched off", function()
+	PugUnitFramesDB = { profiles = { Default = { hideAll = true, units = { player = { enabled = false } } } } }
+	local ns = Login()
+	False(PugUnitFrames_player:IsShown(), "ours is off")
+	False(PlayerFrame:IsShown(), "and the game's does not come back for it")
+	True(PlayerCastingBarFrame:IsShown(), "the game's cast bar stays: with ours off it is the only one")
+	False(ns.Blizzard.NeedsReload())
+end)
+
+Test("a click with Shift, Ctrl or Alt held targets too, where the game alone would do nothing", function()
+	local ns = Login()
+	Target(HOGGER)
+	M.Press(PugUnitFrames_target, "LeftButton")
+	Equal("target", M.clicked.action, "a plain click targets directly")
+	for _, held in ipairs({ "shift-", "ctrl-", "alt-" }) do
+		M.Press(PugUnitFrames_target, "LeftButton", held)
+		True(M.clicked, held .. "click does something")
+		Equal("macro", M.clicked.action)
+		Equal("/target [@mouseover,exists]", M.clicked.macro, "the unit under the mouse is the frame's")
+	end
+	M.Press(PugUnitFrames_target, "RightButton")
+	Equal("togglemenu", M.clicked.action, "a plain right click opens the menu")
+	M.Press(PugUnitFrames_target, "RightButton", "ctrl-")
+	Equal(nil, M.clicked, "with a key held the game does not open it, and nothing else happens")
+
+	Party(2)
+	local button = PartyButton(ns, 2)
+	M.Press(button, "LeftButton")
+	Equal("target", M.clicked.action)
+	Equal("party2", M.clicked.unit)
+	M.Press(button, "LeftButton", "shift-")
+	Equal("macro", M.clicked.action, "the members' buttons, which the game makes, do the same")
+end)
+
+Test("the game's ping key over a frame pings the frame's unit", function()
+	local ns = Login()
+	Party(1)
+	Equal("GUID-Uther", M.PingOver(PugUnitFrames_player))
+	Equal("GUID-Friend1", M.PingOver(PartyButton(ns, 1)), "a member's button, made by the game in or out of a fight")
+	Target(HOGGER)
+	True(IsSealed(M.PingOver(PugUnitFrames_target)), "a creature's identity stays sealed on the way: we never see it")
+	Equal(0, #ns.GetProblems())
+end)
+
+---------------------------------------------------------------------------
+-- Casts, power and health
+---------------------------------------------------------------------------
+Test("a cast the game never ends is unseen once its time is up, and put away when the unit is plainly not casting", function()
+	Login()
+	Target(HOGGER)
+	local cast = PugUnitFrames_target.cast
+	Cast("target", { name = "Aimed Shot", icon = 5, start = M.now, length = 3, id = 7 })
+	True(cast:IsShown())
+	M.Advance(1)
+	Sealed(cast.alpha, "how long another unit's cast has left is sealed")
+	Equal(1, Value(cast.alpha), "still running")
+	Equal(1, Value(cast.shadow.holder.alpha), "its shadow with it")
+	-- The cast is over and the game sends no word of it.
+	M.Advance(2.5)
+	Equal(0, Value(cast.alpha), "unseen")
+	Equal(0, Value(cast.shadow.holder.alpha))
+	M.units.target.cast = nil
+	M.Advance(0.3)
+	False(cast:IsShown(), "and put away")
+
+	Cast("target", { name = "Shoot", icon = 6, start = M.now, length = 2, id = 8 })
+	True(cast:IsShown())
+	Equal(1, cast.alpha, "the next cast is drawn in full")
+	Equal(0, #M.blocked)
+end)
+
+Test("the power number and the combo points move with every tick on the frames watched closely", function()
+	local ns = Login("ROGUE")
+	Target(HOGGER)
+	M.units.player.power = 2500
+	M.Fire("UNIT_POWER_FREQUENT", "player")
+	Equal("2,500", Value(PugUnitFrames_player.texts.power.text))
+	M.comboPoints = 2
+	M.Fire("UNIT_POWER_FREQUENT", "player")
+	Equal(2, Value(PugUnitFrames_target.points.bars[1].value))
+	Party(1)
+	False(PartyButton(ns, 1):IsEventRegistered("UNIT_POWER_FREQUENT"), "group frames are spared the stream")
+end)
+
+Test("a creature with no power to show has no power bar, and its health bar takes the room", function()
+	local ns = Login()
+	local frame = PugUnitFrames_target
+	local function Bottom()
+		return frame.health.anchors[2][5]
+	end
+	Target({ name = "Wizard", reaction = 2, canAttack = true, power = 50, powerMax = 100 })
+	True(frame.power:IsShown(), "a creature with mana keeps its bar: how much it has is sealed, so it may have some")
+	Equal(ns.db.units.target.powerHeight + 2, Bottom())
+
+	-- Runs on rage, which a creature never gathers.
+	Target({ name = "Brute", reaction = 2, canAttack = true, powerType = 1, powerToken = "RAGE", power = 0, powerMax = 100 })
+	False(frame.power:IsShown())
+	Equal(1, Bottom(), "the health bar reaches the plate's edge")
+	Equal("", frame.texts.power.text, "and no number is written for it")
+
+	-- Runs on mana in name only: the game says plainly that there is none.
+	Target({ name = "Boar", reaction = 2, canAttack = true, powerless = true })
+	False(frame.power:IsShown())
+
+	-- A player who runs on rage has a bar worth watching.
+	Target(Friend(1, { powerType = 1, powerToken = "RAGE", power = 30, powerMax = 100 }))
+	True(frame.power:IsShown())
+	Equal(ns.db.units.target.powerHeight + 2, Bottom())
+
+	-- It changes in a fight too: the bars are not protected.
+	M.SetCombat(true)
+	Target({ name = "Brute", reaction = 2, canAttack = true, powerType = 1, powerToken = "RAGE", power = 0, powerMax = 100 })
+	False(frame.power:IsShown())
+	Equal(0, #M.blocked)
+	M.SetCombat(false)
+
+	ns.db.units.target.hideNoPower = false
+	ns.Refresh()
+	True(frame.power:IsShown(), "and it is a setting")
+	Equal(ns.db.units.target.powerHeight + 2, Bottom())
+end)
+
+Test("a druid in a form keeps a strip of mana under the form's bar", function()
+	Player("DRUID", { powerType = 1, powerToken = "RAGE", power = 20, powerMax = 100, mana = 900, manaMax = 1500 })
+	local ns = Login()
+	local strip = PugUnitFrames_player.power.mana
+	True(strip:IsShown(), "bear form: rage on the bar, mana on the strip")
+	Equal(900, Value(strip.value))
+	Equal(1500, Value(strip.high))
+	local _, _, blue = ns.Style.PowerColor("MANA")
+	Near(blue, strip.barColor[3], "in mana's colour")
+	Equal(20, Value(PugUnitFrames_player.power.value), "the bar itself is the form's")
+
+	M.units.player.mana = 400
+	M.Fire("UNIT_POWER_UPDATE", "player")
+	Equal(400, Value(strip.value))
+
+	-- Back in caster form the bar is mana and needs no strip.
+	M.units.player.powerType, M.units.player.powerToken, M.units.player.power, M.units.player.powerMax = 0, "MANA", 400, 1500
+	M.Fire("UNIT_DISPLAYPOWER", "player")
+	False(strip:IsShown())
+	Equal(nil, PugUnitFrames_target.power.mana, "only the player's frame has one")
+end)
+
+Test("a class with no mana has no mana strip", function()
+	Player("WARRIOR", { powerType = 1, powerToken = "RAGE", power = 20, powerMax = 100 })
+	Login()
+	False(PugUnitFrames_player.power.mana:IsShown())
+	True(PugUnitFrames_player.power:IsShown(), "the player's own bar is never put away")
+end)
+
+Test("someone else's kill is grey whatever colours the bar", function()
+	PugUnitFramesDB = { profiles = { Default = { units = { target = { color = "health" } } } } }
+	local ns = Login()
+	local bar = PugUnitFrames_target.health
+	local tapped = CopyTable(HOGGER)
+	tapped.tapped = true
+	Target(tapped)
+	local r, g, b = ns.Style.Toned(ns.Style.REACTION.tapped)
+	Near(r, bar.barColor[1])
+	Near(g, bar.barColor[2])
+	Near(b, bar.trough.vertex[3], "the empty part too")
+	M.units.target.tapped = false
+	M.Fire("UNIT_FACTION", "target")
+	Sealed(bar.barColor[1], "free again, it is coloured by its health")
+end)
+
+Test("a shield shows as a band along the top of the health bar, on the health bar's scale", function()
+	local ns = Login()
+	local band = PugUnitFrames_player.health.absorb
+	True(band:IsShown())
+	Equal(0, Value(band.value), "no shield, nothing drawn")
+	M.units.player.absorb = 1200
+	M.Fire("UNIT_ABSORB_AMOUNT_CHANGED", "player")
+	Sealed(band.value, "the size of a shield is always sealed")
+	Equal(1200, Value(band.value))
+	Equal(5000, Value(band.high), "against full health")
+	Equal("TOPLEFT", band.anchors[1][1], "from the bar's start, so it shows at full health too")
+
+	M.units.player.dead = true
+	M.Fire("UNIT_HEALTH", "player")
+	Equal(0, band.value, "nobody shields the dead")
+	M.units.player.dead = false
+
+	ns.db.units.player.absorbs = false
+	ns.Refresh()
+	False(band:IsShown())
+end)
+
+Test("bars can fill to the left or upwards, and a bar can be turned round", function()
+	local ns = Login()
+	local cfg, bar = ns.db.units.player, PugUnitFrames_player.health
+	Equal("HORIZONTAL", bar.orientation)
+	False(bar.reverseFill)
+	Equal("TOPLEFT", bar.heal.anchors[1][1], "healing on its way starts where the health ends")
+	Equal("TOPRIGHT", bar.heal.anchors[1][3])
+
+	cfg.fill = "left"
+	ns.Refresh()
+	True(bar.reverseFill)
+	True(bar.heal.reverseFill, "the healing runs the same way")
+	Equal("TOPRIGHT", bar.heal.anchors[1][1])
+	Equal("TOPLEFT", bar.heal.anchors[1][3], "from the other end of the fill")
+	True(PugUnitFrames_player.power.reverseFill, "and so does the power bar")
+	True(bar.absorb.reverseFill)
+
+	cfg.fill = "up"
+	ns.Refresh()
+	Equal("VERTICAL", bar.orientation)
+	Equal("VERTICAL", bar.heal.orientation)
+	Equal("BOTTOMLEFT", bar.heal.anchors[1][1])
+	False(PugUnitFrames_player.power.reverseFill, "the power bar, a strip along the bottom, fills as ever")
+
+	-- Turned round: a dark bar, and the class colour where health is missing.
+	cfg.fill, cfg.invert = "right", true
+	ns.Refresh()
+	False(bar.veil:IsShown(), "the colour behind the bar is bare")
+	local r, g, b = ns.Style.Readable(ns.Style.Toned(M.CLASS_COLORS.PALADIN))
+	Near(r, bar.trough.vertex[1], "the class colour, behind")
+	True(bar.barColor[1] < 0.25 and bar.barColor[2] < 0.25, "the bar itself dark")
+	cfg.color = "health"
+	ns.Refresh()
+	Sealed(bar.trough.vertex[1], "by health as well, the sealed colour goes behind")
+	True(type(bar.barColor[1]) == "number" and bar.barColor[1] < 0.25, "and the bar stays dark")
+	Equal(0, #ns.GetProblems())
+end)
+
+Test("a rare creature is marked beside its level", function()
+	Login()
+	Target({ name = "Mazzranache", level = 9, reaction = 2, canAttack = true, classification = "rare" })
+	Equal("9R", PugUnitFrames_target.texts.level.text)
+	M.units.target.classification = "rareelite"
+	M.Fire("UNIT_CLASSIFICATION_CHANGED", "target")
+	Equal("9R+", PugUnitFrames_target.texts.level.text)
+	Target(HOGGER)
+	Equal("11+", PugUnitFrames_target.texts.level.text, "an elite as before")
+end)
+
+---------------------------------------------------------------------------
+-- Marks, a pet's mood, the member targeted, fading
+---------------------------------------------------------------------------
+Test("a group member's part shows as a mark, and nobody's outside the group", function()
+	local ns = Login()
+	Party(2)
+	M.units.party1.role = "HEALER"
+	M.Fire("PLAYER_ROLES_ASSIGNED")
+	local first, second = PartyButton(ns, 1).marks.role, PartyButton(ns, 2).marks.role
+	True(first:IsShown())
+	True(first.texture:find("Mark-Healer", 1, true))
+	False(second:IsShown(), "no part taken, no mark")
+	M.units.party2.role = "TANK"
+	M.Fire("GROUP_ROSTER_UPDATE")
+	True(second.texture:find("Mark-Tank", 1, true))
+
+	local stranger = Friend(7, { inGroup = false, playerControlled = false, role = "TANK" })
+	Target(stranger)
+	False(PugUnitFrames_target.marks.role:IsShown(), "sealed for someone outside the group: counted as none")
+	Equal(0, #ns.GetProblems())
+end)
+
+Test("the party can be put in order of the parts its members play", function()
+	local ns = Login()
+	Party(3)
+	M.units.party1.role, M.units.party2.role, M.units.party3.role = "DAMAGER", "TANK", "HEALER"
+	ns.db.units.party.byRole = true
+	ns.Refresh()
+	Equal("party2", PartyButton(ns, 1).unit, "the tank first")
+	Equal("party3", PartyButton(ns, 2).unit, "then the healer")
+	Equal("party1", PartyButton(ns, 3).unit)
+	ns.db.units.party.byRole = false
+	ns.Refresh()
+	Equal("party1", PartyButton(ns, 1).unit, "and back to the order they joined in")
+end)
+
+Test("someone marked for fighting other players carries a flag in their side's colour", function()
+	Login()
+	local flag = PugUnitFrames_player.marks.pvp
+	Equal(0, flag.alpha, "not marked, no flag")
+	M.units.player.pvp, M.units.player.faction = true, "Alliance"
+	M.Fire("UNIT_FACTION", "player")
+	Equal(1, flag.alpha)
+	True(flag.vertex[3] > flag.vertex[1], "blue for the Alliance")
+
+	-- A guard: whether a creature is marked comes back sealed, and is drawn all the same.
+	Target({ name = "Orgrimmar Grunt", reaction = 2, canAttack = true, pvp = true, faction = "Horde" })
+	local theirs = PugUnitFrames_target.marks.pvp
+	Sealed(theirs.alpha)
+	Equal(1, Value(theirs.alpha))
+	True(theirs.vertex[1] > theirs.vertex[3], "red for the Horde")
+
+	M.units.target.freeForAll, M.units.target.faction = true, nil
+	M.Fire("UNIT_FACTION", "target")
+	Equal(1, theirs.alpha, "everyone's enemy")
+	True(theirs.vertex[1] > 0.9 and theirs.vertex[2] > 0.6, "in amber")
+end)
+
+Test("a hunter sees how the pet feels beside its frame", function()
+	Player("HUNTER")
+	M.SetUnit("pet", { name = "Wolf", playerControlled = true, reaction = 5 })
+	M.petHappiness = 1
+	local ns = Login()
+	local face = PugUnitFrames_pet.mood
+	True(face:IsShown())
+	True(face.texture:find("Mood-Unhappy", 1, true), "unhappy: time to feed it")
+	M.petHappiness = 3
+	M.Fire("UNIT_HAPPINESS", "pet")
+	True(face.texture:find("Mood-Happy", 1, true))
+	M.petHappiness = nil
+	M.Fire("UNIT_PET", "player")
+	False(face:IsShown(), "a pet without a mood has no face")
+	ns.db.units.pet.happiness = false
+	ns.Refresh()
+	False(PugUnitFrames_pet.active.Mood)
+end)
+
+Test("only a hunter's pet frame has a mood", function()
+	Player("WARLOCK")
+	M.SetUnit("pet", { name = "Imp", playerControlled = true, reaction = 5 })
+	M.petHappiness = 3
+	Login()
+	Equal(nil, PugUnitFrames_pet.mood)
+end)
+
+Test("the group member the player has targeted is outlined", function()
+	local ns = Login()
+	Party(2)
+	local first, second = PartyButton(ns, 1).highlight, PartyButton(ns, 2).highlight
+	Equal(0, first.alpha)
+	Target(Friend(2))
+	Equal(1, second.alpha, "the one targeted")
+	Equal(0, first.alpha)
+	M.sealComparisons = true
+	Target(Friend(1))
+	Sealed(first.alpha, "where the game seals the comparison it is drawn all the same")
+	Equal(1, Value(first.alpha))
+	Equal(0, Value(second.alpha))
+	Equal(nil, PugUnitFrames_player.highlight, "single frames have no such line")
+	ns.db.units.party.highlight = false
+	ns.Refresh()
+	False(first:IsShown())
+end)
+
+Test("every frame takes the overall opacity, and the player's frame can step back when nothing is going on", function()
+	PugUnitFramesDB = { profiles = { Default = { alpha = 0.8, units = { player = { calm = 0.5 } } } } }
+	local ns = Login()
+	local frame = PugUnitFrames_player
+	Near(0.4, frame.alpha, "no fight, no target: the overall opacity, faded")
+	Target(HOGGER)
+	Near(0.8, frame.alpha, "a target brings it back")
+	Near(0.8, PugUnitFrames_target.alpha, "a frame that does not fade is at the overall opacity")
+	Target(nil)
+	Near(0.4, frame.alpha)
+	frame.scripts.OnEnter(frame)
+	Near(0.8, frame.alpha, "the mouse over it brings it back")
+	frame.scripts.OnLeave(frame)
+	Near(0.4, frame.alpha)
+	M.SetCombat(true)
+	Near(0.8, frame.alpha, "and so does a fight, from its first moment")
+	M.SetCombat(false)
+	Near(0.4, frame.alpha)
+	Equal(0, #M.blocked, "a protected frame's alpha may change in a fight")
+
+	ns.db.units.player.calm = 1
+	ns.Refresh()
+	Near(0.8, frame.alpha, "switched off, it stays in full")
+	Party(1)
+	Near(0.8, PartyButton(ns, 1).alpha, "group frames too")
+end)
+
+Test("the player's frame can stay away while in a group, also when the group forms in a fight", function()
+	PugUnitFramesDB = { profiles = { Default = { units = { player = { hideInGroup = true } } } } }
+	local ns = Login()
+	True(PugUnitFrames_player:IsShown(), "alone: there")
+	Party(2)
+	M.UpdateUnitWatch()
+	False(PugUnitFrames_player:IsShown(), "in a party: away")
+	M.SetCombat(true)
+	Party(0)
+	M.UpdateUnitWatch()
+	True(PugUnitFrames_player:IsShown(), "the game brings it back in a fight")
+	Equal(0, #M.blocked)
+
+	-- Switched off in a fight: waits for its end, then the frame simply follows its unit again.
+	ns.db.units.player.hideInGroup = false
+	ns.Refresh()
+	M.SetCombat(false)
+	Party(2)
+	M.UpdateUnitWatch()
+	True(PugUnitFrames_player:IsShown())
+	Equal(0, #M.blocked)
+	Equal(0, #ns.GetProblems())
+end)
+
+---------------------------------------------------------------------------
+-- Icons
+---------------------------------------------------------------------------
+Test("stack counts are outlined, time left can be a number, and buffs can be the player's own only", function()
+	local ns = Login()
+	local mine = { id = 23, icon = 123, helpful = true, stacks = 2, length = 30, mine = true }
+	local auras = CopyTable(AURAS)
+	auras[#auras + 1] = mine
+	Target(WithAuras(HOGGER, auras))
+	local icons = ShownIcons(PugUnitFrames_target)
+	Equal(6, #icons)
+	Equal("OUTLINE", icons[1].count.font[3], "readable on a bright icon, whatever the text setting")
+	Equal("", PugUnitFrames_target.texts.name.font[3], "the rest of the lettering keeps its soft shadow")
+	True(icons[1].cooldown.hideNumbers, "the sweep alone, unless asked")
+	Equal("NumberFontNormalSmall", icons[1].cooldown.countdownFont)
+
+	ns.db.auraTimers = true
+	ns.db.units.target.myBuffs = true
+	ns.Refresh()
+	icons = ShownIcons(PugUnitFrames_target)
+	False(icons[1].cooldown.hideNumbers, "the game writes the time left on the icon")
+	Equal(4, #icons, "three debuffs, and of three buffs the one that is the player's")
+	Equal(123, icons[4].icon.texture)
 end)
