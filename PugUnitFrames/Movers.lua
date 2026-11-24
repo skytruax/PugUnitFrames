@@ -114,7 +114,7 @@ function Movers.SetLocked(locked)
 	if locked then
 		ns.Print(L["Frames locked."])
 	else
-		ns.Print(L["Frames unlocked: drag a green box to move its frame, then type /freeuf lock."])
+		ns.Print(L["Frames unlocked: drag a green box to move its frame, then type /pug lock."])
 	end
 end
 

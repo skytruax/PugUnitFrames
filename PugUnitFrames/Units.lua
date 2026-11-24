@@ -55,7 +55,7 @@ function Units.Spawn()
 	_G.ClickCastFrames = _G.ClickCastFrames or {}
 
 	for _, kind in ipairs(SINGLES) do
-		local frame = CreateFrame("Button", "FreeUnitFrames_" .. kind, UIParent, "SecureUnitButtonTemplate")
+		local frame = CreateFrame("Button", "PugUnitFrames_" .. kind, UIParent, "SecureUnitButtonTemplate")
 		frame:SetFrameStrata("LOW")
 		frame:SetAttribute("unit", kind)
 		frame:SetAttribute("*type1", "target")     -- a click targets the unit

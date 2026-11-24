@@ -1,17 +1,17 @@
 ## Interface: 16001
-## Title: Free Unit Frames
+## Title: Pug Unit Frames
 ## Notes: Clean, light unit frames: you, your target and its target, focus, pet, party and raid.
 ## Notes-deDE: Schlanke, aufgeräumte Einheitenfenster: du, dein Ziel und dessen Ziel, Fokus, Begleiter, Gruppe und Schlachtzug.
 ## Notes-esES: Marcos de unidad limpios y ligeros: tú, tu objetivo y el suyo, foco, mascota, grupo y banda.
 ## Notes-frFR: Des cadres d'unité sobres et légers : vous, votre cible et la sienne, focalisation, familier, groupe et raid.
-## Version: 0.1.1
+## Version: 0.2.0
 ## Author: Sky Truax
 ## X-License: MIT
-## X-Website: https://github.com/skytruax/FreeUnitFrames
+## X-Website: https://github.com/skytruax/PugUnitFrames
 ## X-Curse-Project-ID: 1826652
-## IconTexture: Interface\AddOns\FreeUnitFrames\Art\Logo
-## SavedVariables: FreeUnitFramesDB
-## SavedVariablesPerCharacter: FreeUnitFramesCharDB
+## IconTexture: Interface\AddOns\PugUnitFrames\Art\Logo
+## SavedVariables: PugUnitFramesDB
+## SavedVariablesPerCharacter: PugUnitFramesCharDB
 
 Locale.lua
 Core.lua

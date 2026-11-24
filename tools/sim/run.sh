@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Loads Free Unit Frames next to Blizzard's real Forever interface code in the wow-ui-sim
+# Loads Pug Unit Frames next to Blizzard's real Forever interface code in the wow-ui-sim
 # simulator (https://github.com/Osso/wow-ui-sim), runs tools/sim/tests against it, and takes a
 # screenshot.
 #
@@ -34,7 +34,7 @@ make_scratch "$work" "$wants_picture"
 out="${SIM_OUT:-$here/out}"
 mkdir -p "$out"
 status=0
-"$here/lab/run-sim.sh" -o "$out" "${picture[@]}" "$@" "$work/FreeUnitFrames" || status=$?
+"$here/lab/run-sim.sh" -o "$out" "${picture[@]}" "$@" "$work/PugUnitFrames" || status=$?
 
 # Keep the latest picture of a passing run where the README shows it.
 if [[ $status -eq 0 && -s "$out/screenshot.png" ]]; then

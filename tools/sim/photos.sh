@@ -34,7 +34,7 @@ for picture in "${pictures[@]}"; do
   name="$(basename "${picture%.*}")"
   rm -rf "$work/one"; mkdir -p "$work/one"
   make_scratch "$work/one" picture "$picture" >/dev/null
-  "$here/lab/run-sim.sh" -o "$work/run" --no-tests "${PICTURE_OPTIONS[@]}" --fonts "$work/one/simfonts" "$work/one/FreeUnitFrames" | tail -1
+  "$here/lab/run-sim.sh" -o "$work/run" --no-tests "${PICTURE_OPTIONS[@]}" --fonts "$work/one/simfonts" "$work/one/PugUnitFrames" | tail -1
   [[ -s "$work/run/screenshot.png" ]] || { echo "photos.sh: no picture for $name" >&2; exit 1; }
   python3 "$here/photo_note.py" "$work/run/screenshot.png" "$out/$name.png"
 done

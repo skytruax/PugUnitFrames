@@ -1,4 +1,4 @@
--- Scenarios for Free Unit Frames, run by tools/tests/run.py against wowmock.lua.
+-- Scenarios for Pug Unit Frames, run by tools/tests/run.py against wowmock.lua.
 -- Each runs in a fresh Lua state: the stand-in for the client, then the addon, then the scenario.
 --
 -- The stand-in seals what the client seals. A value that arrives on a widget sealed is opened
@@ -63,7 +63,7 @@ local function LoadAddon()
 	local ns = {}
 	for _, path in ipairs(ADDON_LUA_FILES) do
 		local chunk = assert(loadstring(ReadFile(path), "@" .. path))
-		chunk("FreeUnitFrames", ns)
+		chunk("PugUnitFrames", ns)
 	end
 	return ns
 end
@@ -85,7 +85,7 @@ local function Login(class)
 		Player(class)
 	end
 	local ns = LoadAddon()
-	M.Fire("ADDON_LOADED", "FreeUnitFrames")
+	M.Fire("ADDON_LOADED", "PugUnitFrames")
 	M.Fire("PLAYER_LOGIN")
 	M.Fire("PLAYER_ENTERING_WORLD")
 	M.UpdateUnitWatch()
@@ -152,7 +152,7 @@ Test("login builds a secure unit button for each single unit", function()
 	local ns = Login()
 	True(ns.IsBuilt(), "built")
 	for _, kind in ipairs({ "player", "target", "targettarget", "focus", "pet" }) do
-		local frame = _G["FreeUnitFrames_" .. kind]
+		local frame = _G["PugUnitFrames_" .. kind]
 		True(frame, kind .. " frame")
 		True(frame:IsProtected(), kind .. " is protected")
 		Equal(kind, frame:GetAttribute("unit"), kind .. " unit")
@@ -161,9 +161,9 @@ Test("login builds a secure unit button for each single unit", function()
 		Equal(SecureUnitButton_OnClick, frame:GetScript("OnClick"), "the secure click handler is still there")
 		True(ClickCastFrames[frame], kind .. " is offered to click-casting addons")
 	end
-	True(FreeUnitFrames_player:IsShown(), "the player's frame is up")
-	False(FreeUnitFrames_target:IsShown(), "no target, no target frame")
-	False(FreeUnitFrames_pet:IsShown(), "no pet, no pet frame")
+	True(PugUnitFrames_player:IsShown(), "the player's frame is up")
+	False(PugUnitFrames_target:IsShown(), "no target, no target frame")
+	False(PugUnitFrames_pet:IsShown(), "no pet, no pet frame")
 	Equal(0, #ns.GetProblems(), "problems")
 	Equal(0, #M.blocked, "refused calls")
 end)
@@ -171,33 +171,33 @@ end)
 Test("a frame is placed from the middle of the screen, in screen units whatever its scale", function()
 	local ns = Login()
 	local cfg = ns.db.units.player
-	local anchor = FreeUnitFrames_player.anchors[1]
+	local anchor = PugUnitFrames_player.anchors[1]
 	Equal("CENTER", anchor[1])
 	Equal(UIParent, anchor[2])
 	Equal(cfg.x, anchor[4])
 	Equal(cfg.y, anchor[5])
 	cfg.scale = 2
 	ns.Refresh()
-	anchor = FreeUnitFrames_player.anchors[1]
+	anchor = PugUnitFrames_player.anchors[1]
 	Near(cfg.x / 2, anchor[4], "x at double scale")
 	Near(cfg.y / 2, anchor[5], "y at double scale")
-	Near(2, FreeUnitFrames_player:GetScale(), "scale")
+	Near(2, PugUnitFrames_player:GetScale(), "scale")
 end)
 
 Test("a frame comes and goes with its unit, and a disabled one stays away", function()
 	local ns = Login()
 	Target(HOGGER)
-	True(FreeUnitFrames_target:IsShown(), "target frame with a target")
+	True(PugUnitFrames_target:IsShown(), "target frame with a target")
 	Target(nil)
-	False(FreeUnitFrames_target:IsShown(), "target frame without one")
+	False(PugUnitFrames_target:IsShown(), "target frame without one")
 
 	ns.db.units.target.enabled = false
 	ns.Refresh()
 	Target(HOGGER)
-	False(FreeUnitFrames_target:IsShown(), "a disabled frame stays hidden")
+	False(PugUnitFrames_target:IsShown(), "a disabled frame stays hidden")
 	ns.db.units.target.enabled = true
 	ns.Refresh()
-	True(FreeUnitFrames_target:IsShown(), "enabled again")
+	True(PugUnitFrames_target:IsShown(), "enabled again")
 end)
 
 ---------------------------------------------------------------------------
@@ -205,7 +205,7 @@ end)
 ---------------------------------------------------------------------------
 Test("the player's health reaches the bar sealed, and is never opened on the way", function()
 	Login()
-	local bar = FreeUnitFrames_player.health
+	local bar = PugUnitFrames_player.health
 	Sealed(bar.value, "health")
 	Equal(4000, Value(bar.value), "health")
 	-- A player's own maximum health is one of the things the game does not seal.
@@ -216,7 +216,7 @@ end)
 
 Test("health text is written by the game from the sealed numbers, in every style", function()
 	local ns = Login()
-	local cfg, text = ns.db.units.player, FreeUnitFrames_player.texts.health
+	local cfg, text = ns.db.units.player, PugUnitFrames_player.texts.health
 	local expected = { value = "4,000", short = "4,000", percent = "80%", both = "4,000  80%", max = "4,000 / 5,000", deficit = "1000" }
 	for style, written in pairs(expected) do
 		cfg.healthText = style
@@ -247,15 +247,15 @@ Test("a health change redraws the bar and the text", function()
 	Login()
 	M.units.player.health = 1000
 	M.Fire("UNIT_HEALTH", "player")
-	Equal(1000, Value(FreeUnitFrames_player.health.value), "bar")
-	Equal("1,000  20%", Value(FreeUnitFrames_player.texts.health.text), "text")
-	Equal(Enum.StatusBarInterpolation.ExponentialEaseOut, FreeUnitFrames_player.health.interpolation, "a change of the same unit glides")
+	Equal(1000, Value(PugUnitFrames_player.health.value), "bar")
+	Equal("1,000  20%", Value(PugUnitFrames_player.texts.health.text), "text")
+	Equal(Enum.StatusBarInterpolation.ExponentialEaseOut, PugUnitFrames_player.health.interpolation, "a change of the same unit glides")
 end)
 
 Test("a creature's name and maximum health are sealed and still shown", function()
 	Login()
 	Target(HOGGER)
-	local frame = FreeUnitFrames_target
+	local frame = PugUnitFrames_target
 	Sealed(frame.texts.name.text, "a creature's name")
 	Equal("Hogger", Value(frame.texts.name.text))
 	Sealed(frame.health.high, "a creature's maximum health")
@@ -270,22 +270,22 @@ Test("a creature is coloured by how it stands to the player, a player by class",
 	local tone = ns.Style.theme.tone
 	Target(HOGGER)
 	local hostile = ns.Style.REACTION.hostile
-	Near(hostile[1] * tone, FreeUnitFrames_target.health.barColor[1], "hostile red")
+	Near(hostile[1] * tone, PugUnitFrames_target.health.barColor[1], "hostile red")
 
 	Target({ name = "Jaina", class = "MAGE", isPlayer = true, playerControlled = true, reaction = 5, health = 10, healthMax = 10 })
 	local mage = M.CLASS_COLORS.MAGE
-	Near(mage[1] * tone, FreeUnitFrames_target.health.barColor[1], "mage red part")
-	Near(mage[3] * tone, FreeUnitFrames_target.health.barColor[3], "mage blue part")
+	Near(mage[1] * tone, PugUnitFrames_target.health.barColor[1], "mage red part")
+	Near(mage[3] * tone, PugUnitFrames_target.health.barColor[3], "mage blue part")
 
 	Target({ name = "Wolf", tapped = true, reaction = 2, canAttack = true })
-	Near(ns.Style.REACTION.tapped[1] * tone, FreeUnitFrames_target.health.barColor[1], "someone else's kill is grey")
+	Near(ns.Style.REACTION.tapped[1] * tone, PugUnitFrames_target.health.barColor[1], "someone else's kill is grey")
 end)
 
 Test("a class the game seals still colours the bar, untouched", function()
 	Login()
 	-- Contrived: a "player" the game does not treat as player-controlled, so its class is sealed.
 	Target({ name = "Echo", class = "DRUID", isPlayer = true, playerControlled = false, inGroup = false, reaction = 4 })
-	local color = FreeUnitFrames_target.health.barColor
+	local color = PugUnitFrames_target.health.barColor
 	Sealed(color[1], "a sealed class gives sealed colour numbers")
 	Near(M.CLASS_COLORS.DRUID[1], Value(color[1]), "they are handed on as they came, not toned")
 end)
@@ -294,25 +294,25 @@ Test("colouring by health goes through a curve inside the game", function()
 	local ns = Login()
 	ns.db.units.player.color = "health"
 	ns.Refresh()
-	local color = FreeUnitFrames_player.health.barColor
+	local color = PugUnitFrames_player.health.barColor
 	Sealed(color[1], "red part")
 	Sealed(color[2], "green part")
 	-- 80% lies between the amber point at 55% and the green one at 100%.
 	True(Value(color[1]) < 0.88 and Value(color[1]) > 0.36, "between amber and green")
 	M.units.player.health = 100
 	M.Fire("UNIT_HEALTH", "player")
-	True(Value(FreeUnitFrames_player.health.barColor[1]) > 0.8, "nearly empty is red")
+	True(Value(PugUnitFrames_player.health.barColor[1]) > 0.8, "nearly empty is red")
 end)
 
 Test("power reaches its bar sealed, coloured by its kind", function()
 	local ns = Login()
-	local bar = FreeUnitFrames_player.power
+	local bar = PugUnitFrames_player.power
 	Sealed(bar.value, "mana")
 	Equal(3000, Value(bar.value))
 	Equal(4000, Value(bar.high))
 	local r, g, b = ns.Style.PowerColor("MANA")
 	Near(b, bar.barColor[3], "mana is blue")
-	Equal("3,000", Value(FreeUnitFrames_player.texts.power.text), "power text")
+	Equal("3,000", Value(PugUnitFrames_player.texts.power.text), "power text")
 
 	M.units.player.powerType, M.units.player.powerToken, M.units.player.power, M.units.player.powerMax = 1, "RAGE", 40, 100
 	M.Fire("UNIT_DISPLAYPOWER", "player")
@@ -325,11 +325,11 @@ Test("a frame with no power bar has none, and gets one when asked", function()
 	local ns = Login()
 	ns.db.units.player.powerHeight = 0
 	ns.Refresh()
-	False(FreeUnitFrames_player.power:IsShown(), "power bar")
-	False(FreeUnitFrames_player.active.Power, "power element")
+	False(PugUnitFrames_player.power:IsShown(), "power bar")
+	False(PugUnitFrames_player.active.Power, "power element")
 	ns.db.units.player.powerHeight = 8
 	ns.Refresh()
-	True(FreeUnitFrames_player.power:IsShown(), "power bar back")
+	True(PugUnitFrames_player.power:IsShown(), "power bar back")
 end)
 
 Test("dead, ghost and offline are said in words, with an empty bar", function()
@@ -358,7 +358,7 @@ end)
 
 Test("healing on its way is drawn past the end of the health bar", function()
 	Login()
-	local heal = FreeUnitFrames_player.health.heal
+	local heal = PugUnitFrames_player.health.heal
 	Equal(0, heal.value, "nothing coming")
 	M.units.player.incomingHeals = 700
 	M.Fire("UNIT_HEAL_PREDICTION", "player")
@@ -372,7 +372,7 @@ end)
 ---------------------------------------------------------------------------
 Test("threat fills the outlines up to its level, sealed or not", function()
 	Login()
-	local bars = FreeUnitFrames_player.threat.bars
+	local bars = PugUnitFrames_player.threat.bars
 	for level, bar in ipairs(bars) do
 		Equal(level - 1, bar.low, "outline " .. level .. " starts at")
 		Equal(level, bar.high, "outline " .. level .. " is full at")
@@ -406,12 +406,12 @@ Test("a party member out of range fades, from two sealed answers", function()
 	M.units.party1.rangeChecked = false
 	M.Fire("UNIT_IN_RANGE_UPDATE", "party1", M.Seal(false))
 	Equal(1, Value(button.body.alpha), "a range that could not be checked counts as near")
-	Equal(nil, FreeUnitFrames_player.body.alpha, "the player's own frame does not fade")
+	Equal(nil, PugUnitFrames_player.body.alpha, "the player's own frame does not fade")
 end)
 
 Test("a raid mark is one cell of the game's sheet, chosen by a sealed number", function()
 	Login()
-	local mark = FreeUnitFrames_player.marks.raid
+	local mark = PugUnitFrames_player.marks.raid
 	False(mark:IsShown(), "no mark")
 	M.units.player.raidMark = 8
 	M.Fire("RAID_TARGET_UPDATE")
@@ -425,7 +425,7 @@ end)
 
 Test("the raid mark sits inside a wide frame and rides the edge of a narrow one", function()
 	local ns = Login()
-	Equal("TOP", FreeUnitFrames_player.marks.raid.anchors[1][1], "inside, clear of icons above the plate")
+	Equal("TOP", PugUnitFrames_player.marks.raid.anchors[1][1], "inside, clear of icons above the plate")
 	Raid(3)
 	local button = ns.Group.Get("raid"):GetAttribute("child1")
 	Equal("CENTER", button.marks.raid.anchors[1][1], "on the edge, clear of the name")
@@ -433,7 +433,7 @@ end)
 
 Test("leader, combat and resting marks follow the game", function()
 	local ns = Login()
-	local marks = FreeUnitFrames_player.marks
+	local marks = PugUnitFrames_player.marks
 	Equal(0, marks.leader.alpha, "not the leader")
 	M.units.player.leader = true
 	M.Fire("PARTY_LEADER_CHANGED")
@@ -482,7 +482,7 @@ end
 Test("another unit's cast is sealed and still drawn: timer, name, icon, shield", function()
 	Login()
 	Target(HOGGER)
-	local cast = FreeUnitFrames_target.cast
+	local cast = PugUnitFrames_target.cast
 	False(cast:IsShown(), "no cast")
 	Cast("target", { name = "Fireball", icon = 135812, start = M.now, length = 2.5, id = 7 })
 	True(cast:IsShown(), "cast bar")
@@ -504,7 +504,7 @@ end)
 Test("a channel drains instead of filling, and the player's own cast is not sealed", function()
 	Login()
 	Cast("player", { name = "Blizzard", icon = 2, start = M.now, length = 8, id = 3, channel = true })
-	local cast = FreeUnitFrames_player.cast
+	local cast = PugUnitFrames_player.cast
 	True(cast:IsShown())
 	Equal(Enum.StatusBarTimerDirection.RemainingTime, cast.bar.timer.direction, "a channel drains")
 	PlainValue(cast.text.text, "the player's own spell")
@@ -516,7 +516,7 @@ end)
 
 Test("an interrupted cast stays up a moment in red, then goes, unless a new cast began", function()
 	local ns = Login()
-	local cast = FreeUnitFrames_player.cast
+	local cast = PugUnitFrames_player.cast
 	Cast("player", { name = "Heal", icon = 3, start = M.now, length = 2, id = 4 })
 	M.units.player.cast = nil
 	M.Fire("UNIT_SPELLCAST_INTERRUPTED", "player")
@@ -541,9 +541,9 @@ Test("a new target that is casting shows its cast at once", function()
 	local caster = CopyTable(HOGGER)
 	caster.cast = { name = "Net", icon = 5, start = M.now, length = 1.5, id = 9 }
 	Target(caster)
-	True(FreeUnitFrames_target.cast:IsShown())
+	True(PugUnitFrames_target.cast:IsShown())
 	Target(HOGGER)
-	False(FreeUnitFrames_target.cast:IsShown(), "and one that is not, does not")
+	False(PugUnitFrames_target.cast:IsShown(), "and one that is not, does not")
 end)
 
 ---------------------------------------------------------------------------
@@ -567,7 +567,7 @@ Test("in combat the auras are sealed and still drawn: icon, stacks, time, kind",
 	local ns = Login()
 	M.SetCombat(true)
 	Target(WithAuras(HOGGER, AURAS))
-	local frame = FreeUnitFrames_target
+	local frame = PugUnitFrames_target
 	local icons = ShownIcons(frame)
 	Equal(5, #icons, "icons")
 
@@ -595,7 +595,7 @@ end)
 Test("out of combat the same auras arrive plain and are drawn the same way", function()
 	Login()
 	Target(WithAuras(HOGGER, AURAS))
-	local icons = ShownIcons(FreeUnitFrames_target)
+	local icons = ShownIcons(PugUnitFrames_target)
 	Equal(5, #icons)
 	PlainValue(icons[2].icon.texture)
 	Equal(112, icons[2].icon.texture)
@@ -608,7 +608,7 @@ Test("only-mine shows just the player's debuffs, and the limits are kept", funct
 	cfg.myDebuffs, cfg.buffs = true, 1
 	ns.Refresh()
 	Target(WithAuras(HOGGER, AURAS))
-	local icons = ShownIcons(FreeUnitFrames_target)
+	local icons = ShownIcons(PugUnitFrames_target)
 	Equal(2, #icons, "one debuff of mine, one buff")
 	Equal(12, icons[1].auraInstanceID)
 	Equal(21, icons[2].auraInstanceID)
@@ -621,19 +621,19 @@ Test("aura changes are drawn once, on the next screen update, however many arriv
 	table.remove(unit.auras, 1)
 	M.Fire("UNIT_AURA", "target")
 	M.Fire("UNIT_AURA", "target")
-	Equal(5, #ShownIcons(FreeUnitFrames_target), "not redrawn yet")
+	Equal(5, #ShownIcons(PugUnitFrames_target), "not redrawn yet")
 	M.Advance(0)
-	Equal(4, #ShownIcons(FreeUnitFrames_target), "redrawn on the next update")
+	Equal(4, #ShownIcons(PugUnitFrames_target), "redrawn on the next update")
 	M.units.target.auras = {}
 	M.Fire("UNIT_AURA", "target")
 	M.Advance(0)
-	Equal(0, #ShownIcons(FreeUnitFrames_target), "all gone")
+	Equal(0, #ShownIcons(PugUnitFrames_target), "all gone")
 end)
 
 Test("an aura icon shows the game's tooltip for it", function()
 	Login()
 	Target(WithAuras(HOGGER, AURAS))
-	local icon = ShownIcons(FreeUnitFrames_target)[1]
+	local icon = ShownIcons(PugUnitFrames_target)[1]
 	icon:GetScript("OnEnter")(icon)
 	Equal("target", M.tooltip.unit)
 	Equal(11, M.tooltip.aura)
@@ -675,7 +675,7 @@ Test("icons on a raid frame let the mouse through, icons beside a frame do not",
 	True(icon, "a debuff on the raid frame")
 	False(icon.mouse, "a click there still picks the member")
 	Target(WithAuras(HOGGER, AURAS))
-	True(ShownIcons(FreeUnitFrames_target)[1].mouse, "an icon beside a frame has its tooltip")
+	True(ShownIcons(PugUnitFrames_target)[1].mouse, "an icon beside a frame has its tooltip")
 end)
 
 ---------------------------------------------------------------------------
@@ -684,7 +684,7 @@ end)
 Test("a rogue's combo points fill the pips from a sealed count", function()
 	Login("ROGUE")
 	Target(HOGGER)
-	local bars = FreeUnitFrames_target.points.bars
+	local bars = PugUnitFrames_target.points.bars
 	Equal(5, #bars)
 	M.comboPoints = 3
 	M.Fire("UNIT_POWER_UPDATE", "player")
@@ -694,19 +694,19 @@ Test("a rogue's combo points fill the pips from a sealed count", function()
 		Sealed(bar.value, "the count")
 		Equal(3, Value(bar.value))
 	end
-	Equal(nil, FreeUnitFrames_player.points, "only the target frame has them")
+	Equal(nil, PugUnitFrames_player.points, "only the target frame has them")
 end)
 
 Test("a class without combo points has no pips", function()
 	Login("PALADIN")
 	Target(HOGGER)
-	Equal(nil, FreeUnitFrames_target.points)
-	Equal(nil, FreeUnitFrames_player.totems, "and a class without totems has none")
+	Equal(nil, PugUnitFrames_target.points)
+	Equal(nil, PugUnitFrames_player.totems, "and a class without totems has none")
 end)
 
 Test("a shaman's totems show while they stand, also when the game seals them", function()
 	Login("SHAMAN")
-	local buttons = FreeUnitFrames_player.totems.buttons
+	local buttons = PugUnitFrames_player.totems.buttons
 	Equal(4, #buttons)
 	Equal(0, Value(buttons[2].alpha), "nothing standing")
 	M.totems[2] = { icon = 310, start = M.now, length = 120 }
@@ -769,7 +769,7 @@ Test("the player's own party frame does not repeat the player's cast bar", funct
 	Equal("player", mine.unit)
 	M.units.player.cast = { name = "Heal", icon = 3, start = M.now, length = 2, id = 4 }
 	M.Fire("UNIT_SPELLCAST_START", "player")
-	True(FreeUnitFrames_player.cast:IsShown(), "on the player's frame")
+	True(PugUnitFrames_player.cast:IsShown(), "on the player's frame")
 	False(mine.cast:IsShown(), "not a second time among the party")
 	M.units.party1.cast = { name = "Smite", icon = 4, start = M.now, length = 2, id = 5 }
 	M.Fire("UNIT_SPELLCAST_START", "party1")
@@ -882,10 +882,10 @@ Test("a change of size made in a fight waits for its end, and nothing is refused
 	M.SetCombat(true)
 	cfg.width = width + 40
 	ns.Refresh()
-	Equal(width, FreeUnitFrames_player:GetWidth(), "still the old width")
+	Equal(width, PugUnitFrames_player:GetWidth(), "still the old width")
 	Equal(0, #M.blocked)
 	M.SetCombat(false)
-	Equal(width + 40, FreeUnitFrames_player:GetWidth(), "applied when the fight ended")
+	Equal(width + 40, PugUnitFrames_player:GetWidth(), "applied when the fight ended")
 end)
 
 Test("a reload in the middle of a fight builds the frames when it ends", function()
@@ -893,13 +893,13 @@ Test("a reload in the middle of a fight builds the frames when it ends", functio
 	M.combat = true
 	local ns = Login()
 	False(ns.IsBuilt(), "nothing can be built yet")
-	Equal(nil, _G.FreeUnitFrames_player)
+	Equal(nil, _G.PugUnitFrames_player)
 	Equal(0, #M.blocked)
 	M.SetCombat(false)
 	True(ns.IsBuilt())
 	M.UpdateUnitWatch()
-	True(FreeUnitFrames_player:IsShown())
-	Equal(4000, Value(FreeUnitFrames_player.health.value))
+	True(PugUnitFrames_player:IsShown())
+	Equal(4000, Value(PugUnitFrames_player.health.value))
 end)
 
 Test("what a frame draws keeps changing in combat", function()
@@ -908,9 +908,9 @@ Test("what a frame draws keeps changing in combat", function()
 	M.SetCombat(true)
 	M.units.target.health = 20
 	M.Fire("UNIT_HEALTH", "target")
-	Equal(20, Value(FreeUnitFrames_target.health.value))
+	Equal(20, Value(PugUnitFrames_target.health.value))
 	Cast("target", { name = "Enrage", icon = 9, start = M.now, length = 1, id = 2 })
-	True(FreeUnitFrames_target.cast:IsShown(), "a cast bar may come up in a fight: it is not protected")
+	True(PugUnitFrames_target.cast:IsShown(), "a cast bar may come up in a fight: it is not protected")
 	Equal(0, #M.blocked)
 end)
 
@@ -930,7 +930,7 @@ Test("the game's frames step aside, and what an addon may not touch is left alon
 end)
 
 Test("a frame of the game's is kept when the player says so, or when ours is off", function()
-	FreeUnitFramesDB = { profiles = { Default = { hide = { player = false }, units = { focus = { enabled = false } } } } }
+	PugUnitFramesDB = { profiles = { Default = { hide = { player = false }, units = { focus = { enabled = false } } } } }
 	local ns = Login()
 	True(PlayerFrame:IsShown(), "kept by choice")
 	True(FocusFrame:IsShown(), "kept because our focus frame is off")
@@ -946,10 +946,10 @@ Test("the game's frames are put away as the addon loads, before any of them has 
 	LoadAddon()
 	M.Fire("ADDON_LOADED", "SomeOtherAddon")
 	True(PlayerFrame:IsShown(), "not on another addon's account")
-	M.Fire("ADDON_LOADED", "FreeUnitFrames")
+	M.Fire("ADDON_LOADED", "PugUnitFrames")
 	False(PlayerFrame:IsShown(), "away before login")
 	False(PartyFrame:IsShown())
-	Equal(nil, _G.FreeUnitFrames_player, "our own frames are made at login")
+	Equal(nil, _G.PugUnitFrames_player, "our own frames are made at login")
 	Equal(0, #M.blocked)
 end)
 
@@ -969,7 +969,7 @@ Test("with the game's target frame away, picking and losing a target still sound
 end)
 
 Test("with the game's target frame kept, it plays its own sounds and we play none", function()
-	FreeUnitFramesDB = { profiles = { Default = { hide = { target = false } } } }
+	PugUnitFramesDB = { profiles = { Default = { hide = { target = false } } } }
 	Login()
 	Target(HOGGER)
 	Target(nil)
@@ -977,10 +977,10 @@ Test("with the game's target frame kept, it plays its own sounds and we play non
 end)
 
 Test("the game's cast bar is kept unless ours is drawn", function()
-	FreeUnitFramesDB = { profiles = { Default = { units = { player = { castbar = false } } } } }
+	PugUnitFramesDB = { profiles = { Default = { units = { player = { castbar = false } } } } }
 	Login()
 	True(PlayerCastingBarFrame:IsShown())
-	Equal(nil, FreeUnitFrames_player.cast, "and ours is not made")
+	Equal(nil, PugUnitFrames_player.cast, "and ours is not made")
 end)
 
 ---------------------------------------------------------------------------
@@ -997,7 +997,7 @@ end
 Test("unlocking shows a handle on each frame; a dropped handle moves its frame", function()
 	local ns = Login()
 	Equal(nil, Handle("focus"), "no handles while locked")
-	SlashCmdList.FREEUNITFRAMES("unlock")
+	SlashCmdList.PUGUNITFRAMES("unlock")
 	False(ns.db.locked)
 	local handle = Handle("focus")
 	True(handle and handle:IsShown(), "focus handle")
@@ -1010,10 +1010,10 @@ Test("unlocking shows a handle on each frame; a dropped handle moves its frame",
 	handle.dropped = nil
 	Equal(123, cfg.x, "whole screen units")
 	Equal(-46, cfg.y)
-	Equal(123, FreeUnitFrames_focus.anchors[1][4], "the frame went there")
+	Equal(123, PugUnitFrames_focus.anchors[1][4], "the frame went there")
 	Equal(123, handle.anchors[1][4], "and the handle sits on it")
 
-	SlashCmdList.FREEUNITFRAMES("lock")
+	SlashCmdList.PUGUNITFRAMES("lock")
 	True(ns.db.locked)
 	False(handle:IsShown())
 end)
@@ -1040,11 +1040,11 @@ end)
 Test("frames cannot be unlocked in a fight, and a fight locks them again", function()
 	local ns = Login()
 	M.SetCombat(true)
-	SlashCmdList.FREEUNITFRAMES("unlock")
+	SlashCmdList.PUGUNITFRAMES("unlock")
 	True(ns.db.locked, "stays locked")
 	True(Printed(ns.L["Frames cannot be moved during a fight. Unlock them when it is over."]))
 	M.SetCombat(false)
-	SlashCmdList.FREEUNITFRAMES("unlock")
+	SlashCmdList.PUGUNITFRAMES("unlock")
 	False(ns.db.locked)
 	M.SetCombat(true)
 	True(ns.db.locked, "the fight locked them")
@@ -1055,18 +1055,18 @@ end)
 -- Settings: saved, checked, carried in and out
 ---------------------------------------------------------------------------
 Test("a saved file that is nonsense is replaced by the defaults", function()
-	FreeUnitFramesDB = "broken"
-	FreeUnitFramesCharDB = { profile = 12 }
+	PugUnitFramesDB = "broken"
+	PugUnitFramesCharDB = { profile = 12 }
 	local ns = Login()
 	Equal("Default", ns.profileName)
 	Equal("slate", ns.db.theme)
 	Equal(232, ns.db.units.player.width)
-	Equal("table", type(FreeUnitFramesDB.profiles.Default))
-	Equal("Default", FreeUnitFramesCharDB.profile)
+	Equal("table", type(PugUnitFramesDB.profiles.Default))
+	Equal("Default", PugUnitFramesCharDB.profile)
 end)
 
 Test("each setting that is not what it may be goes back to its default; the rest is kept", function()
-	FreeUnitFramesDB = { profiles = { Default = {
+	PugUnitFramesDB = { profiles = { Default = {
 		theme = "neon", fontSize = 99, outline = "yes", farAlpha = 0.6, stray = true,
 		hide = { player = "sure", raid = false, moon = true },
 		units = {
@@ -1098,7 +1098,7 @@ end)
 
 Test("on a narrow screen, fresh settings start inside it; chosen places are left alone", function()
 	UIParent.width = 1024 -- a 4:3 screen: 512 either side of the middle
-	FreeUnitFramesDB = { profiles = { Mine = { units = { party = { x = -900 } } } } }
+	PugUnitFramesDB = { profiles = { Mine = { units = { party = { x = -900 } } } } }
 	local ns = Login()
 	local units = ns.db.units
 	Equal(-500, units.party.x, "the party starts twelve in from the left edge")
@@ -1109,18 +1109,18 @@ Test("on a narrow screen, fresh settings start inside it; chosen places are left
 
 	True(ns.Profiles.Switch("Mine"))
 	Equal(-900, ns.db.units.party.x, "a place the player chose is not second-guessed")
-	SlashCmdList.FREEUNITFRAMES("reset party")
+	SlashCmdList.PUGUNITFRAMES("reset party")
 	Equal(-500, ns.db.units.party.x, "until the frame is reset")
 end)
 
 Test("each character remembers its profile through its own saved file", function()
-	FreeUnitFramesDB = { profiles = { Healer = { fontSize = 14 }, Default = {} } }
-	FreeUnitFramesCharDB = { profile = "Healer" }
+	PugUnitFramesDB = { profiles = { Healer = { fontSize = 14 }, Default = {} } }
+	PugUnitFramesCharDB = { profile = "Healer" }
 	local ns = Login()
 	Equal("Healer", ns.profileName)
 	Equal(14, ns.db.fontSize)
 	True(ns.Profiles.Switch("Default"))
-	Equal("Default", FreeUnitFramesCharDB.profile)
+	Equal("Default", PugUnitFramesCharDB.profile)
 	Equal(11, ns.db.fontSize)
 	False(ns.Profiles.Switch("Nobody"), "a profile that is not there")
 end)
@@ -1131,7 +1131,7 @@ Test("a profile goes out as text and comes back the same", function()
 	ns.db.units.raid.perColumn = 8
 	ns.db.hide.pet = false
 	local text = ns.Profiles.Export(ns.db)
-	Equal("FREEUF1:", text:sub(1, 8))
+	Equal("PUGUF1:", text:sub(1, 7))
 	local copy = ns.Profiles.Import("  " .. text:sub(1, 40) .. "\n" .. text:sub(41) .. "  ")
 	True(copy, "read back, spaces and line breaks and all")
 	Equal("night", copy.theme)
@@ -1151,11 +1151,11 @@ Test("text that is not a profile is turned away with a reason, and changes nothi
 	Refused(nil)
 	Refused("")
 	Refused("hello there")
-	Refused("FREEUF1:not base64 at all!")
-	Refused("FREEUF1:abcd")                               -- decodes, but is not packed data
-	Refused("FREEUF1:" .. C_EncodingUtil.EncodeBase64("Z{{{")) -- unpacks, but is not a table
-	Refused("FREEUF1:" .. C_EncodingUtil.EncodeBase64("Z12"))  -- a number, not settings
-	Refused("FREEUF1:" .. ("ab"):rep(40000))
+	Refused("PUGUF1:not base64 at all!")
+	Refused("PUGUF1:abcd")                               -- decodes, but is not packed data
+	Refused("PUGUF1:" .. C_EncodingUtil.EncodeBase64("Z{{{")) -- unpacks, but is not a table
+	Refused("PUGUF1:" .. C_EncodingUtil.EncodeBase64("Z12"))  -- a number, not settings
+	Refused("PUGUF1:" .. ("ab"):rep(40000))
 	Equal(before, ns.Profiles.Export(ns.db))
 	Equal(0, #M.luaErrors, "being handed rubbish is not an error in the addon")
 end)
@@ -1163,7 +1163,7 @@ end)
 Test("an imported profile is checked like a saved one", function()
 	local ns = Login()
 	local hostile = { theme = "night", fontSize = 500, units = { player = { width = -5, healthText = "everything" }, raid = 7 }, payload = { 1, 2, 3 } }
-	local text = "FREEUF1:" .. C_EncodingUtil.EncodeBase64(C_EncodingUtil.CompressString(C_EncodingUtil.SerializeCBOR(hostile)))
+	local text = "PUGUF1:" .. C_EncodingUtil.EncodeBase64(C_EncodingUtil.CompressString(C_EncodingUtil.SerializeCBOR(hostile)))
 	local settings = ns.Profiles.Import(text)
 	Equal("night", settings.theme)
 	Equal(11, settings.fontSize)
@@ -1176,8 +1176,8 @@ end)
 Test("the profile window copies settings out and brings pasted ones in as a new profile", function()
 	local ns = Login()
 	ns.db.theme = "hearth"
-	SlashCmdList.FREEUNITFRAMES("profile")
-	local window = FreeUnitFramesProfileWindow
+	SlashCmdList.PUGUNITFRAMES("profile")
+	local window = PugUnitFramesProfileWindow
 	True(window:IsShown())
 	local exported = window.edit:GetText()
 	True(window.edit.highlighted, "selected, ready to copy")
@@ -1190,7 +1190,7 @@ Test("the profile window copies settings out and brings pasted ones in as a new 
 	Equal("hearth", ns.db.theme)
 	Equal("slate", ns.saved.profiles.Default.theme, "the old profile is untouched")
 
-	SlashCmdList.FREEUNITFRAMES("profile")
+	SlashCmdList.PUGUNITFRAMES("profile")
 	window.edit:SetText("rubbish")
 	ns.Profiles.ImportFromWindow()
 	True(window:IsShown(), "stays open so the text can be fixed")
@@ -1208,7 +1208,7 @@ Test("profiles can be copied and deleted, down to the last one", function()
 	Equal("Profile", ns.profileName)
 	Equal(1, #ns.GetProfileNames())
 	False(ns.Profiles.DeleteCurrent(), "the last one stays")
-	Equal("Profile", FreeUnitFramesCharDB.profile)
+	Equal("Profile", PugUnitFramesCharDB.profile)
 end)
 
 ---------------------------------------------------------------------------
@@ -1241,7 +1241,7 @@ Test("the frames page shows each kind of frame the controls it has, and they wor
 	local width = cfg.width
 	page.controls.width.children[2]:Click()
 	Equal(width + 2, cfg.width, "plus")
-	Equal(width + 2, FreeUnitFrames_player:GetWidth(), "and the frame follows")
+	Equal(width + 2, PugUnitFrames_player:GetWidth(), "and the frame follows")
 	page.controls.width.children[1]:Click()
 	page.controls.width.children[1]:Click()
 	Equal(width - 2, cfg.width, "minus")
@@ -1269,25 +1269,36 @@ Test("the frames page shows each kind of frame the controls it has, and they wor
 	Equal(0, #ns.GetProblems())
 end)
 
+Test("a copy left behind under the addon's old name is pointed out at login", function()
+	Login()
+	False(Printed("FreeUnitFrames folder"), "nothing to say when the old copy is gone")
+end)
+
+Test("with the old copy still installed, login says to delete it", function()
+	M.loadedAddOns.FreeUnitFrames = true
+	Login()
+	True(Printed("Delete the FreeUnitFrames folder"), "said in chat")
+end)
+
 Test("every command answers", function()
 	local ns = Login()
-	SlashCmdList.FREEUNITFRAMES("status")
+	SlashCmdList.PUGUNITFRAMES("status")
 	True(Printed(ns.L["No errors recorded."]))
 	True(Printed(ns.L["Sealed values"]))
-	SlashCmdList.FREEUNITFRAMES("what")
-	True(Printed("/freeuf unlock"), "anything unknown lists the commands")
-	SlashCmdList.FREEUNITFRAMES("")
-	Equal(ns.Options.category, M.settings.opened, "bare /freeuf opens the options")
+	SlashCmdList.PUGUNITFRAMES("what")
+	True(Printed("/pug unlock"), "anything unknown lists the commands")
+	SlashCmdList.PUGUNITFRAMES("")
+	Equal(ns.Options.category, M.settings.opened, "bare /pug opens the options")
 
 	ns.db.units.player.width = 300
-	SlashCmdList.FREEUNITFRAMES("reset player")
+	SlashCmdList.PUGUNITFRAMES("reset player")
 	Equal(232, ns.db.units.player.width)
-	Equal(232, FreeUnitFrames_player:GetWidth())
+	Equal(232, PugUnitFrames_player:GetWidth())
 	ns.db.theme, ns.db.units.target.height = "night", 90
-	SlashCmdList.FREEUNITFRAMES("  RESET   All ")
+	SlashCmdList.PUGUNITFRAMES("  RESET   All ")
 	Equal("slate", ns.db.theme)
 	Equal(46, ns.db.units.target.height)
-	SlashCmdList.FREEUNITFRAMES("reset everything")
+	SlashCmdList.PUGUNITFRAMES("reset everything")
 	True(Printed(ns.L["Reset what?"]))
 end)
 
@@ -1304,7 +1315,7 @@ end)
 
 Test("the frame tooltip follows the setting", function()
 	local ns = Login()
-	local frame = FreeUnitFrames_player
+	local frame = PugUnitFrames_player
 	frame:GetScript("OnEnter")(frame)
 	Equal("player", M.tooltip.unit)
 	frame:GetScript("OnLeave")(frame)
@@ -1329,14 +1340,14 @@ end)
 Test("the frames are lettered in the addon's own font, or the game's when the player says so", function()
 	local ns = Login()
 	local inter = ns.Style.FONTS.inter
-	True(inter:find("FreeUnitFrames\\Fonts\\Inter-SemiBold.ttf", 1, true), "the font is the addon's own file")
-	Equal(inter, FreeUnitFrames_player.texts.name.font[1], "name")
-	Equal(inter, FreeUnitFrames_player.texts.health.font[1], "numbers")
-	Equal(inter, FreeUnitFrames_player.cast.text.font[1], "cast bar")
+	True(inter:find("PugUnitFrames\\Fonts\\Inter-SemiBold.ttf", 1, true), "the font is the addon's own file")
+	Equal(inter, PugUnitFrames_player.texts.name.font[1], "name")
+	Equal(inter, PugUnitFrames_player.texts.health.font[1], "numbers")
+	Equal(inter, PugUnitFrames_player.cast.text.font[1], "cast bar")
 
 	ns.db.font = "game"
 	ns.Refresh()
-	Equal(STANDARD_TEXT_FONT, FreeUnitFrames_player.texts.name.font[1], "the game's font on request")
+	Equal(STANDARD_TEXT_FONT, PugUnitFrames_player.texts.name.font[1], "the game's font on request")
 	Equal(0, #ns.GetProblems())
 end)
 
@@ -1344,15 +1355,15 @@ Test("where the game's language is written in another script, its own font is us
 	M.locale = "koKR"
 	local ns = Login()
 	Equal("inter", ns.db.font, "the setting is left as it is")
-	Equal(STANDARD_TEXT_FONT, FreeUnitFrames_player.texts.name.font[1])
+	Equal(STANDARD_TEXT_FONT, PugUnitFrames_player.texts.name.font[1])
 	Equal(0, #ns.GetProblems())
 end)
 
 Test("a font file the game cannot read is reported once, and the game's font is used", function()
-	M.unreadableFonts["Interface\\AddOns\\FreeUnitFrames\\Fonts\\Inter-SemiBold.ttf"] = true
+	M.unreadableFonts["Interface\\AddOns\\PugUnitFrames\\Fonts\\Inter-SemiBold.ttf"] = true
 	local ns = Login()
-	Equal(STANDARD_TEXT_FONT, FreeUnitFrames_player.texts.name.font[1], "every text still has a font")
-	Equal(STANDARD_TEXT_FONT, FreeUnitFrames_player.texts.health.font[1])
+	Equal(STANDARD_TEXT_FONT, PugUnitFrames_player.texts.name.font[1], "every text still has a font")
+	Equal(STANDARD_TEXT_FONT, PugUnitFrames_player.texts.health.font[1])
 	local problems = ns.GetProblems()
 	Equal(1, #problems, "said once, however many texts there are")
 	True(problems[1].text:find("Inter-SemiBold.ttf", 1, true), "and it names the file")
@@ -1362,7 +1373,7 @@ end)
 
 Test("the empty part of a health bar is the bar's own colour under a dark veil", function()
 	local ns = Login()
-	local bar = FreeUnitFrames_player.health
+	local bar = PugUnitFrames_player.health
 	local paladin, tone = M.CLASS_COLORS.PALADIN, ns.Style.theme.tone
 	Near(paladin[1] * tone, bar.barColor[1], "the bar")
 	Near(paladin[1] * tone, bar.trough.vertex[1], "the empty part, red")
@@ -1374,7 +1385,7 @@ Test("the empty part of a health bar is the bar's own colour under a dark veil",
 
 	-- A colour the game seals cannot be darkened by arithmetic: it is handed to both as it came.
 	Target({ name = "Echo", class = "DRUID", isPlayer = true, playerControlled = false, inGroup = false, reaction = 4 })
-	local target = FreeUnitFrames_target.health
+	local target = PugUnitFrames_target.health
 	Sealed(target.trough.vertex[1], "a sealed colour reaches the empty part sealed")
 	Near(M.CLASS_COLORS.DRUID[1], Value(target.trough.vertex[1]))
 
@@ -1398,7 +1409,7 @@ end)
 
 Test("the empty part of a power bar is its colour, darkened by the theme's shade", function()
 	local ns = Login()
-	local bar = FreeUnitFrames_player.power
+	local bar = PugUnitFrames_player.power
 	local left = 1 - ns.Style.theme.shade
 	Near(bar.barColor[1] * left, bar.trough.vertex[1], "red")
 	Near(bar.barColor[3] * left, bar.trough.vertex[3], "blue")
@@ -1408,12 +1419,12 @@ Test("the empty part of a power bar is its colour, darkened by the theme's shade
 	ns.Refresh()
 	local night = ns.Style.THEMES.night
 	Near(bar.barColor[3] * (1 - night.shade) + night.veil[3] * night.shade, bar.trough.vertex[3], "under Night's veil")
-	Equal(night.veil[3], FreeUnitFrames_player.health.veil.color[3], "and the health bar wears the same veil")
+	Equal(night.veil[3], PugUnitFrames_player.health.veil.color[3], "and the health bar wears the same veil")
 end)
 
 Test("every plate has a shadow under it, at the button's own level, and it can be switched off", function()
 	local ns = Login()
-	local frame = FreeUnitFrames_player
+	local frame = PugUnitFrames_player
 	local shadow = frame.body.shadow
 	Equal(9, #shadow.pieces, "nine pieces")
 	True(shadow.holder:IsShown(), "shown")
@@ -1451,7 +1462,7 @@ end)
 
 Test("a cast bar has a bright edge on the end of its fill, and loses it when interrupted", function()
 	local ns = Login()
-	local cast = FreeUnitFrames_player.cast
+	local cast = PugUnitFrames_player.cast
 	local spark = cast.spark
 	Equal("ADD", spark.blend, "added to what is under it")
 	Equal(cast.bar:GetStatusBarTexture(), spark.anchors[1][2], "pinned to the fill the game moves")
@@ -1478,7 +1489,7 @@ Test("every theme, texture and text setting can be put on", function()
 			ns.db.shadows = not ns.db.shadows
 			ns.db.font = ns.db.font == "inter" and "game" or "inter"
 			ns.Refresh()
-			Equal(ns.Style.TEXTURES[texture], FreeUnitFrames_player.health.barTexture.texture)
+			Equal(ns.Style.TEXTURES[texture], PugUnitFrames_player.health.barTexture.texture)
 		end
 	end
 	Equal(0, #ns.GetProblems())
@@ -1519,7 +1530,7 @@ Test("the target's target, which sends no events, is looked at again a few times
 	Target(HOGGER)
 	M.SetUnit("targettarget", Friend(1, { health = 900, healthMax = 1000 }))
 	M.UpdateUnitWatch()
-	local frame = FreeUnitFrames_targettarget
+	local frame = PugUnitFrames_targettarget
 	True(frame:IsShown())
 	Equal(900, Value(frame.health.value))
 	M.units.targettarget.health = 400
@@ -1546,12 +1557,12 @@ Test("an error in one part of a frame is reported and does not stop the others",
 	end
 	M.units.player.health = 50
 	ns.Frame.RefreshAll()
-	Equal(50, Value(FreeUnitFrames_player.health.value), "health still drawn")
-	Equal(1, #ns.GetProblems(), "kept for /freeuf status")
+	Equal(50, Value(PugUnitFrames_player.health.value), "health still drawn")
+	Equal(1, #ns.GetProblems(), "kept for /pug status")
 	True(ns.GetProblems()[1].text:find("the power bar broke", 1, true))
-	True(Printed("/freeuf status"), "said once in chat")
+	True(Printed("/pug status"), "said once in chat")
 	Equal(1, #M.luaErrors, "and handed to the game's own error handler, not swallowed")
-	SlashCmdList.FREEUNITFRAMES("status")
+	SlashCmdList.PUGUNITFRAMES("status")
 	True(Printed("the power bar broke"))
 
 	ns.Frame.RefreshAll()
@@ -1562,7 +1573,7 @@ end)
 
 Test("a refused call is kept with the errors", function()
 	local ns = Login()
-	M.Fire("ADDON_ACTION_BLOCKED", "FreeUnitFrames", "Frame:SetPoint()")
+	M.Fire("ADDON_ACTION_BLOCKED", "PugUnitFrames", "Frame:SetPoint()")
 	M.Fire("ADDON_ACTION_BLOCKED", "SomeoneElse", "Frame:Hide()")
 	Equal(1, #ns.GetProblems())
 	True(ns.GetProblems()[1].text:find("SetPoint", 1, true))
@@ -1570,13 +1581,13 @@ end)
 
 Test("portraits are drawn by the game for the unit on show", function()
 	local ns = Login()
-	Equal(nil, FreeUnitFrames_player.portrait, "none by default")
+	Equal(nil, PugUnitFrames_player.portrait, "none by default")
 	ns.db.units.player.portrait = "left"
 	ns.Refresh()
-	local picture = FreeUnitFrames_player.portrait
+	local picture = PugUnitFrames_player.portrait
 	True(picture:IsShown())
 	Equal("player", picture.portraitOf)
-	True(FreeUnitFrames_player.barLeft > 40, "the bars make room for it")
+	True(PugUnitFrames_player.barLeft > 40, "the bars make room for it")
 	ns.db.units.player.portrait = "none"
 	ns.Refresh()
 	False(picture:IsShown())

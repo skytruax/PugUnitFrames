@@ -8,7 +8,7 @@ local L = ns.L
 local Defaults = ns.Defaults
 
 -- An exported profile starts with this, so text that is something else is turned away at once.
-local MARK = "FREEUF1:"
+local MARK = "PUGUF1:"
 local MAX_IMPORT = 60000 -- characters; a real export is a few hundred
 
 ---------------------------------------------------------------------------
@@ -46,7 +46,7 @@ function Profiles.Import(text)
 		return nil, L["That text is far too long to be a profile."]
 	end
 	if text:sub(1, #MARK) ~= MARK then
-		return nil, L["That is not a Free Unit Frames profile: it should start with FREEUF1:"]
+		return nil, L["That is not a Pug Unit Frames profile: it should start with PUGUF1:"]
 	end
 	-- Damaged text makes the game's decoders raise an error. Here that is an answer, not a
 	-- fault: the player is told what the game said, and nothing is changed.
@@ -122,7 +122,7 @@ end
 local window
 
 local function CreateWindow()
-	local frame = CreateFrame("Frame", "FreeUnitFramesProfileWindow", UIParent)
+	local frame = CreateFrame("Frame", "PugUnitFramesProfileWindow", UIParent)
 	frame:SetSize(620, 300)
 	frame:SetPoint("CENTER")
 	frame:SetFrameStrata("DIALOG")
@@ -169,7 +169,7 @@ local function CreateWindow()
 	return frame
 end
 
--- /freeuf profile: the profile in use as text, selected and ready to copy; pasting other text
+-- /pug profile: the profile in use as text, selected and ready to copy; pasting other text
 -- over it and pressing Import brings that in as a new profile.
 function Profiles.ShowWindow()
 	window = window or CreateWindow()

@@ -1,7 +1,7 @@
 # Pushing a version tag (for example v0.1.0) builds the addon zip, attaches it to a GitHub
 # release, and uploads it to CurseForge.
 #
-# The CurseForge upload needs two things: the project id in FreeUnitFrames/FreeUnitFrames.toc
+# The CurseForge upload needs two things: the project id in PugUnitFrames/PugUnitFrames.toc
 # (## X-Curse-Project-ID) and a repository secret named CF_API_TOKEN holding a CurseForge API
 # token. Without them the workflow still makes the GitHub release.
 name: Release

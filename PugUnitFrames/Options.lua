@@ -207,10 +207,10 @@ end
 local function BuildGeneral(panel)
 	local db = function() return ns.db end
 	local y = -16
-	MakeHeading(panel, "Free Unit Frames", 16, y)
+	MakeHeading(panel, "Pug Unit Frames", 16, y)
 	local version = panel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
 	version:SetPoint("TOPLEFT", 190, y - 4)
-	version:SetText(L["Version"] .. " " .. ns.version .. "    /freeuf")
+	version:SetText(L["Version"] .. " " .. ns.version .. "    /pug")
 	y = y - 34
 
 	general.lock = MakeButton(panel, "", 230, function()
@@ -400,7 +400,7 @@ end
 function Options.Register()
 	local generalPanel = MakePanel(general, BuildGeneral, SyncGeneral)
 	local framesPanel = MakePanel(frames, BuildFrames, SyncFrames)
-	Options.category = Settings.RegisterCanvasLayoutCategory(generalPanel, "Free Unit Frames")
+	Options.category = Settings.RegisterCanvasLayoutCategory(generalPanel, "Pug Unit Frames")
 	Settings.RegisterAddOnCategory(Options.category)
 	Options.framesCategory = Settings.RegisterCanvasLayoutSubcategory(Options.category, framesPanel, L["Frames"])
 end

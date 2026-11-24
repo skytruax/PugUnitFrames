@@ -2,7 +2,7 @@ local ADDON, ns = ...
 
 -- The group button template (Templates.xml) reaches the addon through this global, and so can a
 -- player with /run. Blizzard code never reads it.
-_G.FreeUnitFrames = ns
+_G.PugUnitFrames = ns
 
 ns.name = ADDON
 ns.version = C_AddOns.GetAddOnMetadata(ADDON, "Version") or "dev"
@@ -14,7 +14,7 @@ local L = ns.L
 ---------------------------------------------------------------------------
 -- Output
 ---------------------------------------------------------------------------
-local PREFIX = "|cff7fd4a8Free Unit Frames|r: "
+local PREFIX = "|cff7fd4a8Pug Unit Frames|r: "
 function ns.Print(...)
 	local parts = {}
 	for i = 1, select("#", ...) do
@@ -29,7 +29,7 @@ end
 -- The game hides addon errors unless the player has switched them on, so an error while a frame
 -- is being drawn would end that update without anyone seeing why. Code run through ns.Try still
 -- hands every error to the game's own error handler, exactly as an uncaught one would be. On top
--- of that the first one is said in chat and they are kept for /freeuf status, so a problem can be
+-- of that the first one is said in chat and they are kept for /pug status, so a problem can be
 -- reported even with errors hidden. One failing handler or frame does not stop the next.
 local MAX_PROBLEMS = 8 -- different errors kept; repeats of a kept one are only counted
 local problems = {}    -- { text = "...", count = n }, in order of first appearance
@@ -44,7 +44,7 @@ local function Record(text)
 		problems[#problems + 1] = problem
 		problemByText[text] = problem
 		if #problems == 1 then
-			ns.Print("|cffff4040" .. L["Something went wrong inside Free Unit Frames, so a frame may not be updating. Type /freeuf status to see the error."] .. "|r")
+			ns.Print("|cffff4040" .. L["Something went wrong inside Pug Unit Frames, so a frame may not be updating. Type /pug status to see the error."] .. "|r")
 		end
 	end
 end
@@ -81,7 +81,7 @@ end
 -- sees. They are kept with the errors, so that a frame that quietly stays put can be explained.
 local function OnBlocked(_, addon, what)
 	if addon == ADDON then
-		Record(("The game refused to let Free Unit Frames call %s."):format(tostring(what)))
+		Record(("The game refused to let Pug Unit Frames call %s."):format(tostring(what)))
 	end
 end
 
@@ -142,11 +142,11 @@ end)
 ---------------------------------------------------------------------------
 -- Saved settings
 ---------------------------------------------------------------------------
--- FreeUnitFramesDB = {                      -- shared by every character on the account
+-- PugUnitFramesDB = {                      -- shared by every character on the account
 --     schema   = 1,
 --     profiles = { [name] = profile },     -- every setting lives in a profile (Defaults.lua)
 -- }
--- FreeUnitFramesCharDB = { profile = name } -- per character: which profile it uses
+-- PugUnitFramesCharDB = { profile = name } -- per character: which profile it uses
 --
 -- The per-character file is what ties a character to its profile, so the addon never has to ask
 -- the game for the character's name: that is one of the answers the game can seal, and a reload
@@ -163,7 +163,7 @@ end
 -- Saved variables are plain text the player can edit, and they outlive versions of this addon,
 -- so the files are checked on the way in and anything that is not what it should be is replaced.
 local function LoadDatabase()
-	local saved = FreeUnitFramesDB
+	local saved = PugUnitFramesDB
 	if type(saved) ~= "table" then
 		saved = {}
 	end
@@ -177,7 +177,7 @@ local function LoadDatabase()
 		end
 	end
 
-	local own = FreeUnitFramesCharDB
+	local own = PugUnitFramesCharDB
 	if type(own) ~= "table" then
 		own = {}
 	end
@@ -185,8 +185,8 @@ local function LoadDatabase()
 		own.profile = DEFAULT_PROFILE
 	end
 
-	FreeUnitFramesDB = saved
-	FreeUnitFramesCharDB = own
+	PugUnitFramesDB = saved
+	PugUnitFramesCharDB = own
 	ns.saved = saved
 	ns.own = own
 	ns.UseProfile(own.profile)
@@ -245,7 +245,14 @@ ns.On("ADDON_LOADED", function(_, name)
 	end
 end)
 
+-- Until version 0.2 this addon was called Free Unit Frames and lived in a folder of that name. A
+-- copy of it left behind draws its own frames next to these, which looks like a bug in either.
+local OLD_NAME = "FreeUnitFrames"
+
 ns.On("PLAYER_LOGIN", function()
+	if C_AddOns.IsAddOnLoaded(OLD_NAME) then
+		ns.Print("|cffff4040" .. L["Free Unit Frames, this addon's old name, is still installed and is drawing a second set of frames. Delete the FreeUnitFrames folder from Interface\\AddOns and reload."] .. "|r")
+	end
 	ns.Style.Apply()
 	-- A reload in the middle of a fight starts in combat: the frames are then made when it ends.
 	ns.RunOutOfCombat("build", function()
@@ -259,9 +266,9 @@ ns.On("PLAYER_LOGIN", function()
 end)
 
 ---------------------------------------------------------------------------
--- /freeuf
+-- /pug
 ---------------------------------------------------------------------------
--- For /freeuf status: what the client says about sealed ("secret") values right now.
+-- For /pug status: what the client says about sealed ("secret") values right now.
 local function DescribeSealing()
 	if not C_Secrets.HasSecretRestrictions() then
 		return L["this client does not seal values"]
@@ -292,12 +299,12 @@ end
 
 local function Help()
 	ns.Print(L["Commands:"])
-	ns.Print("  /freeuf  -  " .. L["open the options"])
-	ns.Print("  /freeuf unlock  -  " .. L["show the handles and drag the frames"])
-	ns.Print("  /freeuf lock  -  " .. L["put the handles away"])
-	ns.Print("  /freeuf reset <" .. table.concat(ns.Defaults.KINDS, "|") .. "|all>  -  " .. L["put a frame back where and how it started"])
-	ns.Print("  /freeuf profile  -  " .. L["copy your settings out, or paste a set in"])
-	ns.Print("  /freeuf status  -  " .. L["version, what the game is sealing, and any errors"])
+	ns.Print("  /pug  -  " .. L["open the options"])
+	ns.Print("  /pug unlock  -  " .. L["show the handles and drag the frames"])
+	ns.Print("  /pug lock  -  " .. L["put the handles away"])
+	ns.Print("  /pug reset <" .. table.concat(ns.Defaults.KINDS, "|") .. "|all>  -  " .. L["put a frame back where and how it started"])
+	ns.Print("  /pug profile  -  " .. L["copy your settings out, or paste a set in"])
+	ns.Print("  /pug status  -  " .. L["version, what the game is sealing, and any errors"])
 end
 
 local function Reset(what)
@@ -308,7 +315,7 @@ local function Reset(what)
 		ns.Defaults.Reset(ns.db, what)
 		ns.Print(L["Back to its starting place and settings:"] .. " " .. ns.Defaults.Label(what) .. ".")
 	else
-		ns.Print(L["Reset what?"] .. " /freeuf reset <" .. table.concat(ns.Defaults.KINDS, "|") .. "|all>")
+		ns.Print(L["Reset what?"] .. " /pug reset <" .. table.concat(ns.Defaults.KINDS, "|") .. "|all>")
 		return
 	end
 	ns.Refresh()
@@ -336,8 +343,9 @@ local function OnSlash(message)
 	end
 end
 
-SLASH_FREEUNITFRAMES1 = "/freeuf"
-SLASH_FREEUNITFRAMES2 = "/freeunitframes"
-SlashCmdList["FREEUNITFRAMES"] = function(message)
+SLASH_PUGUNITFRAMES1 = "/pug"
+SLASH_PUGUNITFRAMES2 = "/puf"
+SLASH_PUGUNITFRAMES3 = "/pugunitframes"
+SlashCmdList["PUGUNITFRAMES"] = function(message)
 	ns.Try(OnSlash, message)
 end

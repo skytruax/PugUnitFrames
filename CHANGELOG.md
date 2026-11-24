@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.2.0
+
+- A new name: Pug Unit Frames. It was Free Unit Frames, a name that turned out to be in use already. A pug is a small dog, and a PUG is a pick-up group. It is a homage to PitBull Unit Frames, which has not come to Forever, and it is not that project.
+- The addon's folder is now `PugUnitFrames` and its command `/pug` (also `/puf` and `/pugunitframes`). Delete the old `FreeUnitFrames` folder: the addon says so at login if it is still there. Settings made under the old name are not carried over.
+- A new emblem: a pug in the compass ring.
+- Nothing in the frames themselves has changed.
+
 ## v0.1.1
 
 - Nothing in the frames has changed. This is the first version built and published by the release workflow, to CurseForge and GitHub alike, and the addon now carries its CurseForge project id.

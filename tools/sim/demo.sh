@@ -22,9 +22,9 @@ out="${SIM_OUT:-$here/out}/demo"
 mkdir -p "$out"
 pictures=()
 for step in $(seq 1 "$MOMENTS"); do
-  { echo "FreeUnitFramesSimStep = $step"; cat "$here/tests/sim/screenshot.lua"; } > "$work/moment-$step.lua"
+  { echo "PugUnitFramesSimStep = $step"; cat "$here/tests/sim/screenshot.lua"; } > "$work/moment-$step.lua"
   "$here/lab/run-sim.sh" -o "$out/$step" --no-tests "${PICTURE_OPTIONS[@]}" --fonts "$work/simfonts" \
-    --scenario "$work/moment-$step.lua" "$work/FreeUnitFrames" | tail -2
+    --scenario "$work/moment-$step.lua" "$work/PugUnitFrames" | tail -2
   [[ -s "$out/$step/screenshot.png" ]] || { echo "demo.sh: moment $step has no picture, see $out/$step" >&2; exit 1; }
   pictures+=("$out/$step/screenshot.png")
 done

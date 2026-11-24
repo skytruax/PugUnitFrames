@@ -1,17 +1,18 @@
 <p align="center">
-  <img src="docs/banner.png" alt="Free Unit Frames: a party of four, the player casting, a hostile target and a corner of a raid" width="100%">
+  <img src="docs/banner.png" alt="Pug Unit Frames: a party of four, the player casting, a hostile target and a corner of a raid" width="100%">
 </p>
 
-<h1 align="center">Free Unit Frames</h1>
+<h1 align="center">Pug Unit Frames</h1>
 
 <p align="center">
   <b>Clean, light unit frames for World of Warcraft: Forever.</b><br>
-  You, your target and its target, focus, pet, party and raid: dark, thin and easy to read.
+  You, your target and its target, focus, pet, party and raid: dark, thin and easy to read.<br>
+  A pug is a small dog, and a PUG is a pick-up group. These are frames for both.
 </p>
 
 <p align="center">
-  <a href="https://github.com/skytruax/FreeUnitFrames/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/skytruax/FreeUnitFrames?label=release&color=d9a441"></a>
-  <a href="https://github.com/skytruax/FreeUnitFrames/actions/workflows/tests.yml"><img alt="Tests" src="https://github.com/skytruax/FreeUnitFrames/actions/workflows/tests.yml/badge.svg"></a>
+  <a href="https://github.com/skytruax/PugUnitFrames/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/skytruax/PugUnitFrames?label=release&color=d9a441"></a>
+  <a href="https://github.com/skytruax/PugUnitFrames/actions/workflows/tests.yml"><img alt="Tests" src="https://github.com/skytruax/PugUnitFrames/actions/workflows/tests.yml/badge.svg"></a>
   <img alt="World of Warcraft: Forever 1.60.1" src="https://img.shields.io/badge/WoW%20Forever-1.60.1-3b82c4">
   <a href="LICENSE"><img alt="Licence: MIT" src="https://img.shields.io/badge/licence-MIT-3fa55b"></a>
 </p>
@@ -35,12 +36,23 @@ LifeCraft, a typeface by Eliot Truelove.</sub></p>
 
 ---
 
+## A homage, not the original
+
+[PitBull Unit Frames 4.0](https://www.curseforge.com/wow/addons/pitbull-unit-frames-4-0), by
+ckknight, shefkin and nebula169 ([source](https://github.com/nebularg/PitBull4)), is the dog-themed
+unit frames addon a great many of us played with for years, and the credit for the idea belongs to
+them. PitBull has not come to Forever, so here is a smaller dog in its honour.
+
+Pug Unit Frames is **not that project** and has nothing to do with its authors. It is a new addon,
+written from scratch, with none of PitBull's code or art in it. Until version 0.2 it was called
+Free Unit Frames.
+
 ## Status
 
-**0.1 is the first version.** It passes both of its test suites (a model of the client that seals
+**0.2 is the first version under this name.** It passes both of its test suites (a model of the client that seals
 values the way the game does, and a simulator running Blizzard's real interface code). Neither is
 the game, and this version comes straight from them, so expect a rough edge. If something looks
-wrong in the game, `/freeuf status` lists any error it caught: please open an issue with that text.
+wrong in the game, `/pug status` lists any error it caught: please open an issue with that text.
 
 ## What you get
 
@@ -100,26 +112,26 @@ from the addon's own textures and layout numbers. The spell icons and raid marks
 
 ## Install
 
-1. Download the zip from the [latest release](https://github.com/skytruax/FreeUnitFrames/releases/latest).
+1. Download the zip from the [latest release](https://github.com/skytruax/PugUnitFrames/releases/latest).
 2. Unzip it into `World of Warcraft\_forever_\Interface\AddOns\`, so that you end up with
-   `...\AddOns\FreeUnitFrames\FreeUnitFrames.toc`.
+   `...\AddOns\PugUnitFrames\PugUnitFrames.toc`.
 3. Start the game, or log out and in again if it is running.
 
 The game's own player, target, focus, pet, party and raid frames and its cast bar step aside for the
-ones this addon draws. Each can be kept: Options > AddOns > Free Unit Frames.
+ones this addon draws. Each can be kept: Options > AddOns > Pug Unit Frames.
 
 ## Settings
 
-`/freeuf` opens the options.
+`/pug` opens the options.
 
 | Command | What it does |
 | --- | --- |
-| `/freeuf` | open the options |
-| `/freeuf unlock` | show a green box on every frame; drag one to move its frame |
-| `/freeuf lock` | put the boxes away |
-| `/freeuf reset <frame\|all>` | put a frame back where and how it started (`player`, `target`, `targettarget`, `focus`, `pet`, `party`, `raid`) |
-| `/freeuf profile` | your settings as text to copy; paste someone else's to bring them in as a new profile |
-| `/freeuf status` | version, what the game is sealing right now, and any errors caught this session |
+| `/pug` | open the options |
+| `/pug unlock` | show a green box on every frame; drag one to move its frame |
+| `/pug lock` | put the boxes away |
+| `/pug reset <frame\|all>` | put a frame back where and how it started (`player`, `target`, `targettarget`, `focus`, `pet`, `party`, `raid`) |
+| `/pug profile` | your settings as text to copy; paste someone else's to bring them in as a new profile |
+| `/pug status` | version, what the game is sealing right now, and any errors caught this session |
 
 Frames are protected by the game while you fight: they can be moved, sized, switched on and off only
 out of combat. A change made in a fight is kept and happens when the fight ends.
@@ -131,13 +143,13 @@ value that can be passed on to be drawn, and that the addon may not read, compar
 Health always is. Maximum health, power, names, classes, casts, auras, threat and range are under
 conditions Blizzard documents.
 
-Free Unit Frames is written so that it never needs to know. Every such value goes straight from the
+Pug Unit Frames is written so that it never needs to know. Every such value goes straight from the
 game function that answers it to a widget method that Blizzard documents as accepting sealed
 values: a bar's value, a text, a texture, an alpha. Where something has to be decided on a number
 the addon cannot see (which threat outline? how many combo points?), the deciding is given to the
 game too: a row of bars, each running from one level to the next, which the game fills.
 
-All of that lives in one file, [`Sealed.lua`](FreeUnitFrames/Sealed.lua), and the test suite fails
+All of that lives in one file, [`Sealed.lua`](PugUnitFrames/Sealed.lua), and the test suite fails
 if any other file calls a game function whose answer can be sealed. The list of those functions is
 made from Blizzard's own API documentation.
 
@@ -151,7 +163,7 @@ actions, a controller's among them, from being refused later.
 ## Developing
 
 ```
-FreeUnitFrames/        the addon: what goes into Interface/AddOns
+PugUnitFrames/        the addon: what goes into Interface/AddOns
   Sealed.lua           the one place that touches values the game can seal
   Frame.lua            the plate, the events, and the layout every frame shares
   Elements/            one file per thing a frame shows
@@ -196,7 +208,7 @@ and power, threat, range. Blizzard's own interface, bare without its art, is put
 The pictures and textures are drawn by scripts too (`pip install pillow numpy`):
 
 ```
-python3 tools/make_art.py            # the textures in FreeUnitFrames/Art
+python3 tools/make_art.py            # the textures in PugUnitFrames/Art
 python3 tools/make_listing.py        # docs/banner.png, docs/social.png, the logo, curseforge/gallery
 ```
 
@@ -213,7 +225,7 @@ MIT. See [LICENSE](LICENSE).
 The addon brings one thing that is not ours: the typeface its frames are lettered in,
 [Inter](https://github.com/rsms/inter) by the Inter Project Authors, under the SIL Open Font
 License 1.1. The font file is unchanged and its licence is beside it
-([FreeUnitFrames/Fonts](FreeUnitFrames/Fonts)).
+([PugUnitFrames/Fonts](PugUnitFrames/Fonts)).
 
 The simulator the tests use is a separate project under GPL-3.0
 ([wow-ui-sim](https://github.com/Osso/wow-ui-sim)); nothing of it is part of the addon.

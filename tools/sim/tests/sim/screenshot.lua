@@ -1,6 +1,6 @@
 -- Runs in the simulator after login, just before the screenshot is taken (tools/sim/run.sh).
 -- Sets up a moment of a fight for the frames to draw: a party of four, a hostile elite target, a
--- focus, the player healing. The fight has five moments; FreeUnitFramesSimStep picks one
+-- focus, the player healing. The fight has five moments; PugUnitFramesSimStep picks one
 -- (tools/sim/demo.sh renders them all for the moving demo). The still picture is the third.
 --
 -- The addon's code is what draws the picture, unchanged. What stands in for the game:
@@ -8,15 +8,15 @@
 --     handle for other units' auras, casts and power, for threat, range or raid marks, so the
 --     scene answers those game functions itself (see "The scene's answers" below).
 --   * It has none of the game's art. tools/sim/scene_art.py puts the game's icons for the scene's
---     spells, its raid marks and a painted city into the scratch copy (FreeUnitFramesSimArt);
+--     spells, its raid marks and a painted city into the scratch copy (PugUnitFramesSimArt);
 --     without them icons are blank squares and the world is the simulator's grey.
 --   * It draws a bar that runs on a timer as empty, and does not move the end of a bar's fill
 --     texture as the game does, which is what the cast bar's bright edge is pinned to. The scene
 --     fills each cast bar as far as its cast has come and pins the edge there.
 --   * Blizzard's own interface is put away: with no art it is a scatter of bare numbers.
-local ns = FreeUnitFrames
-local art = FreeUnitFramesSimArt
-local STEP = FreeUnitFramesSimStep or 3
+local ns = PugUnitFrames
+local art = PugUnitFramesSimArt
+local STEP = PugUnitFramesSimStep or 3
 
 local function Icon(spell)
 	if art and art.icons[spell] then
@@ -287,7 +287,7 @@ A_Admin.AdvanceTime(healing or 1)
 -- shows and hides those through frames of its own, which must still be running then).
 for _, child in ipairs({ UIParent:GetChildren() }) do
 	local name = child:GetName()
-	if not (name and name:find("^FreeUnitFrames")) then
+	if not (name and name:find("^PugUnitFrames")) then
 		child:Hide()
 	end
 end
@@ -301,7 +301,7 @@ if art then
 		end
 	end
 	-- A world behind the frames.
-	local world = CreateFrame("Frame", "FreeUnitFramesSimWorld", UIParent)
+	local world = CreateFrame("Frame", "PugUnitFramesSimWorld", UIParent)
 	world:SetAllPoints(UIParent)
 	world:SetFrameStrata("BACKGROUND")
 	local picture = world:CreateTexture(nil, "BACKGROUND")

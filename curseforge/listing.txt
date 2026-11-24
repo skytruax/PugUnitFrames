@@ -6,53 +6,36 @@ Project
     public page, once CurseForge has reviewed it: https://www.curseforge.com/projects/1826652
 
 Name
-    Free Unit Frames - PitBull-Style, but Lighter: Player, Target, Focus, Pet, Party & Raid Frames with Cast Bars, Auras and Threat
+    Pug Unit Frames
 
-    127 characters; the field takes 128. Search matches the name first, so the long form carries
-    what people type (PitBull, unit frames, party, raid, cast bars, auras). A page shows only the
-    first forty or so characters in a list, which is why "Free Unit Frames - PitBull-Style" comes
-    first. The short form, if the long one reads as too much:
-        Free Unit Frames - PitBull-Style, Lighter, Ready to Play          (56 characters)
+    The addon was first called Free Unit Frames, which was taken on CurseForge. It is a homage to
+    PitBull Unit Frames 4.0 and deliberately does not carry that addon's name: it is another
+    team's, and CurseForge's Moderation Policies say "Your project should contain distinct content
+    and assets, including in its name, avatar, summary and description." and "Names should not
+    contain game name, class name versions, file versions ect....". So it is another dog: a pug,
+    which is also what every player calls a pick-up group.
 
-    The page's address is its own thing: FreeControl's is "free-control" although its name is
-    longer. I have not seen the create form, so look at the address it proposes before you
-    confirm. If it follows the long name, create the project as "Free Unit Frames" (which gives
-    curseforge.com/wow/addons/free-unit-frames) and put the long name in afterwards, on the
-    project's settings page.
-
-    It says what you asked for (like PitBull, but better) in something that is true today:
-    lighter (one small folder, no libraries, no setup). PitBull's own page lists Retail, MoP
-    Classic, Classic and Classic TBC and no Forever (looked at on 2026-11-23), so "PitBull-style"
-    is also what a PitBull player on Forever will type.
-
-    Why "Forever" is in the summary and not in the name: CurseForge's Moderation Policies say
-    "Names should not contain game name, class name versions, file versions ect...." Other
-    projects have the word in their names and are listed, so it is not always enforced, but a
-    rejected name costs a day.
-
-    Why not "better": it is a claim PitBull's players will test against PitBull's options, of
-    which it has far more than a first version does. If you want it said anyway (128 characters,
-    and it has the game's name in it):
-        Free Unit Frames - Like PitBull for Forever, but Better: Player, Target, Focus, Party & Raid Frames, Cast Bars, Auras and Threat
-    Without the other addon's name at all:
-        Free Unit Frames - Light Player, Target, Party & Raid Frames
+    Check that the name is free when you put it in. If you want search words in the name too
+    (search matches the name first), this is 126 characters of the field's 128:
+        Pug Unit Frames - PitBull-Style, but Lighter: Player, Target, Focus, Pet, Party & Raid Frames with Cast Bars, Auras and Threat
+    "PitBull-Style" there describes; the description credits PitBull and says this is not it.
 
 Summary
-    PitBull-style unit frames written from scratch for Forever: clean class-coloured player, target, focus, pet, party and raid frames that keep working in combat, with auras, cast bars, threat, range and dispel highlights. Light, no libraries, no setup.
+    Light unit frames written from scratch for Forever, a homage to PitBull: clean class-coloured player, target, focus, pet, party and raid frames that keep working in combat, with auras, cast bars, threat, range and dispel highlights. No libraries, no setup.
 
-    250 characters; the field takes 256 and asks for one clear sentence. Search matches the name
-    and the summary, so between them they carry what people type: unit frames, PitBull, Forever,
-    party, raid, auras, cast bars.
+    256 characters, which is all the field takes. It asks for one clear sentence. Search matches
+    the name and the summary, so between them they carry what people type: unit frames, PitBull,
+    Forever, party, raid, auras, cast bars.
 
 Main category        Unit Frames
 Additional category  Combat, HUDs
 License              MIT License
-Source               https://github.com/skytruax/FreeUnitFrames
-Issues               https://github.com/skytruax/FreeUnitFrames/issues
+Source               https://github.com/skytruax/PugUnitFrames
+Issues               https://github.com/skytruax/PugUnitFrames/issues
 
 Logo
-    curseforge/logo.png (400 x 400): the bronze compass ring of FreeControl's emblem with three
-    bars on its disc, so the two addons look like one family.
+    curseforge/logo.png (400 x 400): a pug looking out of the bronze compass ring of FreeControl's
+    emblem, so the two addons look like one family. Our own drawing (tools/make_art.py).
 
 Description
     curseforge/description.html, pasted into the editor's source view (the "<>" button).
@@ -61,39 +44,37 @@ Description
     seven of the gallery pictures at a smaller size (curseforge/web/). The page loads them from
     there, so there is nothing to upload for them. The "?v=" on each link is there so that a
     changed picture is fetched afresh: raise it in description.md when the pictures change.
+    Near its top it credits PitBull Unit Frames 4.0 and its authors, calls this a homage, and
+    says it is not that project. Keep that paragraph whatever else changes.
 
 Images, in this order
     your own screenshots from the game first, then curseforge/gallery/01-hero.png, 09-in-play.png,
     and 02-frames.png to 08-logo.png (1920 x 1080 each). 09-in-play is the addon's own code
     drawing a fight in the simulator; the others are illustrations. Each says on the picture what
     it is, and credits the game's spell icons and raid marks on the frames to Blizzard.
+    All nine changed with the name: any uploaded before 0.2.0 say Free Unit Frames.
 
-File: the first one went up by hand
-    dist/FreeUnitFrames-0.1.0.zip   (tools/package.sh builds it; dist/ is not in the repository)
-    Release type    Release
-    Game version    World of Warcraft: Forever, 1.60.1
-    Changelog       the v0.1.0 section of CHANGELOG.md (markup type: Markdown)
-    The one with the bundled font and the shadows is 299 KB; a zip built before 15:26 on
-    2026-11-23 is a fraction of that and has the first look.
-    A new project, and each new file, is public once CurseForge has reviewed it.
+Files
+    0.1.0 (uploaded by hand) and 0.1.1 (by the release workflow) are the addon under its first
+    name, in a folder called FreeUnitFrames. From 0.2.0 it is Pug Unit Frames in a folder called
+    PugUnitFrames, with the command /pug. Archive the two old files once 0.2.0 is up, or someone
+    will install an addon whose name is not the page's.
 
-Later versions: by pushing a tag
-    1. The project id is in FreeUnitFrames/FreeUnitFrames.toc ("## X-Curse-Project-ID: 1826652").
+Releasing a version: by pushing a tag
+    1. The project id is in PugUnitFrames/PugUnitFrames.toc ("## X-Curse-Project-ID: 1826652").
     2. This repository has the upload token as a secret named CF_API_TOKEN (since 2026-11-23).
        It is the author API token FreeControl's repository uses (authors.curseforge.com > API
        tokens), and it is the account's, not one project's. The Core API key you can apply for
        separately is a different thing and is not needed for any of this.
-    3. Push a version tag (git tag -a v0.1.1 -m "Free Unit Frames 0.1.1"; git push origin v0.1.1).
+    3. Push a version tag (git tag -a v0.2.0 -m "Pug Unit Frames 0.2.0"; git push origin v0.2.0).
        The release workflow builds the zip, makes a GitHub release and sends the file to
        CurseForge with CHANGELOG.md as its changelog.
-    v0.1.0 was tagged before the secret was there, so it is a GitHub release only and the 0.1.0
-    on CurseForge is the one uploaded by hand. Running that workflow again now would send a
-    second 0.1.0 to CurseForge: leave it be. v0.1.1 is the same addon, published by the workflow
-    to both.
+    Never run an old tag's workflow again: it would send that version to CurseForge a second time.
 
 GitHub
-    docs/social.png goes in the repository's Settings > Social preview (that one cannot be set
-    from the command line).
+    The repository is https://github.com/skytruax/PugUnitFrames (it was skytruax/FreeUnitFrames;
+    GitHub forwards the old address). docs/social.png goes in its Settings > Social preview (that
+    one cannot be set from the command line).
 
 Relations
-    none. Free Unit Frames needs no other addon.
+    none. Pug Unit Frames needs no other addon.

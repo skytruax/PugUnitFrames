@@ -3,10 +3,10 @@
 	     also in the middle of a fight when someone joins, so this is where we get to dress them.
 	     Which mouse buttons it answers to is said here and not in OnLoad: addon code may not
 	     change that on a protected button during a fight. -->
-	<Button name="FreeUnitFramesGroupButtonTemplate" inherits="SecureUnitButtonTemplate" registerForClicks="LeftButtonUp, RightButtonUp, MiddleButtonUp, Button4Up, Button5Up" virtual="true">
+	<Button name="PugUnitFramesGroupButtonTemplate" inherits="SecureUnitButtonTemplate" registerForClicks="LeftButtonUp, RightButtonUp, MiddleButtonUp, Button4Up, Button5Up" virtual="true">
 		<Scripts>
 			<OnLoad>
-				FreeUnitFrames.Group.OnButtonLoad(self)
+				PugUnitFrames.Group.OnButtonLoad(self)
 			</OnLoad>
 		</Scripts>
 	</Button>

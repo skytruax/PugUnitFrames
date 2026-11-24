@@ -9,7 +9,7 @@ SecretIn... flag, or has a return value marked ConditionalSecret. The files are 
 nothing in them is run. Widget methods (functions of a script object, not of the global table or
 a C_ namespace) are left out: those are reads of state the addon itself put on a widget.
 
-tools/tests/run.py uses the list to check that only FreeUnitFrames/Sealed.lua calls any of them.
+tools/tests/run.py uses the list to check that only PugUnitFrames/Sealed.lua calls any of them.
 """
 import os
 import re

@@ -21,8 +21,8 @@ local RAID_GROUPS = "1,2,3,4,5,6,7,8"
 -- to this addon: the sizes come from attributes on the header.
 local INITIAL_CONFIG = [[
 	local header = self:GetParent()
-	self:SetWidth(header:GetAttribute("freeuf-width"))
-	self:SetHeight(header:GetAttribute("freeuf-height"))
+	self:SetWidth(header:GetAttribute("pug-width"))
+	self:SetHeight(header:GetAttribute("pug-height"))
 	self:SetAttribute("*type1", "target")
 	self:SetAttribute("*type2", "togglemenu")
 ]]
@@ -105,8 +105,8 @@ local function Configure(header, kind)
 	-- The header is told nothing while it is hidden; shown again at the end, it lays out once.
 	header:Hide()
 
-	header:SetAttribute("freeuf-width", cfg.width)
-	header:SetAttribute("freeuf-height", cfg.height)
+	header:SetAttribute("pug-width", cfg.width)
+	header:SetAttribute("pug-height", cfg.height)
 	-- A button keeps the anchors of the old layout unless they are taken off first.
 	EachButton(header, function(button)
 		button:ClearAllPoints()
@@ -156,10 +156,10 @@ end
 -- Call out of combat, once.
 function Group.Spawn()
 	for _, kind in ipairs({ "party", "raid" }) do
-		local header = CreateFrame("Frame", "FreeUnitFrames_" .. kind, UIParent, "SecureGroupHeaderTemplate")
+		local header = CreateFrame("Frame", "PugUnitFrames_" .. kind, UIParent, "SecureGroupHeaderTemplate")
 		header.kind = kind
 		header:SetFrameStrata("LOW")
-		header:SetAttribute("template", "FreeUnitFramesGroupButtonTemplate")
+		header:SetAttribute("template", "PugUnitFramesGroupButtonTemplate")
 		header:SetAttribute("initialConfigFunction", INITIAL_CONFIG)
 		headers[kind] = header
 	end

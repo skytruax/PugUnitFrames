@@ -1,10 +1,10 @@
 # Build settings for the BigWigs packager (https://github.com/BigWigsMods/packager), which the
-# release workflow runs. The addon lives in the FreeUnitFrames/ folder of this repository;
+# release workflow runs. The addon lives in the PugUnitFrames/ folder of this repository;
 # everything else here is tooling and is left out of the zip players download.
-package-as: FreeUnitFrames
+package-as: PugUnitFrames
 
 move-folders:
-  FreeUnitFrames/FreeUnitFrames: FreeUnitFrames
+  PugUnitFrames/PugUnitFrames: PugUnitFrames
 
 manual-changelog:
   filename: CHANGELOG.md

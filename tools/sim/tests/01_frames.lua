@@ -1,10 +1,10 @@
--- Free Unit Frames against Blizzard's real Forever interface code, in the wow-ui-sim simulator.
+-- Pug Unit Frames against Blizzard's real Forever interface code, in the wow-ui-sim simulator.
 -- Run with tools/sim/run.sh (it copies this folder into a scratch copy of the addon).
 --
 -- Nothing here is a model written by us: the secure unit buttons, the group header that makes
 -- the party frames, the unit watch that shows and hides them and the settings window are
 -- Blizzard's own Lua. The simulator's character is a Paladin in a party of five.
-local ns = FreeUnitFrames
+local ns = PugUnitFrames
 
 -- Every protected call the client refused while a test ran.
 local refused = {}
@@ -35,7 +35,7 @@ end)
 
 test("each single frame is a secure unit button for its unit", function()
 	for _, kind in ipairs({ "player", "target", "targettarget", "focus", "pet" }) do
-		local frame = _G["FreeUnitFrames_" .. kind]
+		local frame = _G["PugUnitFrames_" .. kind]
 		assertNotNil(frame)
 		local protected, explicit = frame:IsProtected()
 		assertTrue(protected)
@@ -49,7 +49,7 @@ test("each single frame is a secure unit button for its unit", function()
 end)
 
 test("the player frame is up, sized and placed as the settings say", function()
-	local frame, cfg = FreeUnitFrames_player, ns.db.units.player
+	local frame, cfg = PugUnitFrames_player, ns.db.units.player
 	assertTrue(frame:IsShown())
 	assertAlmostEquals(cfg.width, frame:GetWidth(), 0.01)
 	assertAlmostEquals(cfg.height, frame:GetHeight(), 0.01)
@@ -62,9 +62,9 @@ end)
 
 -- The game's unit watch shows and hides a frame on its next update after the unit changed, so
 -- the tests step the simulator's clock themselves.
-if not FREEUF_SIM_CLOCK then -- the test files share one simulator, and its clock is switched over once
+if not PUGUF_SIM_CLOCK then -- the test files share one simulator, and its clock is switched over once
 	A_Admin.SetManualClock(GetTime())
-	FREEUF_SIM_CLOCK = true
+	PUGUF_SIM_CLOCK = true
 end
 local function Tick(seconds)
 	A_Admin.AdvanceTime(seconds or 0.5)
@@ -73,20 +73,20 @@ end
 test("a frame comes and goes with its unit", function()
 	A_Admin.ClearTarget()
 	Tick()
-	assertFalse(FreeUnitFrames_target:IsShown())
+	assertFalse(PugUnitFrames_target:IsShown())
 	A_Admin.SetTarget("Hogger", 11, 1, true)
 	Tick()
 	assertTrue(UnitExists("target"))
-	assertTrue(FreeUnitFrames_target:IsShown())
-	assertEquals("target", FreeUnitFrames_target.unit)
+	assertTrue(PugUnitFrames_target:IsShown())
+	assertEquals("target", PugUnitFrames_target.unit)
 	A_Admin.ClearTarget()
 	Tick()
-	assertFalse(FreeUnitFrames_target:IsShown())
+	assertFalse(PugUnitFrames_target:IsShown())
 	NoProblems()
 end)
 
 test("the party header made a frame for each of the four others", function()
-	local header = FreeUnitFrames_party
+	local header = PugUnitFrames_party
 	assertTrue(header:IsShown())
 	local count = 0
 	for index = 1, 5 do
@@ -125,10 +125,10 @@ test("a setting changed through the profile reaches the frame", function()
 	local width = cfg.width
 	cfg.width = width + 20
 	ns.Refresh()
-	assertAlmostEquals(width + 20, FreeUnitFrames_player:GetWidth(), 0.01)
+	assertAlmostEquals(width + 20, PugUnitFrames_player:GetWidth(), 0.01)
 	cfg.width = width
 	ns.Refresh()
-	assertAlmostEquals(width, FreeUnitFrames_player:GetWidth(), 0.01)
+	assertAlmostEquals(width, PugUnitFrames_player:GetWidth(), 0.01)
 	NoProblems()
 	NothingRefused()
 end)
@@ -139,9 +139,9 @@ test("in combat a change of size waits for the fight to end, and nothing is refu
 	A_Admin.SetInCombat(true)
 	cfg.height = height + 10
 	ns.Refresh()
-	assertAlmostEquals(height, FreeUnitFrames_target:GetHeight(), 0.01)
+	assertAlmostEquals(height, PugUnitFrames_target:GetHeight(), 0.01)
 	A_Admin.SetInCombat(false)
-	assertAlmostEquals(height + 10, FreeUnitFrames_target:GetHeight(), 0.01)
+	assertAlmostEquals(height + 10, PugUnitFrames_target:GetHeight(), 0.01)
 	cfg.height = height
 	ns.Refresh()
 	NoProblems()
@@ -150,12 +150,12 @@ end)
 
 test("export and import bring the same settings back", function()
 	local text = ns.Profiles.Export(ns.db)
-	assertEquals("FREEUF1:", text:sub(1, 8))
+	assertEquals("PUGUF1:", text:sub(1, 7))
 	local copy = ns.Profiles.Import(text)
 	assertNotNil(copy)
 	assertEquals(ns.db.units.raid.perColumn, copy.units.raid.perColumn)
 	assertEquals(ns.db.theme, copy.theme)
-	local nothing, why = ns.Profiles.Import("FREEUF1:not really")
+	local nothing, why = ns.Profiles.Import("PUGUF1:not really")
 	assertNil(nothing)
 	assertNotNil(why)
 end)

@@ -1,4 +1,4 @@
--- A stand-in for the parts of the WoW Forever client that Free Unit Frames touches, strict enough
+-- A stand-in for the parts of the WoW Forever client that Pug Unit Frames touches, strict enough
 -- to catch real mistakes:
 --
 --   * what the client seals, it seals here: health always; maximum health, power, names, classes,
@@ -53,6 +53,7 @@ local M = {
 	tooltip = {},          -- what the tooltip was last asked to show
 	reloads = 0,
 	unreadableFonts = {},  -- [path] = true: a font file the game cannot read
+	loadedAddOns = {},     -- [name] = true: another addon that is loaded
 }
 Mock = M
 
@@ -216,7 +217,11 @@ function wipe(target)
 	return target
 end
 
-C_AddOns = { GetAddOnMetadata = function() return "0.0.0-test" end }
+C_AddOns = {
+	GetAddOnMetadata = function() return "0.0.0-test" end,
+	-- M.loadedAddOns[name] = true for an addon a scenario wants to be there besides this one.
+	IsAddOnLoaded = function(name) return M.loadedAddOns[name] or false end,
+}
 PixelUtil = { GetNearestPixelSize = function(size) return size end }
 SlashCmdList = {}
 

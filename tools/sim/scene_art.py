@@ -32,13 +32,13 @@ sys.path.insert(0, os.path.join(ROOT, "tools"))  # the sibling modules, also und
 import brand  # noqa: E402
 import game_icons  # noqa: E402
 
-ADDON_FONT = os.path.join(ROOT, "FreeUnitFrames", "Fonts", "Inter-SemiBold.ttf")
+ADDON_FONT = os.path.join(ROOT, "PugUnitFrames", "Fonts", "Inter-SemiBold.ttf")
 # The fonts in the simulator's image (fonts-dejavu-core). It falls back to these for every text.
 FALLBACK_FONTS = (
     "DejaVuSans.ttf", "DejaVuSans-Bold.ttf", "DejaVuSansMono.ttf", "DejaVuSansMono-Bold.ttf",
     "DejaVuSansMono-Oblique.ttf", "DejaVuSansMono-BoldOblique.ttf", "DejaVuSerif.ttf", "DejaVuSerif-Bold.ttf",
 )
-IN_GAME = "Interface\\\\AddOns\\\\FreeUnitFrames\\\\tests\\\\sim\\\\art\\\\"
+IN_GAME = "Interface\\\\AddOns\\\\PugUnitFrames\\\\tests\\\\sim\\\\art\\\\"
 SIZE = (1920, 1080)
 
 
@@ -98,7 +98,7 @@ def main(arguments):
     world = backdrop(out, arguments[2] if len(arguments) == 3 else None)
     fonts(font_folder)
 
-    lines = ["-- Written by tools/sim/scene_art.py for one run of the simulator.", "FreeUnitFramesSimArt = {",
+    lines = ["-- Written by tools/sim/scene_art.py for one run of the simulator.", "PugUnitFramesSimArt = {",
              '\tfolder = "%s",' % IN_GAME, '\tmarks = "%s",' % sheet, '\tbackdrop = "%s",' % world, "\ticons = {"]
     for name, path in sorted(listed.items()):
         lines.append('\t\t["%s"] = "%s",' % (name, path))

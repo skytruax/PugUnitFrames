@@ -48,12 +48,12 @@ import game_icons  # noqa: E402
 import make_art  # noqa: E402
 
 ROOT = brand.ROOT
-ART = os.path.join(ROOT, "FreeUnitFrames", "Art")
+ART = os.path.join(ROOT, "PugUnitFrames", "Art")
 OUT = os.path.join(ROOT, "curseforge")
 GALLERY = os.path.join(OUT, "gallery")
 DOCS = os.path.join(ROOT, "docs")
 
-TITLE = "Free Unit Frames"
+TITLE = "Pug Unit Frames"
 TAGLINE = "Clean, light unit frames. Your whole group at a glance."
 PLACEHOLDERS = False  # set by --placeholders: draw stand-ins instead of the game's spell icons and raid marks
 
@@ -691,7 +691,7 @@ def combat():
         ("A late joiner gets a frame at once", "Party and raid are the game's own secure group frames."),
         ("Nothing of the game's is hooked", "Its menus are left alone, with controller play in mind."),
         ("No libraries, no borrowed code", "Written from scratch for this client."),
-        ("It tells you when something is wrong", "/freeuf status lists any error it caught."),
+        ("It tells you when something is wrong", "/pug status lists any error it caught."),
     ]
     for index, (title, sub) in enumerate(points):
         point(canvas, 96, 408 + index * 118, title, sub)
@@ -775,7 +775,7 @@ def arrange():
     canvas = slide([("Unlock, drag, ", WHITE), ("done.", GOLD)],
                    "A green handle appears on every frame. Sizes, colours, texts and icons are in the options, frame by frame.")
     box = (70, 330, 1180, 1000)
-    card(canvas, box, "Every frame gets a handle", "/freeuf unlock")
+    card(canvas, box, "Every frame gets a handle", "/pug unlock")
     sx0, sy0, sx1, sy1 = box[0] + 34, box[1] + 92, box[2] - 34, box[3] - 34
     game_screen(canvas, (sx0, sy0, sx1, sy1))
     handles = [("Party", 36, 34, 172, 196), ("Pet", 222, 270, 124, 28), ("Focus", 362, 190, 174, 34),
@@ -807,9 +807,9 @@ def arrange():
 
     side = (1210, 330, 1850, 1000)
     card(canvas, side, "Commands")
-    commands = [("/freeuf", "open the options"), ("/freeuf unlock", "show the handles; /freeuf lock puts them away"),
-                ("/freeuf reset target", "put a frame back as it started"), ("/freeuf profile", "your settings as text: copy, or paste"),
-                ("/freeuf status", "the version, and any error it caught")]
+    commands = [("/pug", "open the options"), ("/pug unlock", "show the handles; /pug lock puts them away"),
+                ("/pug reset target", "put a frame back as it started"), ("/pug profile", "your settings as text: copy, or paste"),
+                ("/pug status", "the version, and any error it caught")]
     for index, (command, what) in enumerate(commands):
         y = 440 + index * 106
         brand.text(canvas, (side[0] + 40, y), command, 31, GOLD, "Bold", "lm")

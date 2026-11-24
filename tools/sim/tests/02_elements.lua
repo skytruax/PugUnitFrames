@@ -1,11 +1,11 @@
 -- What the frames draw, against Blizzard's real widgets: bars, words, cast bar, icons, handles.
 -- The simulator does not seal values, so this shows the drawing code is sound on plain ones and
 -- that every widget method it calls exists. Sealed values are tools/tests' business.
-local ns = FreeUnitFrames
+local ns = PugUnitFrames
 
-if not FREEUF_SIM_CLOCK then -- the test files share one simulator, and its clock is switched over once
+if not PUGUF_SIM_CLOCK then -- the test files share one simulator, and its clock is switched over once
 	A_Admin.SetManualClock(GetTime())
-	FREEUF_SIM_CLOCK = true
+	PUGUF_SIM_CLOCK = true
 end
 local function Tick(seconds)
 	A_Admin.AdvanceTime(seconds or 0.5)
@@ -20,11 +20,11 @@ local function NoProblems()
 end
 
 local function PartyButton(index)
-	return FreeUnitFrames_party:GetAttribute("child" .. index)
+	return PugUnitFrames_party:GetAttribute("child" .. index)
 end
 
 test("the player's bars and words follow the player's health", function()
-	local frame = FreeUnitFrames_player
+	local frame = PugUnitFrames_player
 	A_Admin.SetPlayerHealth(250, 1000)
 	Tick()
 	local low, high = frame.health:GetMinMaxValues()
@@ -40,7 +40,7 @@ test("the player's bars and words follow the player's health", function()
 end)
 
 test("every way of writing health produces text", function()
-	local frame, cfg = FreeUnitFrames_player, ns.db.units.player
+	local frame, cfg = PugUnitFrames_player, ns.db.units.player
 	local before = cfg.healthText
 	A_Admin.SetPlayerHealth(4321, 5000)
 	Tick()
@@ -70,7 +70,7 @@ test("every way of writing health produces text", function()
 end)
 
 test("the cast bar comes up for a cast and goes away after it", function()
-	local cast = FreeUnitFrames_player.cast
+	local cast = PugUnitFrames_player.cast
 	assertNotNil(cast)
 	assertFalse(cast:IsShown())
 	-- The simulator starts and stops a cast without announcing it; the game sends these events.
@@ -85,7 +85,7 @@ test("the cast bar comes up for a cast and goes away after it", function()
 end)
 
 test("an interrupted cast stays up for a moment, then goes", function()
-	local cast = FreeUnitFrames_player.cast
+	local cast = PugUnitFrames_player.cast
 	A_Admin.SetCasting(133, "Fireball", "Interface\\Icons\\Spell_Fire_FlameBolt", 2.5)
 	A_Admin.FireEvent("UNIT_SPELLCAST_START", "player")
 	A_Admin.StopCasting()
@@ -110,7 +110,7 @@ end)
 test("a target gets its buffs drawn as icons with a tooltip", function()
 	A_Admin.SetTarget("Hogger", 11, 1, true)
 	Tick()
-	local frame = FreeUnitFrames_target
+	local frame = PugUnitFrames_target
 	assertTrue(frame:IsShown())
 	local ids = C_UnitAuras.GetUnitAuraInstanceIDs("target", "HELPFUL", 9)
 	local shown = 0
@@ -153,7 +153,7 @@ test("a party member who goes offline is shown as offline", function()
 end)
 
 test("unlocking shows a handle on every frame, and a dropped handle moves its frame", function()
-	SlashCmdList.FREEUNITFRAMES("unlock")
+	SlashCmdList.PUGUNITFRAMES("unlock")
 	assertFalse(ns.db.locked)
 	local cfg = ns.db.units.focus
 	local x, y = cfg.x, cfg.y
@@ -164,22 +164,22 @@ test("unlocking shows a handle on every frame, and a dropped handle moves its fr
 	assertAlmostEquals(cfg.height * cfg.scale, height, 0.01)
 	cfg.x, cfg.y = x + 40, y - 25
 	ns.Refresh()
-	local frameX, frameY = FreeUnitFrames_focus:GetCenter()
+	local frameX, frameY = PugUnitFrames_focus:GetCenter()
 	local middleX, middleY = UIParent:GetCenter()
 	assertAlmostEquals(x + 40, frameX - middleX, 0.5)
 	assertAlmostEquals(y - 25, frameY - middleY, 0.5)
 	cfg.x, cfg.y = x, y
 	ns.Refresh()
-	SlashCmdList.FREEUNITFRAMES("lock")
+	SlashCmdList.PUGUNITFRAMES("lock")
 	assertTrue(ns.db.locked)
 	NoProblems()
 end)
 
 test("every slash command runs", function()
 	for _, command in ipairs({ "status", "help", "reset focus", "reset nonsense", "profile", "lock" }) do
-		SlashCmdList.FREEUNITFRAMES(command)
+		SlashCmdList.PUGUNITFRAMES(command)
 	end
-	FreeUnitFramesProfileWindow:Hide()
+	PugUnitFramesProfileWindow:Hide()
 	NoProblems()
 end)
 
@@ -196,7 +196,7 @@ test("profiles can be copied, switched and deleted", function()
 	ns.db.units.player.width = ns.db.units.player.width + 30
 	ns.Refresh()
 	assertTrue(ns.Profiles.Switch(first))
-	assertAlmostEquals(ns.db.units.player.width, FreeUnitFrames_player:GetWidth(), 0.01)
+	assertAlmostEquals(ns.db.units.player.width, PugUnitFrames_player:GetWidth(), 0.01)
 	assertTrue(ns.Profiles.Switch(copy))
 	assertTrue(ns.Profiles.DeleteCurrent())
 	assertEquals(first, ns.profileName)

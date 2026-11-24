@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Runs Free Unit Frames' tests without the game.
+"""Runs Pug Unit Frames' tests without the game.
 
     pip install lupa          # Lua 5.1 embedded in Python
     python3 tools/tests/run.py [name-filter]
@@ -24,7 +24,7 @@ import xml.etree.ElementTree as ElementTree
 from lupa import lua51
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-ADDON = "FreeUnitFrames"
+ADDON = "PugUnitFrames"
 ADDON_DIR = os.path.join(ROOT, ADDON)
 SEALED_HOME = "Sealed.lua"  # the one file allowed to call functions whose answer can be sealed
 
