@@ -143,7 +143,7 @@ end)
 -- Saved settings
 ---------------------------------------------------------------------------
 -- PugUnitFramesDB = {                      -- shared by every character on the account
---     schema   = 2,                        -- how the profiles are laid out; 1 was version 0.2
+--     schema   = 3,                        -- how the profiles are laid out; 1 was version 0.2, 2 was 0.3.0 to 0.3.2
 --     profiles = { [name] = profile },     -- every setting lives in a profile (Defaults.lua)
 -- }
 -- PugUnitFramesCharDB = { profile = name } -- per character: which profile it uses
@@ -151,7 +151,7 @@ end)
 -- The per-character file is what ties a character to its profile, so the addon never has to ask
 -- the game for the character's name: that is one of the answers the game can seal, and a reload
 -- in the middle of a fight would then have nothing to look the profile up by.
-local SCHEMA = 2
+local SCHEMA = 3
 local DEFAULT_PROFILE = "Default"
 local MAX_PROFILE_NAME = 32
 

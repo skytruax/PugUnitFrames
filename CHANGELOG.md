@@ -2,6 +2,8 @@
 
 ## Not released yet
 
+- **The level is plain text again**, at the start of the line under the name with the dragon before it, exactly as it was before 0.3.2. The badge that 0.3.2 put on the portrait is still there for those who liked it, as a setting that starts switched off: "Level as a badge", Options > Frames > Text and portrait. Settings saved by 0.3.2 have it switched off once, since 0.3.2 had switched it on for everyone; if you want the badge, switch it on again.
+
 Fixed, after a second reading of 0.3.2:
 
 - Logging in or reloading in the middle of a fight, with the game slow to hand the addon's font over: the frames made when the fight ended were lettered in the game's font, while `/pug status` said the addon's was in use. They are made in the font the game has handed over by then.

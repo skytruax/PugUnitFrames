@@ -104,8 +104,8 @@ error it caught: please open an issue with that text.
 
 Also in there: portraits; a character's first name and surname, on a line of their own wherever a
 frame has the height (first name over surname on a raid frame), which is also where a long creature
-name fits; the level on a badge at the foot of the portrait, in the colour of how hard the fight
-would be, with the game's dragon in it for an elite or rare creature; Questie's icon on a
+name fits; the game's dragon beside the level of an elite or rare creature (and the level on a
+small badge at the foot of the portrait, for those who switch that on); Questie's icon on a
 creature that one of your quests needs, if you run [Questie](https://github.com/Questie/Questie);
 each party member's buffs in a row above the frame, as on the target; raid icons, resting, in
 combat, ready-check answers and a resurrection on its way; the leader's crown, a mark for tank,

@@ -286,7 +286,7 @@ Test("a creature's name and maximum health are sealed and still shown", function
 	Sealed(frame.health.high, "a creature's maximum health")
 	Equal(600, Value(frame.health.high))
 	Equal(300, Value(frame.health.value))
-	Equal("11", frame.texts.level.text, "the level of an elite, whose dragon stands beside it")
+	Equal("11+", frame.texts.level.text, "level of an elite")
 	Equal(Enum.StatusBarInterpolation.Immediate, frame.health.interpolation, "a new target's bar jumps, it does not glide")
 end)
 
@@ -1357,7 +1357,7 @@ Test("a profile goes out as text and comes back the same", function()
 	ns.db.units.raid.perColumn = 8
 	ns.db.hide.pet = false
 	local text = ns.Profiles.Export(ns.db)
-	Equal("PUGUF2:", text:sub(1, 7))
+	Equal("PUGUF3:", text:sub(1, 7))
 	local copy = ns.Profiles.Import("  " .. text:sub(1, 40) .. "\n" .. text:sub(41) .. "  ")
 	True(copy, "read back, spaces and line breaks and all")
 	Equal("night", copy.theme)
@@ -1377,13 +1377,14 @@ Test("text that is not a profile is turned away with a reason, and changes nothi
 	Refused(nil)
 	Refused("")
 	Refused("hello there")
+	Refused("PUGUF3:not base64 at all!")
+	Refused("PUGUF3:abcd")                               -- decodes, but is not packed data
+	Refused("PUGUF3:" .. C_EncodingUtil.EncodeBase64("Z{{{")) -- unpacks, but is not a table
+	Refused("PUGUF3:" .. C_EncodingUtil.EncodeBase64("Z12"))  -- a number, not settings
+	Refused("PUGUF3:" .. ("ab"):rep(40000))
+	Refused("PUGUF1:not base64 at all!")                 -- the older marks are read, and checked the same
 	Refused("PUGUF2:not base64 at all!")
-	Refused("PUGUF2:abcd")                               -- decodes, but is not packed data
-	Refused("PUGUF2:" .. C_EncodingUtil.EncodeBase64("Z{{{")) -- unpacks, but is not a table
-	Refused("PUGUF2:" .. C_EncodingUtil.EncodeBase64("Z12"))  -- a number, not settings
-	Refused("PUGUF2:" .. ("ab"):rep(40000))
-	Refused("PUGUF1:not base64 at all!")                 -- the older mark is read, and checked the same
-	Refused("PUGUF3:abcd")                               -- a mark this version does not know
+	Refused("PUGUF4:abcd")                               -- a mark this version does not know
 	Equal(before, ns.Profiles.Export(ns.db))
 	Equal(0, #M.luaErrors, "being handed rubbish is not an error in the addon")
 end)
@@ -1391,7 +1392,7 @@ end)
 Test("an imported profile is checked like a saved one", function()
 	local ns = Login()
 	local hostile = { theme = "night", fontSize = 500, units = { player = { width = -5, healthText = "everything" }, raid = 7 }, payload = { 1, 2, 3 } }
-	local text = "PUGUF2:" .. C_EncodingUtil.EncodeBase64(C_EncodingUtil.CompressString(C_EncodingUtil.SerializeCBOR(hostile)))
+	local text = "PUGUF3:" .. C_EncodingUtil.EncodeBase64(C_EncodingUtil.CompressString(C_EncodingUtil.SerializeCBOR(hostile)))
 	local settings = ns.Profiles.Import(text)
 	Equal("night", settings.theme)
 	Equal(11, settings.fontSize)
@@ -2383,10 +2384,8 @@ Test("bars can fill to the left or upwards, and a bar can be turned round", func
 	Equal(0, #ns.GetProblems())
 end)
 
-Test("a rare creature's level says so, where no star or dragon does", function()
-	local ns = Login()
-	ns.db.units.target.elite = false
-	ns.Refresh()
+Test("a rare creature is marked beside its level", function()
+	Login()
 	Target({ name = "Mazzranache", level = 9, reaction = 2, canAttack = true, classification = "rare" })
 	Equal("9R", PugUnitFrames_target.texts.level.text)
 	M.units.target.classification = "rareelite"
@@ -2394,14 +2393,6 @@ Test("a rare creature's level says so, where no star or dragon does", function()
 	Equal("9R+", PugUnitFrames_target.texts.level.text)
 	Target(HOGGER)
 	Equal("11+", PugUnitFrames_target.texts.level.text, "an elite as before")
-
-	-- With the star or the dragon in the badge the number stands alone, and the badge stays small.
-	ns.db.units.target.elite = true
-	ns.Refresh()
-	Target({ name = "Mazzranache", level = 9, reaction = 2, canAttack = true, classification = "rareelite" })
-	Equal("9", PugUnitFrames_target.texts.level.text)
-	True(PugUnitFrames_target.texts.rank:IsShown())
-	Equal(0, #ns.GetProblems())
 end)
 
 ---------------------------------------------------------------------------
@@ -2637,14 +2628,21 @@ Test("a tall plate gives the name a line of its own, the whole width of the bar"
 	Equal(nil, name.width, "and no width of its own to cut it short")
 
 	True(texts.health.anchors[1][5] < 0, "the health number on the line below")
+	Equal(frame.health, texts.level.anchors[1][2], "which the level starts")
+	True(texts.level.anchors[1][5] < 0)
 	Equal(frame.power, texts.power.anchors[1][2], "and the power number is on the power bar")
 	True(frame.nameRow > 0, "the marks are told where the name's line runs")
 end)
 
-Test("the level stands on a badge at the foot of the portrait, in gold for the player", function()
+Test("switched on, the level stands on a badge at the foot of the portrait, in gold for the player", function()
 	local ns = Login()
 	local frame = PugUnitFrames_player
 	local texts, badge = frame.texts, frame.texts.badge
+	False(ns.db.units.player.levelBadge, "off to begin with: the level is plain text on its line")
+	False(badge.back:IsShown())
+	Equal(frame.health, texts.level.anchors[1][2])
+	ns.db.units.player.levelBadge = true
+	ns.Refresh()
 	True(badge:IsShown(), "the badge")
 	True(badge.back:IsShown(), "a dark tile")
 	True(badge.edge[1]:IsShown(), "with a thin rim")
@@ -2667,6 +2665,13 @@ Test("the level stands on a badge at the foot of the portrait, in gold for the p
 	Equal("7", texts.level.text)
 	True(badge.width < two, "one figure needs less than two")
 
+	-- With the level on the portrait, a power number that has no bar to sit on starts the lower line.
+	ns.db.units.player.powerHeight = 6
+	ns.Refresh()
+	Equal(frame.health, texts.power.anchors[1][2])
+	Near(4, texts.power.anchors[1][4])
+	ns.db.units.player.powerHeight = 10
+
 	-- A portrait too small to carry it leaves it on the line.
 	ns.db.units.player.height = 30
 	ns.Refresh()
@@ -2677,46 +2682,106 @@ Test("the level stands on a badge at the foot of the portrait, in gold for the p
 	ns.Refresh()
 	Equal(frame.health, badge.anchors[1][2], "and so it does with no portrait")
 	True(badge.anchors[1][5] < 0, "on the lower line")
-	Equal(0, #ns.GetProblems())
-end)
+	Equal(14, badge.height, "a little lower there, to stay on the bar")
 
-Test("with the badge switched off the level is plain text at the start of its line", function()
-	local ns = Login()
+	-- Switched off again, everything is where it was.
+	ns.db.units.player.portrait = "left"
 	ns.db.units.player.levelBadge = false
 	ns.Refresh()
-	local frame = PugUnitFrames_player
-	local texts, badge = frame.texts, frame.texts.badge
-	False(badge.back:IsShown(), "no tile")
-	False(badge.edge[1]:IsShown(), "no rim")
-	Equal(frame.health, badge.anchors[1][2], "at the start of the lower line")
-	True(badge.anchors[1][5] < 0)
-	Equal("60", texts.level.text)
-	local text = ns.Style.theme.text
-	Near(text[1], texts.level.textColor[1], "in the colour of the other words")
-	Target(HOGGER)
-	ns.db.units.target.levelBadge = false
-	ns.Refresh()
-	Equal("11+", PugUnitFrames_target.texts.level.text, "an elite's level says so itself")
-	True(PugUnitFrames_target.texts.rank:IsShown(), "beside its dragon")
+	False(badge.back:IsShown())
+	Equal(frame.health, texts.level.anchors[1][2])
+	Near(ns.Style.theme.text[1], texts.level.textColor[1], "in the colour of the other words")
 	Equal(0, #ns.GetProblems())
 end)
 
-Test("a power bar too thin for its number leaves it on the lower line", function()
+Test("switched on, the badge holds an elite's dragon and the number stands alone", function()
+	local ns = Login()
+	ns.db.units.target.levelBadge = true
+	ns.Refresh()
+	Target(HOGGER)
+	local frame = PugUnitFrames_target
+	local texts, badge = frame.texts, frame.texts.badge
+	True(texts.rank:IsShown(), "an elite")
+	Equal(badge, texts.rank.anchors[1][2], "inside the badge")
+	Equal("LEFT", texts.rank.anchors[1][1], "at its left")
+	Equal(badge, texts.level.anchors[1][2], "the level after it")
+	Equal("RIGHT", texts.level.anchors[1][1])
+	Equal("11", texts.level.text, "with no mark of its own: the dragon says it")
+	Equal("BOTTOMRIGHT", badge.anchors[1][3], "the badge at the foot of the target's portrait, at the right end")
+	Near(-(frame.pixel + (46 - 2 * frame.pixel) / 2), badge.anchors[1][4])
+	local withDragon = badge.width
+
+	-- The colour is the game's for how hard the fight would be, a little lighter to be read on
+	-- the dark tile.
+	local hard = GetCreatureDifficultyColor(11)
+	Near(hard.r + (1 - hard.r) * 0.25, texts.level.textColor[1], "the number")
+	Near(hard.g + (1 - hard.g) * 0.25, texts.level.textColor[2])
+	Near(hard.b + (1 - hard.b) * 0.25, badge.edge[2].color[3], "and the rim")
+
+	Target({ name = "Mottled Boar", level = 3, reaction = 2, canAttack = true })
+	False(texts.rank:IsShown(), "an ordinary creature has no dragon")
+	True(badge:IsShown(), "and its level has the badge to itself")
+	Equal("3", texts.level.text)
+	True(badge.width < withDragon, "a narrower one")
+	Target(Friend(5, { inGroup = false }))
+	Near(ns.Style.LEVEL[1], texts.level.textColor[1], "a player's level is in gold, as nobody is to be fought")
+
+	Target(HOGGER)
+	ns.db.units.target.elite = false
+	ns.Refresh()
+	False(texts.rank:IsShown(), "the dragon switched off")
+	Equal("11+", texts.level.text, "the level says it then")
+
+	-- A frame with a dragon and no level has no badge to put it in: the dragon stands bare.
+	M.SetUnit("targettarget", HOGGER)
+	M.UpdateUnitWatch()
+	ns.db.units.targettarget.levelBadge = true
+	ns.Refresh()
+	local other = PugUnitFrames_targettarget.texts
+	True(other.rank:IsShown())
+	False(other.badge.back:IsShown(), "no tile behind a dragon alone")
+	Equal(PugUnitFrames_targettarget.health, other.rank.anchors[1][2], "it starts the line as ever")
+	Equal(0, #ns.GetProblems())
+end)
+
+Test("a profile saved by 0.3.2, which put every level on a badge, has the badge switched off once", function()
+	PugUnitFramesDB = { schema = 2, profiles = { Default = { units = {
+		player = { levelBadge = true, width = 250 },
+		target = { levelBadge = true },
+	} } } }
+	local ns = Login()
+	False(ns.db.units.player.levelBadge, "off: nobody can say whether it was chosen")
+	False(ns.db.units.target.levelBadge)
+	Equal(250, ns.db.units.player.width, "everything else is as it was saved")
+	Equal(3, PugUnitFramesDB.schema)
+	False(PugUnitFrames_player.texts.badge.back:IsShown(), "and the level is plain text again")
+	Equal(PugUnitFrames_player.health, PugUnitFrames_player.texts.level.anchors[1][2])
+end)
+
+Test("a badge switched on in this version stays on, in the saved settings and in exported text", function()
+	PugUnitFramesDB = { schema = 3, profiles = { Default = { units = { player = { levelBadge = true } } } } }
+	local ns = Login()
+	True(ns.db.units.player.levelBadge, "chosen in this version: kept")
+	True(PugUnitFrames_player.texts.badge.back:IsShown())
+	local text = ns.Profiles.Export(ns.db)
+	Equal("PUGUF3:", text:sub(1, 7))
+	True(ns.Profiles.Import(text).units.player.levelBadge, "and it travels in exported text")
+	local older = ns.Profiles.Import("PUGUF2:" .. Packed({ units = { player = { levelBadge = true, width = 250 } } }))
+	False(older.units.player.levelBadge, "text from 0.3.2 comes in without it, as a saved profile does")
+	Equal(250, older.units.player.width)
+end)
+
+Test("a power bar too thin for its number leaves it beside the level", function()
 	local ns = Login()
 	local frame = PugUnitFrames_player
 	ns.db.units.player.powerHeight = 6
 	ns.Refresh()
 	local texts = frame.texts
-	Equal(frame.health, texts.power.anchors[1][2], "at the start of it, the level being on the portrait")
+	Equal(texts.level, texts.power.anchors[1][2], "after the level, on the lower line")
 	Equal("LEFT", texts.power.justify)
-	True(texts.power.anchors[1][5] < 0)
-	ns.db.units.player.portrait = "none"
-	ns.Refresh()
-	Equal(texts.badge, texts.power.anchors[1][2], "after the level, where that is on the line too")
 	ns.db.units.player.level = false
 	ns.Refresh()
-	Equal(frame.health, texts.power.anchors[1][2], "or at the start of it again")
-	False(texts.badge:IsShown(), "no level, no badge")
+	Equal(frame.health, texts.power.anchors[1][2], "or at the start of it")
 	Equal(0, #ns.GetProblems())
 end)
 
@@ -2745,8 +2810,7 @@ Test("a low plate has one line: the name has the whole bar, or what the numbers'
 
 	cfg.level, cfg.powerText = true, "value"
 	ns.Refresh()
-	Equal(texts.badge, texts.name.anchors[1][2], "after the level's badge")
-	Equal(frame.health, texts.badge.anchors[1][2], "which starts the line")
+	Equal(texts.level, texts.name.anchors[1][2], "after the level")
 	Equal("BOTTOMRIGHT", texts.health.anchors[1][1], "health over power, a column at the right")
 	Equal("TOPRIGHT", texts.power.anchors[1][1])
 	Equal(frame.health, texts.power.anchors[1][2])
@@ -2762,28 +2826,17 @@ Test("a raid frame keeps its name in the middle, with nearly the whole plate to 
 	False(button.texts.rank:IsShown())
 end)
 
-Test("an elite or a rare creature has the game's dragon in its level's badge", function()
+Test("an elite or a rare creature has the game's dragon beside its level", function()
 	local ns = Login()
 	Target(HOGGER)
 	local frame = PugUnitFrames_target
-	local texts, badge = frame.texts, frame.texts.badge
+	local texts = frame.texts
 	True(texts.rank:IsShown(), "an elite")
 	Equal("nameplates-icon-elite-gold", texts.rank.atlas, "the gold dragon of the game's nameplates")
-	Equal(badge, texts.rank.anchors[1][2], "inside the badge")
-	Equal("LEFT", texts.rank.anchors[1][1], "at its left")
-	Equal(badge, texts.level.anchors[1][2], "the level after it")
-	Equal("RIGHT", texts.level.anchors[1][1])
-	Equal("11", texts.level.text, "with no mark of its own: the dragon says it")
-	Equal("BOTTOMRIGHT", badge.anchors[1][3], "the badge at the foot of the target's portrait, at the right end")
-	Near(-(frame.pixel + (46 - 2 * frame.pixel) / 2), badge.anchors[1][4])
-	local withDragon = badge.width
-
-	-- The colour is the game's for how hard the fight would be, a little lighter to be read on
-	-- the dark tile.
-	local hard = GetCreatureDifficultyColor(11)
-	Near(hard.r + (1 - hard.r) * 0.25, texts.level.textColor[1], "the number")
-	Near(hard.g + (1 - hard.g) * 0.25, texts.level.textColor[2])
-	Near(hard.b + (1 - hard.b) * 0.25, badge.edge[2].color[3], "and the rim")
+	Equal(frame.health, texts.rank.anchors[1][2], "it starts the lower line")
+	True(texts.rank.anchors[1][5] < 0)
+	Equal(texts.rank, texts.level.anchors[1][2], "and the level stands after it")
+	Equal("11+", texts.level.text, "which says it as well")
 
 	M.units.target.classification = "rare"
 	M.Fire("UNIT_CLASSIFICATION_CHANGED", "target")
@@ -2797,35 +2850,30 @@ Test("an elite or a rare creature has the game's dragon in its level's badge", f
 
 	Target({ name = "Mottled Boar", level = 3, reaction = 2, canAttack = true })
 	False(texts.rank:IsShown(), "an ordinary creature has none")
-	True(badge:IsShown(), "and its level has the badge to itself")
-	Equal("3", texts.level.text)
-	True(badge.width < withDragon, "a narrower one")
+	Equal(frame.health, texts.level.anchors[1][2], "and its level starts the line itself")
 	Target(Friend(5, { inGroup = false }))
 	False(texts.rank:IsShown(), "nor has a player")
-	Near(ns.Style.LEVEL[1], texts.level.textColor[1], "whose level is in gold, as nobody is to be fought")
 
 	Target(HOGGER)
 	True(texts.rank:IsShown())
 	ns.db.units.target.elite = false
 	ns.Refresh()
 	False(texts.rank:IsShown(), "switched off")
-	Equal("11+", texts.level.text, "the level says it then")
+	Equal(frame.health, texts.level.anchors[1][2])
+	Equal("11+", texts.level.text, "the level still says it")
 	Equal(0, #ns.GetProblems())
 end)
 
-Test("on a plate with one line and no level the dragon stands bare before the name", function()
+Test("on a plate with one line the dragon stands before the name", function()
 	local ns = Login()
 	Target(Friend(5, { inGroup = false }))
 	M.SetUnit("targettarget", HOGGER)
 	M.UpdateUnitWatch()
 	local frame = PugUnitFrames_targettarget
-	local texts, badge = frame.texts, frame.texts.badge
+	local texts = frame.texts
 	True(texts.rank:IsShown())
-	False(texts.level:IsShown(), "no level on this frame")
-	False(badge.back:IsShown(), "so no tile behind the dragon")
-	Equal(frame.health, badge.anchors[1][2], "it starts the line")
-	Equal(0, badge.anchors[1][5], "the one line")
-	Equal(badge, texts.name.anchors[1][2], "the name follows it")
+	Equal(0, texts.rank.anchors[1][5], "on the one line")
+	Equal(texts.rank, texts.name.anchors[1][2], "the name follows it")
 	M.SetUnit("targettarget", Friend(9))
 	M.Advance(0.3)
 	False(texts.rank:IsShown(), "gone with the creature")
@@ -3062,7 +3110,7 @@ Test("a profile from version 0.2 moves to the new starting values where it was n
 	Equal(3, units.raid.debuffs)
 	Equal("inside", units.raid.debuffSide)
 	Equal(nil, units.party.auraSide, "the old setting is gone")
-	Equal(2, PugUnitFramesDB.schema)
+	Equal(3, PugUnitFramesDB.schema)
 	Equal(0, #ns.GetProblems())
 end)
 
@@ -3106,8 +3154,10 @@ Test("profile text from version 0.2 is still read, and brought along the same wa
 	Equal(3, settings.units.party.buffs)
 	Equal("left", settings.units.player.portrait)
 
-	local now = ns.Profiles.Import("PUGUF2:" .. Packed({ units = { player = { portrait = "none" } } }))
+	local now = ns.Profiles.Import("PUGUF3:" .. Packed({ units = { player = { portrait = "none" } } }))
 	Equal("none", now.units.player.portrait, "text from this version is taken as it is")
+	local between = ns.Profiles.Import("PUGUF2:" .. Packed({ units = { player = { portrait = "none" } } }))
+	Equal("none", between.units.player.portrait, "and so is text from 0.3.0 to 0.3.2, whose portraits were already this version's")
 end)
 
 Test("any mix of settings lays out and draws without an error, in and out of a fight", function()
