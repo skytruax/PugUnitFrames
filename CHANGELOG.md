@@ -1,6 +1,6 @@
 # Changelog
 
-## Not released yet
+## v0.3.4
 
 - **New starting settings.** A new profile, and a frame you reset, now starts with the settings the addon's author plays with:
     - larger frames (player and target at 115%, party at 120%, focus at 130%), with a taller power bar and cast bar on player and target;
