@@ -783,6 +783,22 @@ Test("a party frame lights up in the colour of a debuff the player can remove", 
 	False(lamp.button:IsVisible(), "switched off, it stays dark")
 end)
 
+Test("a light the game will not make leaves the icons standing", function()
+	M.unknownFilters.RAID = true -- a client whose aura containers do not know this filter word
+	local ns = Login()
+	Party(2)
+	local button = PartyButton(ns, 1)
+	M.units.party1.auras = CopyTable(AURAS)
+	M.Fire("UNIT_AURA", "party1")
+	Equal(5, #ShownIcons(button), "buffs and debuffs are drawn all the same")
+	True(button.active.Auras, "the element stays on")
+	Equal(nil, button.auras.lamp.button, "without the light")
+	local problems = ns.GetProblems()
+	Equal(1, #problems, "and the refusal is on the list, once for all the frames")
+	True(problems[1].text:find("RAID", 1, true), "naming what the game would not take")
+	M.luaErrors = {} -- expected in this scenario
+end)
+
 Test("icons on a raid frame let the mouse through; icons beside a frame keep it, for the game's tooltip", function()
 	local ns = Login()
 	Raid(3)

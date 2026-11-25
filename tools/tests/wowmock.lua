@@ -53,6 +53,7 @@ local M = {
 	tooltip = {},          -- what the tooltip was last asked to show
 	reloads = 0,
 	unreadableFonts = {},  -- [path] = true: a font file the game cannot read
+	unknownFilters = {},   -- [word] = true: an aura filter word this client's containers do not know
 	loadedAddOns = {},     -- [name] = true: another addon that is loaded
 	driven = {},           -- [frame] = the rule the game shows and hides it by (RegisterStateDriver)
 	keyDown = true,        -- the game's "cast on key down" setting, on unless the player changes it
@@ -1791,7 +1792,7 @@ local function ValidFilter(filter)
 	assert(type(filter) == "string", "an aura filter must be a string")
 	for word in filter:gmatch("[^|%s]+") do
 		local bare = word:gsub("^!", "")
-		assert(FILTER_WORDS[bare], "Unknown aura filter component: '" .. bare .. "'")
+		assert(FILTER_WORDS[bare] and not M.unknownFilters[bare], "Unknown aura filter component: '" .. bare .. "'")
 	end
 	return true
 end

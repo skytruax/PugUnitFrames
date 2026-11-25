@@ -325,6 +325,33 @@ local function SetUpSide(frame, there, cfg, wanted)
 	end
 end
 
+-- The light for a debuff the player can remove ("RAID" on a harmful aura means just that): a
+-- container of its own with one slot, which is the game's word for a single aura on a button
+-- that stays where it is put.
+local function SetUpLamp(frame, cfg)
+	local auras, lamp = frame.auras, frame.auras.lamp
+	local wanted = cfg.dispel and true or false
+	if wanted and not lamp.host then
+		lamp.host = CreateFrame("AuraContainer", nil, auras.holder, "CustomAuraContainerTemplate")
+		lamp.host:SetAllPoints(frame.body)
+	end
+	if wanted and not lamp.slot then
+		lamp.host:AddAuraSlot("removable", "HARMFUL|RAID", {
+			initializeFrame = function(button)
+				ns.Try(MakeLamp, frame, button)
+			end,
+		})
+		lamp.slot = true
+	end
+	if lamp.slot then
+		lamp.host:SetShown(wanted)
+		lamp.host:SetAuraSlotEnabled("removable", wanted)
+		if frame.unit then
+			lamp.host:SetUnit(frame.unit)
+		end
+	end
+end
+
 ---------------------------------------------------------------------------
 -- The element
 ---------------------------------------------------------------------------
@@ -345,34 +372,18 @@ function Auras.Layout(frame, cfg, on)
 	local sides = Sides(cfg)
 	frame.auraAbove = sides.above and Frame.TakeAbove(frame, 0) or 0
 	frame.auraBelow = sides.below and Frame.TakeBelow(frame, 0) or 0
+	-- Each side and the light are set up on their own: if the game will not have one of them,
+	-- that one is reported and the others are still there.
 	for _, side in ipairs(SIDES) do
 		local there = auras.sides[side]
 		if sides[side] and not there then
 			there = MakeSide(frame, side)
 		end
 		if there then
-			SetUpSide(frame, there, cfg, sides[side])
+			ns.Try(SetUpSide, frame, there, cfg, sides[side])
 		end
 	end
-
-	-- The light for a debuff the player can remove ("RAID" on a harmful aura means just that).
-	local lamp = auras.lamp
-	if cfg.dispel and not lamp.host then
-		lamp.host = CreateFrame("AuraContainer", nil, auras.holder, "CustomAuraContainerTemplate")
-		lamp.host:SetAllPoints(frame.body)
-		lamp.host:AddAuraSlot("removable", "HARMFUL|RAID", {
-			initializeFrame = function(button)
-				ns.Try(MakeLamp, frame, button)
-			end,
-		})
-	end
-	if lamp.host then
-		lamp.host:SetShown(cfg.dispel and true or false)
-		lamp.host:SetAuraSlotEnabled("removable", cfg.dispel and true or false)
-		if frame.unit then
-			lamp.host:SetUnit(frame.unit)
-		end
-	end
+	ns.Try(SetUpLamp, frame, cfg)
 
 	DressAll(frame)
 end
