@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.3.2
+
+Fixed:
+
+- **Buffs and debuffs in a fight.** In a fight this game does not let an addon ask which buffs and debuffs a unit has: every such question is an error (the line "Auras cannot be accessed when secret" in `/pug status`, hundreds of times in an evening), and the icons stood still until the fight was over. The icons are now drawn by the game's own aura container, which the game fills itself, in a fight and out of it, on buttons this addon dresses: icon, time left, stacks, and a rim in the colour of the debuff's kind. The light on a party or raid frame for a debuff you can remove works the same way. The tooltip on an icon is the game's own.
+- **The addon's font.** The game can take its time before it hands an addon's font file over. Version 0.3.1 gave up after twelve seconds, lettered the frames in the game's font for the rest of the session and called it an error. The file is now asked for as the addon loads and tried again for as long as it takes, and the frames change to it the moment the game takes it. Only after ten minutes of refusals is anything said, once. `/pug status` has a "Font" line that says which font is in use and why.
+- One part of a frame that fails no longer keeps the rest of that frame, or the frames laid out after it, from being set up; it is reported and left out.
+
+New:
+
+- **The level on a badge.** The player's and the target's level stands on a small dark tile at the foot of the portrait, the number and the rim in the colour of how hard the fight would be, gold for someone who cannot be fought. An elite's dragon and a rare creature's star are inside it, and the number then stands alone. On a frame without a portrait the badge starts the line the level was on. "Level as a badge" is a setting of each frame (Options > Frames > Text and portrait) and starts switched on; off, the level is plain text as before.
+
+Good to know:
+
+- Icons come in the game's order now, your own first.
+- A change to the icons' size made in the middle of a fight is taken up when the fight ends: the game closes its aura buttons to addons while it keeps auras sealed.
+
 ## v0.3.1
 
 - **Shields are drawn the way healing on its way is**: a pale stretch of bar that starts where the health ends (after the healing, when some is on its way) and is as long as the shield is large. It takes the place of the band along the top of the bar. Only as much of a shield is drawn as there is room for before the end of the bar; when there is more shield than room, a pale cap lights up on the bar's end. That cap is all a shield on someone at full health has to show, which is when a shield is usually cast. "Shields on the health bar" still switches it, frame by frame.

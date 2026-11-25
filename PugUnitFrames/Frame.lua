@@ -360,14 +360,17 @@ function Frame.Layout(frame)
 	for _, element in ipairs(elements) do
 		local name = element.name
 		local wanted = element.Wanted(cfg, frame.kind) and true or false
+		-- Each element is made and laid out on its own: one that fails is reported (ns.Try hands
+		-- the error to the game as any error is) and left out, and the rest of the frame stands.
+		local sound = true
 		if wanted and not frame.made[name] then
-			element.Create(frame)
-			frame.made[name] = true
+			sound = ns.Try(element.Create, frame)
+			frame.made[name] = sound
 		end
 		if frame.made[name] then
-			element.Layout(frame, cfg, wanted)
+			sound = ns.Try(element.Layout, frame, cfg, wanted) and sound
 		end
-		frame.active[name] = wanted
+		frame.active[name] = wanted and sound
 	end
 
 	RegisterEvents(frame)

@@ -58,7 +58,8 @@ function Units.ApplyLayout()
 	for _, kind in ipairs(SINGLES) do
 		local frame = frames[kind]
 		if frame then
-			Place(frame, ns.db.units[kind])
+			-- One frame that cannot be placed is reported; the others are still laid out.
+			ns.Try(Place, frame, ns.db.units[kind])
 			Frame.Layout(frame)
 		end
 	end

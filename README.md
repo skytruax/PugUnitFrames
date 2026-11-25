@@ -104,7 +104,8 @@ error it caught: please open an issue with that text.
 
 Also in there: portraits; a character's first name and surname, on a line of their own wherever a
 frame has the height (first name over surname on a raid frame), which is also where a long creature
-name fits; the game's dragon beside the level of an elite or rare creature; Questie's icon on a
+name fits; the level on a badge at the foot of the portrait, in the colour of how hard the fight
+would be, with the game's dragon in it for an elite or rare creature; Questie's icon on a
 creature that one of your quests needs, if you run [Questie](https://github.com/Questie/Questie);
 each party member's buffs in a row above the frame, as on the target; raid icons, resting, in
 combat, ready-check answers and a resurrection on its way; the leader's crown, a mark for tank,
@@ -169,6 +170,14 @@ All of that lives in one file, [`Sealed.lua`](PugUnitFrames/Sealed.lua), and the
 if any other file calls a game function whose answer can be sealed. The list of those functions is
 made from Blizzard's own API documentation.
 
+Buffs and debuffs are the exception, because for them there is no sealed answer to pass on: while
+the game keeps auras sealed, an addon that so much as asks which auras a unit has gets an error.
+What the game offers instead is its own aura container, a frame an addon creates and sets up (which
+unit, which auras, how many, in what rows) and the game fills itself. This addon gives each of the
+container's buttons its parts as the game creates it (an icon, a sweep for the time left, a count,
+a rim) and never learns what any aura is. [`Elements/Auras.lua`](PugUnitFrames/Elements/Auras.lua)
+is all of it.
+
 The frames are the game's secure unit buttons, and party and raid are its secure group headers, so
 they keep working in combat, including for someone who joins in the middle of a fight. No library
 and no other addon's code is included, the game's menus are left alone, and none of its code is
@@ -221,8 +230,9 @@ seal values, so anything that depends on how the live client behaves is confirme
 <p align="center"><sub>The addon's own code drawing beside Blizzard's interface code in the simulator. The simulator has
 none of the game's art and no world, and reads no font from an addon's folder, so the scene
 (<code>tools/sim/tests/sim/screenshot.lua</code>) hands it the game's icons for its spells, the raid marks, the game's stand-in
-portraits and its elite dragon, a painted city and the addon's own font, and answers the game functions the simulator has no handle for: other units' auras, casts
-and power, threat, range. Blizzard's own interface, bare without its art, is put away.</sub></p>
+portraits and its elite dragon, a painted city and the addon's own font, and answers the game functions the simulator has no handle for: other units' casts
+and power, threat, range. The simulator knows no auras for the scene's people either, so the scene puts them on the addon's buttons itself, in the rows the game's
+aura container lays them in. Blizzard's own interface, bare without its art, is put away.</sub></p>
 
 The pictures and textures are drawn by scripts too (`pip install pillow numpy`):
 

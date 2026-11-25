@@ -107,22 +107,63 @@ test("the game's own cast bar stays away while ours is in use", function()
 	A_Admin.FireEvent("UNIT_SPELLCAST_STOP", "player")
 end)
 
-test("a target gets its buffs drawn as icons with a tooltip", function()
+-- What the game has put on one of its own aura buttons (is it shown, where, with which picture)
+-- is closed to addon code. The simulator lets a test ask as the game's own code would.
+local function Seen(object, method, ...)
+	return securecallfunction(object[method], object, ...)
+end
+
+test("a target's auras are drawn by the game's aura container, on buttons the addon dressed", function()
 	A_Admin.SetTarget("Hogger", 11, 1, true)
 	Tick()
-	local frame = PugUnitFrames_target
+	local frame, cfg = PugUnitFrames_target, ns.db.units.target
 	assertTrue(frame:IsShown())
-	local ids = C_UnitAuras.GetUnitAuraInstanceIDs("target", "HELPFUL", 9)
-	local shown = 0
-	for _, icon in ipairs(frame.auras.icons) do
-		if icon:IsShown() then
-			shown = shown + 1
-			assertNotNil(icon.auraInstanceID)
-			icon:GetScript("OnEnter")(icon)
-			icon:GetScript("OnLeave")(icon)
+	local there = frame.auras.sides.above
+	assertNotNil(there, "the target's icons stand above its plate")
+	local container = there.container
+	assertEquals("target", container:GetUnit())
+	assertTrue(container:HasAuraGroup("debuffs") and container:HasAuraGroup("buffs"))
+	local buffs = #C_UnitAuras.GetUnitAuraInstanceIDs("target", "HELPFUL", cfg.buffs)
+	local debuffs = #C_UnitAuras.GetUnitAuraInstanceIDs("target", "HARMFUL", cfg.debuffs)
+	assertTrue(buffs + debuffs > 0, "the simulator's target has auras on it")
+	-- The game made its buttons ten at a time, and the addon gave each its parts.
+	assertEquals(container:GetAuraGroupFrameCount("debuffs") + container:GetAuraGroupFrameCount("buffs"), #there.parts)
+
+	local shown = { debuffs = 0, buffs = 0 }
+	local lefts = {}
+	for _, part in ipairs(there.parts) do
+		if Seen(part.button, "IsVisible") then
+			shown[part.kind] = shown[part.kind] + 1
+			assertNotNil(Seen(part.icon, "GetTexture"), "the aura's picture is on the icon")
+			local left, bottom, width, height = Seen(part.button, "GetRect")
+			assertAlmostEquals(cfg.auraSize, width, 0.01)
+			assertAlmostEquals(cfg.auraSize, height, 0.01)
+			assertTrue(bottom >= frame:GetTop() + 2, "above the plate")
+			assertTrue(left >= frame:GetLeft() - 0.5 and left + width <= frame:GetLeft() + cfg.auraPerRow * (cfg.auraSize + 2), "in a row of at most nine from its left end")
+			local key = ("%.1f/%.1f"):format(left, bottom)
+			assertEquals(nil, lefts[key], "no two icons in one place")
+			lefts[key] = true
+			assertTrue(part.button:IsMouseEnabled(), "the pointer finds it, for the game's tooltip")
 		end
 	end
-	assertEquals(#ids + #C_UnitAuras.GetUnitAuraInstanceIDs("target", "HARMFUL", 18), shown)
+	assertEquals(debuffs, shown.debuffs)
+	assertEquals(buffs, shown.buffs)
+
+	-- A new size is taken up by the buttons there are.
+	local before = cfg.auraSize
+	cfg.auraSize = before + 6
+	ns.Refresh()
+	Tick()
+	for _, part in ipairs(there.parts) do
+		if Seen(part.button, "IsVisible") then
+			local _, _, width = Seen(part.button, "GetRect")
+			assertAlmostEquals(before + 6, width, 0.01)
+		end
+	end
+	cfg.auraSize = before
+	ns.Refresh()
+
+	-- No target, no icons.
 	A_Admin.ClearTarget()
 	Tick()
 	NoProblems()

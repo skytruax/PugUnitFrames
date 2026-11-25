@@ -618,9 +618,18 @@ function FontString:SetShadowColor(...) Plain("SetShadowColor", ...) end
 function FontString:SetShadowOffset(...) Plain("SetShadowOffset", ...) end
 -- SecretArguments = "AllowedWhenTainted"
 function FontString:SetTextColor(r, g, b, a) self.textColor = { r, g, b, a } end
-function FontString:SetText(text) self.text = text end
+-- A text with no font cannot be written on: in the game that is an error.
+function FontString:SetText(text)
+	if not self.font and not self.fontObject then
+		error("FontString:SetText(): Font not set", 2)
+	end
+	self.text = text
+end
 function FontString:SetFormattedText(format, ...)
 	Plain("SetFormattedText's format", format)
+	if not self.font and not self.fontObject then
+		error("FontString:SetFormattedText(): Font not set", 2)
+	end
 	local arguments = { ... }
 	local sealed = AnySealed(...)
 	for index = 1, select("#", ...) do
@@ -989,6 +998,13 @@ end
 function CreateFrame(kind, name, parent, template)
 	local class = CLASSES[kind]
 	assert(class, "this model has no frame type '" .. tostring(kind) .. "'")
+	-- The buttons of an aura container are the game's to make.
+	if kind == "AuraButton" and insecure() then
+		error("CreateFrame: AuraButton cannot be created by addons", 2)
+	end
+	if kind == "AuraContainer" then
+		assert(template == "CustomAuraContainerTemplate", "this model has aura containers of the template CustomAuraContainerTemplate only")
+	end
 	local frame = setmetatable({
 		widget = kind, name = name, parent = parent, shown = true, anchors = {}, scale = 1,
 		level = parent and parent.level + 1 or 0,
@@ -1005,6 +1021,7 @@ function CreateFrame(kind, name, parent, template)
 
 	if template then
 		assert(template == "CooldownFrameTemplate" or template == "UICheckButtonTemplate" or template == "UIPanelButtonTemplate"
+			or template == "CustomAuraContainerTemplate"
 			or template == "SecureUnitButtonTemplate" or template == "SecureGroupHeaderTemplate"
 			or template == "SecureActionButtonTemplate" or M.templateScripts[template],
 			"this model has no template '" .. tostring(template) .. "'")
@@ -1051,6 +1068,9 @@ function CreateFrame(kind, name, parent, template)
 				end
 			end
 		end
+	end
+	if kind == "AuraContainer" then
+		M.NewAuraContainer(frame)
 	end
 	return frame
 end
@@ -1222,6 +1242,14 @@ function M.Fire(event, ...)
 			frame.scripts.OnEvent(frame, event, ...)
 		end
 	end
+	-- The game's aura containers hear of a unit's auras changing themselves.
+	if event == "UNIT_AURA" then
+		for _, container in ipairs(M.auraContainers or {}) do
+			if container.unitToken == unit then
+				container.dirty = true
+			end
+		end
+	end
 end
 
 -- The game announces a fight before it locks protected frames and seals what a fight seals, and
@@ -1247,6 +1275,7 @@ function M.Advance(seconds)
 			frame.scripts.OnUpdate(frame, seconds)
 		end
 	end
+	M.FillAuraContainers()
 	local waiting = M.timers
 	M.timers = {}
 	for _, timer in ipairs(waiting) do
@@ -1719,6 +1748,507 @@ C_UnitAuras = {
 		return Through(curve, aura.kind or 0, M.combat)
 	end,
 }
+
+---------------------------------------------------------------------------
+-- The game's aura container (Blizzard_AuraContainer)
+---------------------------------------------------------------------------
+-- While auras are sealed, an addon may not ask the game about a unit's auras at all: every
+-- C_UnitAuras question above raises an error (the precondition RequiresUnitAuraAccess, failure
+-- mode "Error"; in the game: "Auras cannot be accessed when secret while tainted by <addon>").
+-- What an addon has instead is this: a frame it creates and sets up, which the game's own code
+-- fills with one button for each aura. The addon makes the parts of a button (an icon, a sweep,
+-- a count, a rim) as the button is created and hands them to it; the game puts the aura on
+-- them. Once made, a button may not be touched by addon code while auras are sealed.
+--
+-- This model does what the game's code does with such a container, as the game's code.
+do
+	local guarded = { "GetUnitAuraInstanceIDs", "GetAuraDataByAuraInstanceID", "GetAuraDuration", "GetAuraApplicationDisplayCount", "GetAuraDispelTypeColor" }
+	for _, name in ipairs(guarded) do
+		local answer = C_UnitAuras[name]
+		C_UnitAuras[name] = function(...)
+			if M.combat and insecure() then
+				M.auraRefusals = (M.auraRefusals or 0) + 1
+				error(name .. "(): Auras cannot be accessed when secret while tainted by 'PugUnitFrames'", 2)
+			end
+			return answer(...)
+		end
+	end
+end
+
+AuraContainerSortMethod = { Default = 0, BigDefensive = 1, UnitFrameDebuff = 2, ImportantOnly = 3, Expiration = 4, ExpirationOnly = 5, Name = 6, NameOnly = 7, AuraInstanceIDOnly = 8 }
+AuraContainerSortDirection = { Normal = 0, Reverse = 1 }
+AnchorUtil = { FlowLayoutAxis = { Horizontal = 0, Vertical = 1 }, FlowDirection = { Left = -1, Right = 1, Up = 1, Down = -1 } }
+Enum.CustomAuraButtonDispelTypeTextureStyle = { Border = 0, BorderWithIcon = 1, Icon = 2, PreserveAsset = 3, CustomAsset = 4 }
+
+local AuraContainer, AuraButton = {}, {}
+Inherit(AuraContainer, Frame)
+M.auraContainers = {}
+
+local BATCH = 10 -- buttons the game makes at a time, so that their making says nothing about the auras
+local FILTER_WORDS = { HELPFUL = true, HARMFUL = true, PLAYER = true, RAID = true, CANCELABLE = true }
+
+local function ValidFilter(filter)
+	assert(type(filter) == "string", "an aura filter must be a string")
+	for word in filter:gmatch("[^|%s]+") do
+		local bare = word:gsub("^!", "")
+		assert(FILTER_WORDS[bare], "Unknown aura filter component: '" .. bare .. "'")
+	end
+	return true
+end
+
+local function InEnum(enum, value)
+	for _, known in pairs(enum) do
+		if known == value then
+			return true
+		end
+	end
+	return false
+end
+
+local function IsDescendant(region, owner)
+	local parent = region.owner or region.parent
+	while parent do
+		if parent == owner then
+			return true
+		end
+		parent = parent.owner or parent.parent
+	end
+	return false
+end
+
+-- A part handed to a button has to be the button's own: one of its regions, or of a frame on it.
+local function Own(button, object, widget, what)
+	assert(type(object) == "table", what .. ": bad object in function call")
+	if widget == "AnimationGroup" then
+		assert(rawget(object, "animations"), what .. ": expected object type 'AnimationGroup'")
+	else
+		assert(object.widget == widget, what .. ": expected object type '" .. widget .. "', got '" .. tostring(object.widget) .. "'")
+	end
+	assert(IsDescendant(object, button), what .. ": must be the owner or a direct or indirect descendant of owner")
+	return object
+end
+
+-- Addon code may not touch a finished button while auras are sealed.
+local function Restricted(button, what)
+	if rawget(button, "restricted") and M.combat and insecure() then
+		M.blocked[#M.blocked + 1] = "AuraButton:" .. what
+		error("AuraButton:" .. what .. "(): access denied while auras are secret", 3)
+	end
+end
+-- A button is one of the game's buttons with every call guarded. What only looks (is it shown,
+-- how large is it) is left open here for the scenarios to read; the addon itself never asks.
+local LOOKS = { IsShown = true, IsVisible = true, GetParent = true, GetWidth = true, GetHeight = true, GetFrameLevel = true, GetScript = true }
+for name, method in pairs(Button) do
+	if type(method) == "function" then
+		if LOOKS[name] then
+			AuraButton[name] = method
+		else
+			AuraButton[name] = function(self, ...)
+				Restricted(self, name)
+				return method(self, ...)
+			end
+		end
+	end
+end
+
+-- The game brings a button's display up to date the moment a part is handed over: with no aura
+-- on it, a question mark for the icon and an empty count. So a count has to have its font by then.
+function AuraButton:SetIcon(texture)
+	Restricted(self, "SetIcon")
+	self.parts.icon = Own(self, texture, "Texture", "SetIcon")
+	texture.texture = "Interface\\Icons\\INV_Misc_QuestionMark"
+end
+function AuraButton:SetDurationCooldown(cooldown) Restricted(self, "SetDurationCooldown") self.parts.cooldown = Own(self, cooldown, "Cooldown", "SetDurationCooldown") end
+function AuraButton:SetApplicationCount(text, options)
+	Restricted(self, "SetApplicationCount")
+	assert(options == nil or type(options) == "table", "SetApplicationCount: options must be a table or nil")
+	self.parts.count = Own(self, text, "FontString", "SetApplicationCount")
+	text:SetText("")
+end
+local DISPEL_OPTIONS = { showAlways = "boolean", showWhenHarmful = "boolean", showWhenHelpful = "boolean", showWithoutDispelType = "boolean",
+	style = "number", customDispelColorCurve = "table", customDispelColorMap = "table", customDispelAssetMap = "table", stealableFilter = "number" }
+function AuraButton:AddDispelTypeTexture(texture, options)
+	Restricted(self, "AddDispelTypeTexture")
+	Own(self, texture, "Texture", "AddDispelTypeTexture")
+	options = options or {}
+	for key, value in pairs(options) do
+		assert(DISPEL_OPTIONS[key], "AddDispelTypeTexture: unknown option '" .. tostring(key) .. "'")
+		assert(type(value) == DISPEL_OPTIONS[key], "AddDispelTypeTexture: option '" .. key .. "' must be a " .. DISPEL_OPTIONS[key])
+	end
+	if options.style ~= nil then
+		assert(InEnum(Enum.CustomAuraButtonDispelTypeTextureStyle, options.style), "AddDispelTypeTexture: bad style")
+	end
+	assert(options.customDispelColorCurve == nil or options.customDispelColorCurve.isColor, "customDispelColorCurve must be a colour curve")
+	for _, known in ipairs(self.parts.dispel) do
+		assert(known.texture ~= texture, "Display element has already been added.")
+	end
+	self.parts.dispel[#self.parts.dispel + 1] = {
+		texture = texture, showAlways = options.showAlways or false,
+		harmful = options.showWhenHarmful ~= false, helpful = options.showWhenHelpful or false,
+		untyped = options.showWithoutDispelType or false, curve = options.customDispelColorCurve,
+		-- With no style given the game puts its own bordered picture on the texture.
+		style = options.style or Enum.CustomAuraButtonDispelTypeTextureStyle.BorderWithIcon,
+	}
+end
+function AuraButton:AddAuraShownAnimation(group)
+	Restricted(self, "AddAuraShownAnimation")
+	self.parts.shownAnimations[#self.parts.shownAnimations + 1] = Own(self, group, "AnimationGroup", "AddAuraShownAnimation")
+end
+local TOOLTIP_ANCHORS = { ANCHOR_LEFT = true, ANCHOR_RIGHT = true, ANCHOR_BOTTOMLEFT = true, ANCHOR_BOTTOM = true, ANCHOR_BOTTOMRIGHT = true,
+	ANCHOR_TOPLEFT = true, ANCHOR_TOP = true, ANCHOR_TOPRIGHT = true, ANCHOR_CURSOR = true, ANCHOR_NONE = true, ANCHOR_PRESERVE = true }
+function AuraButton:SetTooltipAnchorPoint(point, x, y)
+	Restricted(self, "SetTooltipAnchorPoint")
+	assert(TOOLTIP_ANCHORS[point], "point must be a valid tooltip anchor point name")
+	assert((x == nil or type(x) == "number") and (y == nil or type(y) == "number"), "offsets must be numbers or nil")
+	self.tooltipAnchor = point
+end
+function AuraButton:SetHideTooltipInCombat(hide) Restricted(self, "SetHideTooltipInCombat") self.tooltipHideInCombat = hide == true end
+
+-- The game's own code puts an aura on a button, or takes it off.
+local function Apply(button, token, aura)
+	local parts, sealed = button.parts, M.combat
+	button.aura, button.unit = aura, aura and token or nil
+	if parts.icon then
+		parts.icon.texture = aura and SealIf(sealed, aura.icon) or nil
+	end
+	if parts.count then
+		local stacks = aura and aura.stacks or 0
+		parts.count.text = aura and SealIf(sealed, stacks > 1 and tostring(stacks) or "") or ""
+	end
+	if parts.cooldown then
+		parts.cooldown.duration = Duration(M.now, aura and aura.length or 0, sealed)
+	end
+	for _, dispel in ipairs(parts.dispel) do
+		local show = aura ~= nil and (dispel.showAlways
+			or (((aura.helpful and dispel.helpful) or (not aura.helpful and dispel.harmful)) and ((aura.kind or 0) ~= 0 or dispel.untyped)))
+		dispel.texture.shown = show and true or false
+		if show and dispel.curve then
+			local color = Through(dispel.curve, aura.kind or 0, sealed)
+			dispel.texture.vertex = { color:GetRGBA() }
+		end
+	end
+	local was = button.shown
+	button.shown = aura ~= nil
+	for _, group in ipairs(parts.shownAnimations) do
+		if button.shown and not was then
+			group:Play()
+		elseif not button.shown then
+			group:Stop()
+		end
+	end
+end
+
+local function NewButton(container, initializeFrame)
+	local button = M.Secure(CreateFrame, "AuraButton", nil, container)
+	button.parts = { dispel = {}, shownAnimations = {} }
+	button.shown = false
+	button.mouse = true
+	if initializeFrame then
+		-- The addon's own function, run as addon code, before the button is closed to it.
+		local saved = M.secure
+		M.secure = 0
+		local ok, problem = pcall(initializeFrame, button)
+		M.secure = saved
+		if not ok then
+			error(problem, 0)
+		end
+	end
+	rawset(button, "restricted", true)
+	return button
+end
+
+local function Matches(aura, filter, candidates)
+	for word in filter:gmatch("[^|%s]+") do
+		local negated = word:sub(1, 1) == "!"
+		local bare = negated and word:sub(2) or word
+		local fits = true
+		if bare == "HELPFUL" then
+			fits = aura.helpful and true or false
+		elseif bare == "HARMFUL" then
+			fits = not aura.helpful
+		elseif bare == "PLAYER" then
+			fits = aura.mine and true or false
+		elseif bare == "RAID" then
+			-- A buff the player can cast, or a debuff the player can remove.
+			fits = (aura.helpful and aura.mine) or (not aura.helpful and aura.removable) or false
+		end
+		if fits == negated then
+			return false
+		end
+	end
+	if candidates then
+		if candidates.isFromPlayerOrPlayerPet ~= nil and (aura.mine or false) ~= candidates.isFromPlayerOrPlayerPet then
+			return false
+		end
+		if candidates.maxDuration ~= nil and ((aura.length or 0) == 0 or aura.length > candidates.maxDuration) then
+			return false
+		end
+	end
+	return true
+end
+
+local CANDIDATE_FIELDS = { includeSpellIDs = "table", excludeSpellIDs = "table", includeDispelTypes = "table", excludeDispelTypes = "table",
+	maxDuration = "number", isFromPlayerOrPlayerPet = "boolean", isStealable = "boolean", isBossAura = "boolean" }
+local LAYOUT_FIELDS = { elementSpacing = "number", lineSpacing = "number", groupSpacing = "number", groupLineSpacing = "number",
+	forceNewLine = "boolean", elementWidth = "number", elementHeight = "number", layoutIndex = "number" }
+
+local function CheckFields(what, given, known)
+	assert(given == nil or type(given) == "table", what .. " must be a table or nil.")
+	for key, value in pairs(given or {}) do
+		assert(known[key], what .. ": unknown field '" .. tostring(key) .. "'")
+		assert(type(value) == known[key], what .. "." .. key .. " must be a " .. known[key])
+	end
+	return given
+end
+
+local function CheckCount(count)
+	assert(count == math.huge or (type(count) == "number" and count >= 0 and count == math.floor(count)), "maxFrameCount must be a non-negative integer or infinity.")
+	return count
+end
+
+local function Dirty(container)
+	container.dirty = true
+end
+
+function AuraContainer:GetUnit() return self.unitToken end
+function AuraContainer:SetUnit(token)
+	assert(type(token) == "string", "SetUnit needs a unit token")
+	if self.unitToken ~= token then
+		self.unitToken = token
+		Dirty(self)
+	end
+end
+function AuraContainer:IsEnabled() return self.enabled == true end
+function AuraContainer:SetEnabled(enabled)
+	if self.enabled ~= enabled then
+		self.enabled = enabled
+		Dirty(self)
+	end
+end
+function AuraContainer:UpdateAllAuras() self.refreshes = self.refreshes + 1 Dirty(self) end
+function AuraContainer:SetEditModePreviewEnabled(enabled) self.editModePreview = enabled == true end
+
+function AuraContainer:HasAuraGroup(key) return self.groupByKey[key] ~= nil end
+local function Group(self, key)
+	return self.groupByKey[key] or error(("aura group '%s' was not found with this key."):format(tostring(key)), 3)
+end
+function AuraContainer:AddAuraGroup(key, filter, options)
+	assert(type(key) == "string" and key ~= "", "groupKey must be a non-empty string.")
+	ValidFilter(filter)
+	assert(not self.groupByKey[key], ("aura group '%s' already exists with this key."):format(key))
+	options = options or {}
+	assert(options.initializeFrame == nil or type(options.initializeFrame) == "function", "initializeFrame must be a function or nil.")
+	assert(options.templateNames == nil or type(options.templateNames) == "table", "templateNames must be a table or nil.")
+	assert(InEnum(AuraContainerSortMethod, options.sortMethod or 0), "sortMethod must be a valid AuraContainerSortMethod.")
+	assert(InEnum(AuraContainerSortDirection, options.sortDirection or 0), "sortDirection must be a valid AuraContainerSortDirection.")
+	local group = {
+		key = key, filter = filter, enabled = true, buttons = {}, shown = {},
+		maxFrameCount = CheckCount(options.maxFrameCount == nil and math.huge or options.maxFrameCount),
+		candidates = CheckFields("candidateFilters", options.candidateFilters, CANDIDATE_FIELDS),
+		layout = CheckFields("layout", options.layout, LAYOUT_FIELDS) or {},
+		initializeFrame = options.initializeFrame, registered = #self.groups + 1,
+	}
+	self.groups[#self.groups + 1] = group
+	self.groupByKey[key] = group
+	for _ = 1, BATCH do
+		group.buttons[#group.buttons + 1] = NewButton(self, group.initializeFrame)
+	end
+	Dirty(self)
+end
+function AuraContainer:GetAuraGroupFrameCount(key) local group = self.groupByKey[key] return group and #group.buttons or 0 end
+function AuraContainer:GetAuraGroupFrame(key, index) local group = self.groupByKey[key] return group and group.buttons[index] or nil end
+function AuraContainer:IsAuraGroupEnabled(key) return Group(self, key).enabled end
+function AuraContainer:SetAuraGroupEnabled(key, enabled)
+	assert(type(enabled) == "boolean", "enabled must be a boolean.")
+	Group(self, key).enabled = enabled
+	Dirty(self)
+end
+function AuraContainer:SetAuraGroupFilterString(key, filter)
+	local group = Group(self, key)
+	ValidFilter(filter)
+	group.filter = filter
+	Dirty(self)
+end
+function AuraContainer:SetAuraGroupMaxFrameCount(key, count)
+	Group(self, key).maxFrameCount = CheckCount(count)
+	Dirty(self)
+end
+function AuraContainer:SetAuraGroupCandidateFilters(key, candidates)
+	Group(self, key).candidates = CheckFields("candidateFilters", candidates, CANDIDATE_FIELDS)
+	Dirty(self)
+end
+function AuraContainer:SetAuraGroupLayout(key, layout)
+	Group(self, key).layout = CheckFields("layout", layout, LAYOUT_FIELDS) or {}
+	Dirty(self)
+end
+
+-- (The game has no "is there such a slot" for addons; GetAuraSlotFrame answers nil for none.)
+local function Slot(self, key)
+	return self.slotByKey[key] or error(("aura slot '%s' was not found with this key."):format(tostring(key)), 3)
+end
+function AuraContainer:AddAuraSlot(key, filter, options)
+	assert(type(key) == "string" and key ~= "", "slotKey must be a non-empty string.")
+	ValidFilter(filter)
+	assert(not self.slotByKey[key], ("aura slot '%s' already exists with this key."):format(key))
+	options = options or {}
+	assert(options.initializeFrame == nil or type(options.initializeFrame) == "function", "initializeFrame must be a function or nil.")
+	local slot = { key = key, filter = filter, enabled = true,
+		candidates = CheckFields("candidateFilters", options.candidateFilters, CANDIDATE_FIELDS) }
+	slot.button = NewButton(self, options.initializeFrame)
+	self.slots[#self.slots + 1] = slot
+	self.slotByKey[key] = slot
+	Dirty(self)
+	return slot.button
+end
+function AuraContainer:GetAuraSlotFrame(key) local slot = self.slotByKey[key] return slot and slot.button or nil end
+function AuraContainer:IsAuraSlotEnabled(key) return Slot(self, key).enabled end
+function AuraContainer:SetAuraSlotEnabled(key, enabled)
+	assert(type(enabled) == "boolean", "enabled must be a boolean.")
+	Slot(self, key).enabled = enabled
+	Dirty(self)
+end
+
+function AuraContainer:SetFlowLayoutAxis(axis)
+	assert(InEnum(AnchorUtil.FlowLayoutAxis, axis), "layoutAxis must be valid.")
+	self.flow.axis = axis
+	Dirty(self)
+end
+local POINTS = { TOPLEFT = true, TOPRIGHT = true, BOTTOMLEFT = true, BOTTOMRIGHT = true, TOP = true, BOTTOM = true, LEFT = true, RIGHT = true, CENTER = true }
+function AuraContainer:SetFlowLayoutAnchorPoint(point)
+	assert(type(point) == "string" and POINTS[point], "anchorPoint must be a string.")
+	self.flow.anchorPoint = point
+	Dirty(self)
+end
+function AuraContainer:SetFlowLayoutGrowthDirection(horizontal, vertical)
+	assert(horizontal == 1 or horizontal == -1, "horizontalDirection must be valid.")
+	assert(vertical == 1 or vertical == -1, "verticalDirection must be valid.")
+	self.flow.horizontal, self.flow.vertical = horizontal, vertical
+	Dirty(self)
+end
+function AuraContainer:SetFlowLayoutPadding(left, right, top, bottom)
+	assert(type(left) == "number" and type(right) == "number" and type(top) == "number" and type(bottom) == "number", "padding must be numbers.")
+	self.flow.padding = { left, right, top, bottom }
+	Dirty(self)
+end
+function AuraContainer:SetFlowLayoutMaximumLineSize(size)
+	assert(size == nil or type(size) == "number", "maximumLineSize must be a number or nil.")
+	self.flow.maximumLineSize = size or math.huge
+	Dirty(self)
+end
+
+-- What the game's code does when a container has something new to show: the auras each group
+-- lets through, in the game's order, one to a button; then the buttons in rows.
+local function Fill(container)
+	local unit = M.units[container.unitToken]
+	local auras = container.enabled and unit and unit.auras or {}
+	for _, group in ipairs(container.groups) do
+		group.shown = {}
+		local used = 0
+		if group.enabled then
+			for _, aura in ipairs(auras) do
+				if used < group.maxFrameCount and Matches(aura, group.filter, group.candidates) then
+					used = used + 1
+					if not group.buttons[used] then
+						for _ = 1, BATCH do
+							group.buttons[#group.buttons + 1] = NewButton(container, group.initializeFrame)
+						end
+					end
+					Apply(group.buttons[used], container.unitToken, aura)
+					group.shown[used] = group.buttons[used]
+				end
+			end
+		end
+		for index = used + 1, #group.buttons do
+			Apply(group.buttons[index], nil, nil)
+		end
+	end
+	for _, slot in ipairs(container.slots) do
+		local chosen
+		if slot.enabled then
+			for _, aura in ipairs(auras) do
+				if Matches(aura, slot.filter, slot.candidates) then
+					chosen = aura
+					break
+				end
+			end
+		end
+		Apply(slot.button, container.unitToken, chosen)
+	end
+
+	-- The rows (the game's flow layout, along the horizontal axis as this addon uses it).
+	local flow = container.flow
+	assert(flow.axis == AnchorUtil.FlowLayoutAxis.Horizontal, "this model lays aura buttons out along the horizontal axis only")
+	local order = {}
+	for _, group in ipairs(container.groups) do
+		order[#order + 1] = group
+	end
+	table.sort(order, function(a, b)
+		local left, right = a.layout.layoutIndex or a.registered, b.layout.layoutIndex or b.registered
+		if left ~= right then
+			return left < right
+		end
+		return a.registered < b.registered
+	end)
+	local x, y, line, tallest, placed = 0, 0, 0, 0, false
+	local width, height = 1, 1
+	for _, group in ipairs(order) do
+		local layout = group.layout
+		local spacing, lineSpacing = layout.elementSpacing or 0, layout.lineSpacing or 0
+		if placed and #group.shown > 0 and layout.forceNewLine then
+			x, y, line = 0, y + (tallest + (layout.groupLineSpacing or lineSpacing)) * flow.vertical, 0
+			tallest = 0
+		end
+		for _, button in ipairs(group.shown) do
+			local w, h = layout.elementWidth or button:GetWidth(), layout.elementHeight or button:GetHeight()
+			if line > 0 and line + w > flow.maximumLineSize then
+				x, y, line = 0, y + (tallest + lineSpacing) * flow.vertical, 0
+				tallest = 0
+			end
+			button.anchors = { { flow.anchorPoint, container, flow.anchorPoint, x, y } }
+			x = x + (w + spacing) * flow.horizontal
+			line = line + w + spacing
+			tallest = math.max(tallest, h)
+			width, height = math.max(width, line - spacing), math.max(height, math.abs(y) + h)
+			placed = true
+		end
+	end
+	-- The container takes the size of what it holds; in the game that size is sealed.
+	container.width, container.height = width, height
+	container.dirty = false
+	container.fills = container.fills + 1
+end
+
+function M.NewAuraContainer(frame)
+	frame.unitToken, frame.enabled, frame.groups, frame.groupByKey, frame.slots, frame.slotByKey = "none", true, {}, {}, {}, {}
+	frame.flow = { axis = 0, anchorPoint = "TOPLEFT", horizontal = 1, vertical = -1, padding = { 0, 0, 0, 0 }, maximumLineSize = math.huge }
+	frame.dirty, frame.fills, frame.refreshes, frame.wasVisible = true, 0, 0, false
+	M.auraContainers[#M.auraContainers + 1] = frame
+end
+
+-- The game works a container through on the next screen update, while it is on screen.
+function M.FillAuraContainers()
+	for _, container in ipairs(M.auraContainers) do
+		local visible = container:IsVisible()
+		if visible and (container.dirty or not container.wasVisible) then
+			M.Secure(Fill, container)
+		end
+		container.wasVisible = visible
+	end
+end
+
+-- The buttons of a group that have an aura on them, in order.
+function M.AuraButtons(container, key)
+	local shown = {}
+	for _, button in ipairs(container.groupByKey[key] and container.groupByKey[key].buttons or {}) do
+		if button.shown then
+			shown[#shown + 1] = button
+		end
+	end
+	return shown
+end
+
+CLASSES.AuraContainer = AuraContainer
+CLASSES.AuraButton = AuraButton
 
 ---------------------------------------------------------------------------
 -- Tooltip, settings window, text encoding

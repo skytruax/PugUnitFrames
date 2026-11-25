@@ -25,6 +25,7 @@ Style.FONT_ORDER = { "inter", "game" }
 -- Inter has Latin, Greek and Cyrillic letters and no others. Where the game runs in a language
 -- written otherwise, its own font is used whatever the setting says, or names would be boxes.
 local OTHER_SCRIPT = { koKR = true, zhCN = true, zhTW = true }
+local L = ns.L
 
 -- A theme is a handful of tones. Colours that carry meaning (class, reaction, power, debuff kind)
 -- are the same in every theme; `tone` is how strongly they are laid on.
@@ -108,6 +109,7 @@ Style.CAST = { 0.93, 0.74, 0.28 }
 Style.HEAL = { 0.45, 0.92, 0.55, 0.55 } -- healing on its way, drawn past the end of the health bar
 Style.ABSORB = { 0.66, 0.84, 1.00, 0.72 } -- a shield that soaks up damage, drawn after the health as healing on its way is
 Style.POINT = { 0.96, 0.78, 0.25 }      -- a combo point
+Style.LEVEL = { 1.00, 0.84, 0.38 }      -- the level of someone who cannot be fought: the gold the game writes levels in
 
 -- The time left on an icon is written by the game, in one of its own fonts: small figures of even
 -- width with an outline, the one its own aura icons use.
@@ -157,48 +159,81 @@ Style.shadows = true
 -- would be an error the first time anything is written with it. So the file is tried on a piece
 -- of text nobody sees, and a yes is kept.
 --
--- A no is not kept at once. Just after logging in or reloading the game can need a few seconds
--- before it has a font file ready (players of another addon were told "font could not be
--- loaded" for a font that was fine, now and then). So a file that is refused is tried again a
--- few times, the game's own font is used in the meantime, and only when the last try fails is
--- it reported and given up for the session.
-local RETRY_AFTER = { 1, 3, 8 } -- seconds from one try to the next
-local readable = {}             -- [font] = true once read, false once given up
-local tries = {}                -- [font] = failed tries so far
+-- A no is never kept. This game can take its time before it hands a font file over: seconds
+-- after a reload, and on a first evening in the game it had still not done so after twelve
+-- seconds, which is when an earlier version of this addon gave up for the session. So a file
+-- that is refused is tried again and again, at longer intervals, the game's own font is used in
+-- the meantime, and the frames are lettered anew the moment it is taken. After ten minutes of
+-- refusals it is reported, once, and from then on tried once a minute. Asking while a try is
+-- already on its way uses no try up. (Fonts.xml names the file too, so that the game is asked
+-- for it as the addon loads.)
+local RETRY_AFTER = { 1, 2, 4, 8, 15, 30 } -- seconds from one try to the next; the last is repeated
+local REPORT_AFTER = 600                   -- seconds of refusals before they are reported
+local RETRY_LATER = 60                     -- seconds from one try to the next after that
+local readable, reported = {}, {}          -- [font] = true once the game has taken it, once its refusal is reported
+local tries, since, pending = {}, {}, {}   -- [font] = failed tries so far, when the first failed, a try on its way
 local tryout
+local samples = {}                         -- [font] = the text it is tried on
 
 local function TryToRead(font)
 	tryout = tryout or CreateFrame("Frame")
 	-- A fresh text has no font yet, so one that has a font afterwards got it from this file.
-	local text = tryout:CreateFontString()
-	local ran, answer = pcall(text.SetFont, text, font, 12, "")
-	return ran and answer ~= false and text:GetFont() ~= nil, ran and "the game would not take it" or tostring(answer)
+	local sample = samples[font]
+	if not sample then
+		sample = tryout:CreateFontString(nil, "OVERLAY")
+		samples[font] = sample
+	end
+	local ran, answer = pcall(sample.SetFont, sample, font, 12, "")
+	local taken = ran and answer ~= false and sample:GetFont() ~= nil
+	return taken, ran and "the game would not take it" or tostring(answer)
 end
 
 local function CanRead(font)
-	if readable[font] ~= nil then
-		return readable[font]
+	if readable[font] then
+		return true
+	elseif pending[font] then
+		return false
 	end
 	local ok, why = TryToRead(font)
 	if ok then
 		readable[font] = true
 		return true
 	end
-	local failed = (tries[font] or 0) + 1
-	tries[font] = failed
-	local wait = RETRY_AFTER[failed]
-	if not wait then
-		readable[font] = false
-		ns.Report(("The font %s could not be loaded (%s). The game's own font is used instead."):format(font, why))
-		return false
+	tries[font] = (tries[font] or 0) + 1
+	since[font] = since[font] or GetTime()
+	local wait = RETRY_AFTER[tries[font]] or RETRY_AFTER[#RETRY_AFTER]
+	if reported[font] then
+		wait = RETRY_LATER
+	elseif GetTime() - since[font] >= REPORT_AFTER then
+		reported[font] = true
+		wait = RETRY_LATER
+		ns.Report(("The font %s could not be loaded in %d tries over %d minutes (%s). The game's own font is used instead, and the file is still tried once a minute. If the addon was installed or updated while the game was running, restart the game: a reload does not always find files that are new."):format(
+			font, tries[font], math.floor(REPORT_AFTER / 60), why))
 	end
-	-- Tried again in a moment; if it can be read by then, every frame is lettered anew.
+	-- Tried again in a while; if it can be read by then, every frame is lettered anew.
+	pending[font] = true
 	ns.After(wait, function()
-		if readable[font] == nil and CanRead(font) then
+		pending[font] = nil
+		if CanRead(font) then
 			ns.Refresh()
 		end
 	end)
 	return false
+end
+
+-- For /pug status: which font the frames are lettered in, and why if it is not the one asked for.
+function Style.FontStatus()
+	local wanted = Style.FONTS[ns.db.font]
+	if not wanted or wanted == STANDARD_TEXT_FONT then
+		return L["the game's own"]
+	elseif OTHER_SCRIPT[GetLocale()] then
+		return L["the game's own, for this language's script"]
+	elseif readable[wanted] then
+		return L["the addon's own"]
+	end
+	local state = reported[wanted] and L["the game's own: the addon's font file could not be loaded"]
+		or L["the game's own for now: the game has not handed over the addon's font file yet"]
+	return ("%s (%dx, %d s)"):format(state, tries[wanted] or 0, since[wanted] and GetTime() - since[wanted] or 0)
 end
 
 -- Reads the look out of the settings. Frames pick it up on their next Frame.Layout.

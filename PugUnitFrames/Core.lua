@@ -232,10 +232,11 @@ function ns.Refresh()
 	end
 	ns.Style.Apply()
 	ns.RunOutOfCombat("layout", function()
-		ns.Units.ApplyLayout()
-		ns.Group.ApplyLayout()
-		ns.Blizzard.Apply()
-		ns.Movers.Sync()
+		-- Each on its own: one that fails is reported, and the others are still done.
+		ns.Try(ns.Units.ApplyLayout)
+		ns.Try(ns.Group.ApplyLayout)
+		ns.Try(ns.Blizzard.Apply)
+		ns.Try(ns.Movers.Sync)
 	end)
 	ns.Frame.RefreshAll()
 end
@@ -290,6 +291,7 @@ local function Status()
 	ns.Print(("%s: %s. %s: %s."):format(L["Profile"], ns.profileName, L["Frames"],
 		built and (ns.db.locked and L["locked"] or L["unlocked"]) or L["not built yet (waiting for the fight to end)"]))
 	ns.Print(L["Sealed values"] .. ": " .. DescribeSealing() .. ".")
+	ns.Print(L["Font"] .. ": " .. ns.Style.FontStatus() .. ".")
 	if #problems == 0 then
 		ns.Print(L["No errors recorded."])
 		return

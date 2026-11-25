@@ -42,13 +42,19 @@ test("the target's name has a line to itself, as wide as the health bar", functi
 	local room = frame.health:GetWidth() - 8
 	assertTrue(room > 170, "room for a long name beside a portrait")
 	assertTrue(texts.name:GetStringWidth() <= room, "and this one fits, also in the simulator's wider font")
-	-- The name above, the level and the health number below it.
+	-- The name above, the health number below it, and the level on its badge at the foot of the
+	-- portrait.
 	local _, nameY = texts.name:GetCenter()
-	local _, levelY = texts.level:GetCenter()
 	local _, healthY = texts.health:GetCenter()
-	assertTrue(nameY > levelY + 8)
-	assertAlmostEquals(levelY, healthY, 1)
-	assertTrue(texts.level:GetLeft() < texts.health:GetLeft(), "level from the left, number from the right")
+	assertTrue(nameY > healthY + 8)
+	local badge, portrait = texts.badge, frame.portrait
+	assertTrue(badge:IsShown())
+	assertTrue(badge:GetLeft() >= portrait:GetLeft() - 0.5 and badge:GetRight() <= portrait:GetRight() + 0.5, "the badge is on the portrait")
+	assertAlmostEquals((portrait:GetLeft() + portrait:GetRight()) / 2, (badge:GetLeft() + badge:GetRight()) / 2, 0.6)
+	assertTrue(badge:GetBottom() >= frame:GetBottom() and badge:GetTop() <= portrait:GetBottom() + portrait:GetHeight() / 2, "in its lower half")
+	assertEquals("24", texts.level:GetText())
+	assertTrue(texts.level:GetLeft() >= badge:GetLeft() and texts.level:GetRight() <= badge:GetRight() + 0.5, "the number inside it")
+	assertTrue(badge:GetFrameLevel() > portrait:GetParent():GetFrameLevel(), "and drawn over the picture")
 	-- The power number sits on the power bar.
 	local _, powerY = texts.power:GetCenter()
 	local _, barY = frame.power:GetCenter()
@@ -94,13 +100,28 @@ test("an elite target has the game's gold dragon before its level", function()
 	assertTrue(texts.rank:IsShown())
 	assertEquals("nameplates-icon-elite-gold", texts.rank:GetAtlas())
 	assertTrue(texts.rank:GetRight() <= texts.level:GetLeft(), "the level stands after it")
-	assertEquals("11+", texts.level:GetText())
+	assertEquals("11", texts.level:GetText())
+	local badge, portrait = texts.badge, PugUnitFrames_target.portrait
+	assertTrue(texts.rank:GetLeft() >= badge:GetLeft() and texts.level:GetRight() <= badge:GetRight() + 0.5, "both in the level's badge")
+	assertTrue(badge:GetLeft() >= portrait:GetLeft() - 0.5 and badge:GetRight() <= portrait:GetRight() + 0.5, "which is on the portrait")
 	ns.db.units.target.elite = false
 	ns.Refresh()
 	assertFalse(texts.rank:IsShown())
+	assertEquals("11+", texts.level:GetText())
 	ns.db.units.target.elite = true
 	ns.Refresh()
 	assertTrue(texts.rank:IsShown())
+	-- Without the badge the two stand on the lower line, as they did before 0.3.2.
+	ns.db.units.target.levelBadge = false
+	ns.Refresh()
+	assertEquals("11+", texts.level:GetText())
+	assertTrue(texts.rank:GetLeft() >= PugUnitFrames_target.health:GetLeft(), "on the bar")
+	assertTrue(texts.rank:GetRight() <= texts.level:GetLeft())
+	local _, levelY = texts.level:GetCenter()
+	local _, healthY = texts.health:GetCenter()
+	assertAlmostEquals(levelY, healthY, 1.5)
+	ns.db.units.target.levelBadge = true
+	ns.Refresh()
 	NoProblems()
 end)
 

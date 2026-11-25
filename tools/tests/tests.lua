@@ -135,14 +135,39 @@ local function PartyButton(ns, index)
 	return ns.Group.Get("party"):GetAttribute("child" .. index)
 end
 
+-- The parts of a frame's aura buttons that have an aura on them: the debuffs, then the buffs, as
+-- the game has them in its containers. Each is what the addon made for one button: button, edge,
+-- icon, cooldown, count. The game works a container through on the next screen update, so one
+-- is let pass first.
+local AURA_SIDES = { "above", "below", "left", "right", "inside" }
 local function ShownIcons(frame)
+	M.Advance(0)
 	local shown = {}
-	for _, icon in ipairs(frame.auras.icons) do
-		if icon:IsShown() then
-			shown[#shown + 1] = icon
+	for _, kind in ipairs({ "debuffs", "buffs" }) do
+		for _, side in ipairs(AURA_SIDES) do
+			local there = frame.auras.sides[side]
+			if there then
+				local partOf = {}
+				for _, part in ipairs(there.parts) do
+					partOf[part.button] = part
+				end
+				for _, button in ipairs(M.AuraButtons(there.container, kind)) do
+					-- A container that has been put away keeps its buttons as they were, unseen.
+					if button:IsVisible() then
+						shown[#shown + 1] = partOf[button] or error("the game has an aura on a button the addon gave no parts")
+					end
+				end
+			end
 		end
 	end
 	return shown
+end
+
+-- Lets whole seconds pass one at a time, so that a timer set by a timer comes due as well.
+local function Pass(seconds)
+	for _ = 1, seconds do
+		M.Advance(1)
+	end
 end
 
 ---------------------------------------------------------------------------
@@ -261,7 +286,7 @@ Test("a creature's name and maximum health are sealed and still shown", function
 	Sealed(frame.health.high, "a creature's maximum health")
 	Equal(600, Value(frame.health.high))
 	Equal(300, Value(frame.health.value))
-	Equal("11+", frame.texts.level.text, "level of an elite")
+	Equal("11", frame.texts.level.text, "the level of an elite, whose dragon stands beside it")
 	Equal(Enum.StatusBarInterpolation.Immediate, frame.health.interpolation, "a new target's bar jumps, it does not glide")
 end)
 
@@ -573,7 +598,7 @@ local AURAS = {
 	{ id = 22, icon = 122, helpful = true, stacks = 5, length = 0 },
 }
 
-Test("in combat the auras are sealed and still drawn: icon, stacks, time, kind", function()
+Test("in a fight the game draws the auras on the addon's buttons: icon, stacks, time, kind", function()
 	local ns = Login()
 	M.SetCombat(true)
 	Target(WithAuras(HOGGER, AURAS))
@@ -582,34 +607,44 @@ Test("in combat the auras are sealed and still drawn: icon, stacks, time, kind",
 	Equal(5, #icons, "icons")
 
 	local poison = icons[2]
-	Equal(12, poison.auraInstanceID, "debuffs come first, in the game's order")
+	Equal(12, poison.button.aura.id, "debuffs come first, in the game's order")
 	Sealed(poison.icon.texture, "the icon")
 	Equal(112, Value(poison.icon.texture))
 	Sealed(poison.count.text, "the stack count")
 	Equal("3", Value(poison.count.text))
 	Equal(8, M.SpanOf(poison.cooldown.duration).length, "the sweep")
-	local curve = ns.Style.debuffKindCurve
 	Sealed(poison.edge.vertex[1], "the rim's colour")
 	Near(0.27, Value(poison.edge.vertex[1]), "poison is green: red part")
 	Near(0.78, Value(poison.edge.vertex[2]), "poison is green: green part")
 	Equal("", Value(icons[1].count.text), "one stack shows no number")
+	True(icons[3].edge:IsShown(), "a debuff of no kind has its rim as well")
+	Near(0.72, Value(icons[3].edge.vertex[1]), "in the red of plain harm")
+	local edge = ns.Style.theme.edge
+	Equal(edge[1], icons[4].edge.vertex[1], "a buff's rim is the theme's dark edge, set by the addon")
 
-	-- Buffs start on a fresh row: the three debuffs took slots 0-2 of a row of nine.
-	local perRow, step = ns.db.units.target.auraPerRow, ns.db.units.target.auraSize + 2
-	Equal(0, icons[4].anchors[1][4], "the first buff is at the start of its row")
-	True(icons[4].anchors[1][5] > icons[1].anchors[1][5], "which is the next row up")
-	Equal(2 * step, icons[3].anchors[1][4], "the third debuff is third in its row")
+	-- Buffs start on a fresh row: the three debuffs took the first three places of a row of nine.
+	local cfg = ns.db.units.target
+	local step = cfg.auraSize + 2
+	Equal(cfg.auraSize, poison.button:GetWidth(), "a button has the size the settings give")
+	Equal(0, icons[4].button.anchors[1][4], "the first buff is at the start of its row")
+	True(icons[4].button.anchors[1][5] > icons[1].button.anchors[1][5], "which is the next row up")
+	Equal(2 * step, icons[3].button.anchors[1][4], "the third debuff is third in its row")
+
+	-- In a fight an addon may not ask the game about auras at all, nor touch a finished button.
+	Equal(0, M.auraRefusals or 0, "the addon asked the game nothing about an aura")
+	Equal(0, #M.blocked, "and touched no button the game had closed")
 	Equal(0, #ns.GetProblems(), "problems")
 end)
 
 Test("out of combat the same auras arrive plain and are drawn the same way", function()
-	Login()
+	local ns = Login()
 	Target(WithAuras(HOGGER, AURAS))
 	local icons = ShownIcons(PugUnitFrames_target)
 	Equal(5, #icons)
 	PlainValue(icons[2].icon.texture)
 	Equal(112, icons[2].icon.texture)
 	Equal("3", icons[2].count.text)
+	Equal(0, #ns.GetProblems())
 end)
 
 Test("only-mine shows just the player's debuffs, and the limits are kept", function()
@@ -620,44 +655,105 @@ Test("only-mine shows just the player's debuffs, and the limits are kept", funct
 	Target(WithAuras(HOGGER, AURAS))
 	local icons = ShownIcons(PugUnitFrames_target)
 	Equal(2, #icons, "one debuff of mine, one buff")
-	Equal(12, icons[1].auraInstanceID)
-	Equal(21, icons[2].auraInstanceID)
+	Equal(12, icons[1].button.aura.id)
+	Equal(21, icons[2].button.aura.id)
+
+	-- Switched off altogether, and on again: the game keeps a group once it is made.
+	cfg.debuffs = 0
+	ns.Refresh()
+	icons = ShownIcons(PugUnitFrames_target)
+	Equal(1, #icons, "no debuffs")
+	Equal(21, icons[1].button.aura.id)
+	cfg.debuffs, cfg.myDebuffs, cfg.buffs = 2, false, 0
+	ns.Refresh()
+	icons = ShownIcons(PugUnitFrames_target)
+	Equal(2, #icons, "two debuffs at most, whoever cast them, and no buffs")
+	Equal(11, icons[1].button.aura.id)
+	Equal(12, icons[2].button.aura.id)
+	Equal(0, #ns.GetProblems())
 end)
 
-Test("aura changes are drawn once, on the next screen update, however many arrive", function()
-	Login()
-	local unit = WithAuras(HOGGER, AURAS)
+Test("the game's containers hear of aura changes themselves, and are told of a new target", function()
+	local ns = Login()
+	local unit = WithAuras(HOGGER, CopyTable(AURAS))
 	Target(unit)
+	local frame = PugUnitFrames_target
+	Equal(5, #ShownIcons(frame))
+	Equal(nil, frame.listeners.UNIT_AURA, "the addon does not listen for aura changes itself")
 	table.remove(unit.auras, 1)
 	M.Fire("UNIT_AURA", "target")
-	M.Fire("UNIT_AURA", "target")
-	Equal(5, #ShownIcons(PugUnitFrames_target), "not redrawn yet")
-	M.Advance(0)
-	Equal(4, #ShownIcons(PugUnitFrames_target), "redrawn on the next update")
-	M.units.target.auras = {}
-	M.Fire("UNIT_AURA", "target")
-	M.Advance(0)
-	Equal(0, #ShownIcons(PugUnitFrames_target), "all gone")
+	Equal(4, #ShownIcons(frame), "the game redraws them")
+
+	-- What the game does not tell a container is that "target" is now someone else.
+	local container = frame.auras.sides.above.container
+	Equal("target", container:GetUnit())
+	local before = container.refreshes
+	Target(WithAuras(Friend(5, { inGroup = false }), { AURAS[4] }))
+	True(container.refreshes > before, "told to look again")
+	local icons = ShownIcons(frame)
+	Equal(1, #icons, "the new target's one buff")
+	Equal(21, icons[1].button.aura.id)
+	Equal(0, #ns.GetProblems())
 end)
 
-Test("an aura icon shows the game's tooltip for it", function()
-	Login()
+Test("a setting that changes the icons in a fight is taken up by the buttons when it ends", function()
+	local ns = Login()
 	Target(WithAuras(HOGGER, AURAS))
-	local icon = ShownIcons(PugUnitFrames_target)[1]
-	icon:GetScript("OnEnter")(icon)
-	Equal("target", M.tooltip.unit)
-	Equal(11, M.tooltip.aura)
-	icon:GetScript("OnLeave")(icon)
-	Equal(nil, M.tooltip.aura)
+	local frame, cfg = PugUnitFrames_target, ns.db.units.target
+	local icons = ShownIcons(frame)
+	Equal(22, icons[1].button:GetWidth())
+	M.SetCombat(true)
+	cfg.auraSize = 30
+	ns.db.auraTimers = true
+	ns.Refresh()
+	Equal(0, #M.blocked, "a finished button is closed to the addon in a fight, and it is left alone")
+	Equal(0, #ns.GetProblems(), "so nothing goes wrong")
+	Equal(22, icons[1].button:GetWidth(), "it keeps its look for now")
+	Equal(5, #ShownIcons(frame), "and its aura")
+	M.SetCombat(false)
+	Equal(30, icons[1].button:GetWidth(), "and takes the new one when the fight is over")
+	False(icons[1].cooldown.hideNumbers)
+	Equal(0, #ns.GetProblems())
+end)
+
+Test("someone who joins in the middle of a fight gets a frame whose aura buttons are whole", function()
+	local ns = Login()
+	Party(1)
+	M.SetCombat(true)
+	Party(3)
+	local button = PartyButton(ns, 3)
+	True(button and button.auras, "the game made a button for the newcomer, and the addon dressed it")
+	M.units.party3.auras = {
+		{ id = 51, icon = 151, helpful = false, kind = 1, stacks = 4, length = 9, removable = true },
+		{ id = 52, icon = 152, helpful = true, length = 30 },
+	}
+	M.Fire("UNIT_AURA", "party3")
+	local icons = ShownIcons(button)
+	Equal(2, #icons, "the debuff and the buff are drawn")
+	Equal(ns.db.units.party.auraSize, icons[1].button:GetWidth(), "on buttons of the right size")
+	Equal("4", Value(icons[1].count.text))
+	True(icons[1].count.font, "the count lettered")
+	local lamp = button.auras.lamp
+	True(lamp.button:IsShown(), "and the light for a debuff the player can remove is lit")
+	Equal(lamp.button, lamp.lines[1].anchors[1][2], "its lines laid along the rim")
+	Equal(0, M.auraRefusals or 0, "without a question about auras")
+	Equal(0, #M.blocked, "or a hand on a button the game had closed")
+	Equal(0, #ns.GetProblems())
+	M.SetCombat(false)
+	Equal(0, #ns.GetProblems(), "and nothing is owed when the fight ends")
 end)
 
 Test("a party frame lights up in the colour of a debuff the player can remove", function()
 	local ns = Login()
 	Party(2)
 	local button = PartyButton(ns, 1)
-	local light, lamp, pulse = button.auras.light, button.auras.lamp, button.auras.pulse
-	False(lamp:IsShown(), "nothing to remove")
+	M.Advance(0)
+	local lamp = button.auras.lamp
+	local light, pulse = lamp.lines, lamp.pulse
+	False(lamp.button:IsShown(), "nothing to remove")
 	False(pulse:IsPlaying())
+	False(lamp.button.mouse, "the light never takes the pointer from the plate under it")
+	Equal(button.body, lamp.button.anchors[1][2], "it is as large as the plate")
 	M.SetCombat(true)
 	M.units.party1.auras = {
 		{ id = 31, icon = 1, helpful = false, kind = 2 },                  -- a curse the player cannot remove
@@ -675,20 +771,34 @@ Test("a party frame lights up in the colour of a debuff the player can remove", 
 	M.Advance(0)
 	False(light[1]:IsVisible(), "out again")
 	False(pulse:IsPlaying())
+	Equal(0, M.auraRefusals or 0, "all of it without asking the game about an aura")
+	Equal(0, #ns.GetProblems())
+
+	M.SetCombat(false)
+	ns.db.units.party.dispel = false
+	ns.Refresh()
+	M.units.party1.auras = { { id = 32, icon = 2, helpful = false, kind = 3, removable = true } }
+	M.Fire("UNIT_AURA", "party1")
+	M.Advance(0)
+	False(lamp.button:IsVisible(), "switched off, it stays dark")
 end)
 
-Test("icons on a raid frame let the mouse through, icons beside a frame do not", function()
+Test("icons on a raid frame let the mouse through; icons beside a frame keep it, for the game's tooltip", function()
 	local ns = Login()
 	Raid(3)
 	local button = ns.Group.Get("raid"):GetAttribute("child1")
 	M.units.raid1.auras = { { id = 41, icon = 1, helpful = false } }
 	M.Fire("UNIT_AURA", "raid1")
-	M.Advance(0)
 	local icon = ShownIcons(button)[1]
 	True(icon, "a debuff on the raid frame")
-	False(icon.mouse, "a click there still picks the member")
+	False(icon.button.mouse, "the pointer there still finds the member")
+	Equal(button.health, button.auras.sides.inside.container.anchors[1][2], "it stands on the health bar")
+	Equal("BOTTOMRIGHT", button.auras.sides.inside.container.anchors[1][1], "in its lower right corner")
 	Target(WithAuras(HOGGER, AURAS))
-	True(ShownIcons(PugUnitFrames_target)[1].mouse, "an icon beside a frame has its tooltip")
+	local beside = ShownIcons(PugUnitFrames_target)[1]
+	True(beside.button.mouse, "an icon beside a frame has the game's tooltip for its aura")
+	Equal("ANCHOR_BOTTOMRIGHT", beside.button.tooltipAnchor, "which opens under it")
+	Equal(0, #ns.GetProblems())
 end)
 
 ---------------------------------------------------------------------------
@@ -1474,23 +1584,35 @@ Test("where the game's language is written in another script, its own font is us
 	Equal(0, #ns.GetProblems())
 end)
 
-Test("a font file the game cannot read is tried again, then reported once, and the game's font is used", function()
-	M.unreadableFonts["Interface\\AddOns\\PugUnitFrames\\Fonts\\Inter-SemiBold.ttf"] = true
+Test("a font file the game does not take is tried for ten minutes before a word is said, and tried on after that", function()
+	local inter = "Interface\\AddOns\\PugUnitFrames\\Fonts\\Inter-SemiBold.ttf"
+	M.unreadableFonts[inter] = true
 	local ns = Login()
 	Equal(STANDARD_TEXT_FONT, PugUnitFrames_player.texts.name.font[1], "every text still has a font")
 	Equal(STANDARD_TEXT_FONT, PugUnitFrames_player.texts.health.font[1])
 	Equal(0, #ns.GetProblems(), "not given up at the first refusal: the game may still be loading the file")
-	M.Advance(1)
-	M.Advance(3)
-	Equal(0, #ns.GetProblems(), "nor at the third")
-	M.Advance(8)
+	Pass(13)
+	Equal(0, #ns.GetProblems(), "nor after twelve seconds, which is where version 0.3.1 gave up")
+	True(ns.Style.FontStatus():find("has not handed over", 1, true), "/pug status says what it is waiting for")
+	Pass(580)
+	Equal(0, #ns.GetProblems(), "nor in the tenth minute")
+	Pass(40)
 	local problems = ns.GetProblems()
-	Equal(1, #problems, "said once, however many texts there are")
+	Equal(1, #problems, "said once, after ten minutes")
 	True(problems[1].text:find("Inter-SemiBold.ttf", 1, true), "and it names the file")
+	True(problems[1].text:find("restart the game", 1, true), "and what may help")
+	True(ns.Style.FontStatus():find("could not be loaded", 1, true))
 	ns.Refresh()
-	M.Advance(30)
-	Equal(1, #ns.GetProblems(), "and not again on the next layout")
+	Pass(300)
+	Equal(1, #ns.GetProblems(), "and not again")
+	Equal(1, problems[1].count)
 	Equal(STANDARD_TEXT_FONT, PugUnitFrames_player.texts.name.font[1])
+
+	-- It is still tried, once a minute: if the game hands the file over after all, it is used.
+	M.unreadableFonts[inter] = nil
+	Pass(61)
+	Equal(inter, PugUnitFrames_player.texts.name.font[1], "taken up, however late")
+	Equal("the addon's own", ns.Style.FontStatus())
 end)
 
 Test("a font the game is slow to have ready is taken up when it arrives, and nothing is reported", function()
@@ -1498,13 +1620,32 @@ Test("a font the game is slow to have ready is taken up when it arrives, and not
 	M.unreadableFonts[inter] = true
 	local ns = Login()
 	Equal(STANDARD_TEXT_FONT, PugUnitFrames_player.texts.name.font[1], "the game's font in the meantime")
-	M.Advance(1)
+	True(PugUnitFrames_player:IsShown())
+	-- Asking again and again (every change of a setting does) uses no try up and starts no second
+	-- round of them.
+	for _ = 1, 20 do
+		ns.Refresh()
+	end
+	Pass(20)
+	Equal(STANDARD_TEXT_FONT, PugUnitFrames_player.texts.name.font[1], "still waiting, twenty seconds in")
 	M.unreadableFonts[inter] = nil
-	M.Advance(3)
-	Equal(inter, PugUnitFrames_player.texts.name.font[1], "the addon's own once the game has it")
+	Pass(31)
+	Equal(inter, PugUnitFrames_player.texts.name.font[1], "the frames are lettered anew the moment the game takes it")
 	Equal(inter, PugUnitFrames_player.texts.health.font[1])
+	Equal("the addon's own", ns.Style.FontStatus())
+	Equal(0, #M.blocked)
 	Equal(0, #ns.GetProblems())
-	False(Printed("went wrong"))
+end)
+
+Test("/pug status says which font the frames are lettered in", function()
+	local ns = Login()
+	SlashCmdList.PUGUNITFRAMES("status")
+	True(Printed("Font: the addon's own."), "the addon's")
+	ns.db.font = "game"
+	ns.Refresh()
+	M.printed = {}
+	SlashCmdList.PUGUNITFRAMES("status")
+	True(Printed("Font: the game's own."), "the game's, when that is what is asked for")
 end)
 
 Test("the empty part of a health bar is the bar's own colour under a dark veil", function()
@@ -1704,6 +1845,57 @@ Test("an error in one part of a frame is reported and does not stop the others",
 	ns.Frame.RefreshAll()
 	Equal(1, #ns.GetProblems(), "the same error is counted, not listed again")
 	Equal(2, ns.GetProblems()[1].count)
+	M.luaErrors = {} -- expected in this scenario
+end)
+
+Test("an element that cannot be laid out is left out, and the rest of the frame stands", function()
+	local ns = Login()
+	Party(2)
+	local marks = ns.Elements.Marks
+	local layout = marks.Layout
+	marks.Layout = function()
+		error("the marks will not lay out")
+	end
+	ns.db.units.player.width = 250
+	ns.db.units.party.castbar = true
+	ns.Refresh()
+	local problems = ns.GetProblems()
+	Equal(1, #problems, "reported, once for all the frames")
+	True(problems[1].text:find("the marks will not lay out", 1, true))
+	local player, member = PugUnitFrames_player, PartyButton(ns, 1)
+	Equal(250, player:GetWidth(), "the frame took its new size")
+	False(player.active.Marks, "without the element that failed")
+	True(player.active.Health and player.active.Texts and player.active.CastBar, "and with every other")
+	True(player.listeners.UNIT_HEALTH, "it still listens")
+	-- The group is laid out as well, and what was switched on there works.
+	True(member.active.CastBar, "the party's new cast bars are there")
+	M.units.party1.cast = { name = "Smite", icon = 4, start = M.now, length = 2, id = 5 }
+	M.Fire("UNIT_SPELLCAST_START", "party1")
+	True(member.cast:IsShown(), "and come up")
+	M.units.player.health = 50
+	M.Fire("UNIT_HEALTH", "player")
+	Equal(50, Value(player.health.value), "health is drawn as before")
+
+	marks.Layout = layout
+	ns.Refresh()
+	True(player.active.Marks, "mended, the element is back")
+	True(#M.luaErrors >= 1, "the errors went to the game's own handler, not into a drawer")
+	M.luaErrors = {} -- expected in this scenario
+end)
+
+Test("a single frame that cannot be placed does not keep the party from being laid out", function()
+	local ns = Login()
+	Party(2)
+	local place = PugUnitFrames_focus.SetScale
+	PugUnitFrames_focus.SetScale = function()
+		error("the focus frame will not be placed")
+	end
+	ns.db.units.party.width = 180
+	ns.Refresh()
+	Equal(180, PartyButton(ns, 1):GetWidth(), "the party took its new width")
+	Equal(1, #ns.GetProblems(), "and the failure is on the list")
+	True(ns.GetProblems()[1].text:find("the focus frame will not be placed", 1, true))
+	PugUnitFrames_focus.SetScale = place
 	M.luaErrors = {} -- expected in this scenario
 end)
 
@@ -2094,8 +2286,10 @@ Test("bars can fill to the left or upwards, and a bar can be turned round", func
 	Equal(0, #ns.GetProblems())
 end)
 
-Test("a rare creature is marked beside its level", function()
-	Login()
+Test("a rare creature's level says so, where no star or dragon does", function()
+	local ns = Login()
+	ns.db.units.target.elite = false
+	ns.Refresh()
 	Target({ name = "Mazzranache", level = 9, reaction = 2, canAttack = true, classification = "rare" })
 	Equal("9R", PugUnitFrames_target.texts.level.text)
 	M.units.target.classification = "rareelite"
@@ -2103,6 +2297,14 @@ Test("a rare creature is marked beside its level", function()
 	Equal("9R+", PugUnitFrames_target.texts.level.text)
 	Target(HOGGER)
 	Equal("11+", PugUnitFrames_target.texts.level.text, "an elite as before")
+
+	-- With the star or the dragon in the badge the number stands alone, and the badge stays small.
+	ns.db.units.target.elite = true
+	ns.Refresh()
+	Target({ name = "Mazzranache", level = 9, reaction = 2, canAttack = true, classification = "rareelite" })
+	Equal("9", PugUnitFrames_target.texts.level.text)
+	True(PugUnitFrames_target.texts.rank:IsShown())
+	Equal(0, #ns.GetProblems())
 end)
 
 ---------------------------------------------------------------------------
@@ -2287,6 +2489,7 @@ Test("stack counts are outlined, time left can be a number, and buffs can be the
 	False(icons[1].cooldown.hideNumbers, "the game writes the time left on the icon")
 	Equal(4, #icons, "three debuffs, and of three buffs the one that is the player's")
 	Equal(123, icons[4].icon.texture)
+	Equal(0, #ns.GetProblems())
 end)
 
 ---------------------------------------------------------------------------
@@ -2337,23 +2540,86 @@ Test("a tall plate gives the name a line of its own, the whole width of the bar"
 	Equal(nil, name.width, "and no width of its own to cut it short")
 
 	True(texts.health.anchors[1][5] < 0, "the health number on the line below")
-	Equal(frame.health, texts.level.anchors[1][2], "which the level starts")
-	True(texts.level.anchors[1][5] < 0)
 	Equal(frame.power, texts.power.anchors[1][2], "and the power number is on the power bar")
 	True(frame.nameRow > 0, "the marks are told where the name's line runs")
 end)
 
-Test("a power bar too thin for its number leaves it beside the level", function()
+Test("the level stands on a badge at the foot of the portrait, in gold for the player", function()
+	local ns = Login()
+	local frame = PugUnitFrames_player
+	local texts, badge = frame.texts, frame.texts.badge
+	True(badge:IsShown(), "the badge")
+	True(badge.back:IsShown(), "a dark tile")
+	True(badge.edge[1]:IsShown(), "with a thin rim")
+	Equal("BOTTOM", badge.anchors[1][1], "at the foot")
+	Equal(frame.body, badge.anchors[1][2])
+	Equal("BOTTOMLEFT", badge.anchors[1][3], "of the portrait, which is at the left end")
+	Near(frame.pixel + (46 - 2 * frame.pixel) / 2, badge.anchors[1][4], "in the middle of it")
+	Equal(badge, texts.level.anchors[1][2], "the number is in it")
+	Equal("60", texts.level.text)
+	local gold = ns.Style.LEVEL
+	Near(gold[1], texts.level.textColor[1], "in gold")
+	Near(gold[2], texts.level.textColor[2])
+	Near(gold[3], badge.edge[1].color[3], "and so is the rim")
+	Equal(16, badge.height, "a little higher than its figures")
+	local two = badge.width
+
+	-- The badge is as wide as what it holds.
+	M.units.player.level = 7
+	M.Fire("UNIT_LEVEL", "player")
+	Equal("7", texts.level.text)
+	True(badge.width < two, "one figure needs less than two")
+
+	-- A portrait too small to carry it leaves it on the line.
+	ns.db.units.player.height = 30
+	ns.Refresh()
+	Equal(frame.health, badge.anchors[1][2], "on a low plate the badge starts the line")
+	Equal("LEFT", badge.anchors[1][1])
+	ns.db.units.player.height = 46
+	ns.db.units.player.portrait = "none"
+	ns.Refresh()
+	Equal(frame.health, badge.anchors[1][2], "and so it does with no portrait")
+	True(badge.anchors[1][5] < 0, "on the lower line")
+	Equal(0, #ns.GetProblems())
+end)
+
+Test("with the badge switched off the level is plain text at the start of its line", function()
+	local ns = Login()
+	ns.db.units.player.levelBadge = false
+	ns.Refresh()
+	local frame = PugUnitFrames_player
+	local texts, badge = frame.texts, frame.texts.badge
+	False(badge.back:IsShown(), "no tile")
+	False(badge.edge[1]:IsShown(), "no rim")
+	Equal(frame.health, badge.anchors[1][2], "at the start of the lower line")
+	True(badge.anchors[1][5] < 0)
+	Equal("60", texts.level.text)
+	local text = ns.Style.theme.text
+	Near(text[1], texts.level.textColor[1], "in the colour of the other words")
+	Target(HOGGER)
+	ns.db.units.target.levelBadge = false
+	ns.Refresh()
+	Equal("11+", PugUnitFrames_target.texts.level.text, "an elite's level says so itself")
+	True(PugUnitFrames_target.texts.rank:IsShown(), "beside its dragon")
+	Equal(0, #ns.GetProblems())
+end)
+
+Test("a power bar too thin for its number leaves it on the lower line", function()
 	local ns = Login()
 	local frame = PugUnitFrames_player
 	ns.db.units.player.powerHeight = 6
 	ns.Refresh()
 	local texts = frame.texts
-	Equal(texts.level, texts.power.anchors[1][2], "after the level, on the lower line")
+	Equal(frame.health, texts.power.anchors[1][2], "at the start of it, the level being on the portrait")
 	Equal("LEFT", texts.power.justify)
+	True(texts.power.anchors[1][5] < 0)
+	ns.db.units.player.portrait = "none"
+	ns.Refresh()
+	Equal(texts.badge, texts.power.anchors[1][2], "after the level, where that is on the line too")
 	ns.db.units.player.level = false
 	ns.Refresh()
-	Equal(frame.health, texts.power.anchors[1][2], "or at the start of it")
+	Equal(frame.health, texts.power.anchors[1][2], "or at the start of it again")
+	False(texts.badge:IsShown(), "no level, no badge")
 	Equal(0, #ns.GetProblems())
 end)
 
@@ -2382,7 +2648,8 @@ Test("a low plate has one line: the name has the whole bar, or what the numbers'
 
 	cfg.level, cfg.powerText = true, "value"
 	ns.Refresh()
-	Equal(texts.level, texts.name.anchors[1][2], "after the level")
+	Equal(texts.badge, texts.name.anchors[1][2], "after the level's badge")
+	Equal(frame.health, texts.badge.anchors[1][2], "which starts the line")
 	Equal("BOTTOMRIGHT", texts.health.anchors[1][1], "health over power, a column at the right")
 	Equal("TOPRIGHT", texts.power.anchors[1][1])
 	Equal(frame.health, texts.power.anchors[1][2])
@@ -2398,17 +2665,28 @@ Test("a raid frame keeps its name in the middle, with nearly the whole plate to 
 	False(button.texts.rank:IsShown())
 end)
 
-Test("an elite or a rare creature has the game's dragon beside its level", function()
+Test("an elite or a rare creature has the game's dragon in its level's badge", function()
 	local ns = Login()
 	Target(HOGGER)
 	local frame = PugUnitFrames_target
-	local texts = frame.texts
+	local texts, badge = frame.texts, frame.texts.badge
 	True(texts.rank:IsShown(), "an elite")
 	Equal("nameplates-icon-elite-gold", texts.rank.atlas, "the gold dragon of the game's nameplates")
-	Equal(frame.health, texts.rank.anchors[1][2], "it starts the lower line")
-	True(texts.rank.anchors[1][5] < 0)
-	Equal(texts.rank, texts.level.anchors[1][2], "and the level stands after it")
-	Equal("11+", texts.level.text, "which says it as well")
+	Equal(badge, texts.rank.anchors[1][2], "inside the badge")
+	Equal("LEFT", texts.rank.anchors[1][1], "at its left")
+	Equal(badge, texts.level.anchors[1][2], "the level after it")
+	Equal("RIGHT", texts.level.anchors[1][1])
+	Equal("11", texts.level.text, "with no mark of its own: the dragon says it")
+	Equal("BOTTOMRIGHT", badge.anchors[1][3], "the badge at the foot of the target's portrait, at the right end")
+	Near(-(frame.pixel + (46 - 2 * frame.pixel) / 2), badge.anchors[1][4])
+	local withDragon = badge.width
+
+	-- The colour is the game's for how hard the fight would be, a little lighter to be read on
+	-- the dark tile.
+	local hard = GetCreatureDifficultyColor(11)
+	Near(hard.r + (1 - hard.r) * 0.25, texts.level.textColor[1], "the number")
+	Near(hard.g + (1 - hard.g) * 0.25, texts.level.textColor[2])
+	Near(hard.b + (1 - hard.b) * 0.25, badge.edge[2].color[3], "and the rim")
 
 	M.units.target.classification = "rare"
 	M.Fire("UNIT_CLASSIFICATION_CHANGED", "target")
@@ -2422,30 +2700,35 @@ Test("an elite or a rare creature has the game's dragon beside its level", funct
 
 	Target({ name = "Mottled Boar", level = 3, reaction = 2, canAttack = true })
 	False(texts.rank:IsShown(), "an ordinary creature has none")
-	Equal(frame.health, texts.level.anchors[1][2], "and its level starts the line itself")
+	True(badge:IsShown(), "and its level has the badge to itself")
+	Equal("3", texts.level.text)
+	True(badge.width < withDragon, "a narrower one")
 	Target(Friend(5, { inGroup = false }))
 	False(texts.rank:IsShown(), "nor has a player")
+	Near(ns.Style.LEVEL[1], texts.level.textColor[1], "whose level is in gold, as nobody is to be fought")
 
 	Target(HOGGER)
 	True(texts.rank:IsShown())
 	ns.db.units.target.elite = false
 	ns.Refresh()
 	False(texts.rank:IsShown(), "switched off")
-	Equal(frame.health, texts.level.anchors[1][2])
-	Equal("11+", texts.level.text, "the level still says it")
+	Equal("11+", texts.level.text, "the level says it then")
 	Equal(0, #ns.GetProblems())
 end)
 
-Test("on a plate with one line the dragon stands before the name", function()
+Test("on a plate with one line and no level the dragon stands bare before the name", function()
 	local ns = Login()
 	Target(Friend(5, { inGroup = false }))
 	M.SetUnit("targettarget", HOGGER)
 	M.UpdateUnitWatch()
 	local frame = PugUnitFrames_targettarget
-	local texts = frame.texts
+	local texts, badge = frame.texts, frame.texts.badge
 	True(texts.rank:IsShown())
-	Equal(0, texts.rank.anchors[1][5], "on the one line")
-	Equal(texts.rank, texts.name.anchors[1][2], "the name follows it")
+	False(texts.level:IsShown(), "no level on this frame")
+	False(badge.back:IsShown(), "so no tile behind the dragon")
+	Equal(frame.health, badge.anchors[1][2], "it starts the line")
+	Equal(0, badge.anchors[1][5], "the one line")
+	Equal(badge, texts.name.anchors[1][2], "the name follows it")
 	M.SetUnit("targettarget", Friend(9))
 	M.Advance(0.3)
 	False(texts.rank:IsShown(), "gone with the creature")
@@ -2594,13 +2877,17 @@ Test("a party member's buffs stand above the plate, as the target's do, and the 
 	local icons = ShownIcons(button)
 	Equal(5, #icons, "three debuffs and two buffs")
 	Equal(113, icons[3].icon.texture, "the debuffs first")
-	Equal("TOPLEFT", icons[1].anchors[1][1])
-	Equal("TOPRIGHT", icons[1].anchors[1][3], "to the right of the plate")
+	local beside, above = button.auras.sides.right.container, button.auras.sides.above.container
+	Equal(beside, icons[1].button:GetParent(), "in the game's container")
+	Equal("TOPLEFT", beside.anchors[1][1])
+	Equal(button.body, beside.anchors[1][2])
+	Equal("TOPRIGHT", beside.anchors[1][3], "which hangs to the right of the plate")
 	Equal(121, icons[4].icon.texture, "then the buffs")
-	Equal("BOTTOMLEFT", icons[4].anchors[1][1])
-	Equal("TOPLEFT", icons[4].anchors[1][3], "above the plate")
-	Equal(0, icons[4].anchors[1][4], "from its left end, on a row of their own")
-	Equal(cfg.auraSize + 2, icons[5].anchors[1][4])
+	Equal(above, icons[4].button:GetParent(), "in a container of their own")
+	Equal("BOTTOMLEFT", above.anchors[1][1])
+	Equal("TOPLEFT", above.anchors[1][3], "above the plate")
+	Equal(0, icons[4].button.anchors[1][4], "from its left end, on a row of their own")
+	Equal(cfg.auraSize + 2, icons[5].button.anchors[1][4])
 
 	-- The members stand far enough apart for that row, whatever the gap is set to.
 	local row = 3 + cfg.auraSize
@@ -2616,8 +2903,9 @@ Test("a party member's buffs stand above the plate, as the target's do, and the 
 	cfg.buffs, cfg.buffSide = 8, "right"
 	ns.Refresh()
 	icons = ShownIcons(button)
-	Equal("TOPRIGHT", icons[4].anchors[1][3])
-	Equal(-(cfg.auraSize + 2), icons[4].anchors[1][5], "one row down")
+	Equal(beside, icons[4].button:GetParent(), "in the debuffs' container now")
+	Equal(0, icons[4].button.anchors[1][4], "at the start of a row")
+	Equal(-(cfg.auraSize + 2), icons[4].button.anchors[1][5], "one row down")
 	Equal(-(cfg.spacing + 2), header:GetAttribute("yOffset"), "two rows beside the plate hang two below it, and the members stand that much further apart")
 	cfg.buffs = 0
 	ns.Refresh()

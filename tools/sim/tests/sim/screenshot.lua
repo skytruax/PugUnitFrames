@@ -5,8 +5,12 @@
 --
 -- The addon's code is what draws the picture, unchanged. What stands in for the game:
 --   * The simulator can set up a player, a target, a focus and four party members. It has no
---     handle for other units' auras, casts and power, for threat, range or raid marks, so the
---     scene answers those game functions itself (see "The scene's answers" below).
+--     handle for other units' casts and power, for threat, range or raid marks, so the scene
+--     answers those game functions itself (see "The scene's answers" below).
+--   * It has no handle for other units' auras either, and those the addon does not ask about:
+--     the game's own aura container draws them, from what the game knows. The scene switches the
+--     containers off and puts its auras on the addon's buttons itself, in the rows the game
+--     would lay them in (see "The auras" below).
 --   * It has none of the game's art. tools/sim/scene_art.py puts the game's icons for the scene's
 --     spells, its raid marks and a painted city into the scratch copy (PugUnitFramesSimArt);
 --     without them icons are blank squares and the world is the simulator's grey.
@@ -239,57 +243,16 @@ A_Admin.SetFocusPower(moment.focus[2], MANA.focus)
 ---------------------------------------------------------------------------
 local now = GetTime()
 
-local auraByID, aurasOf, nextID = {}, {}, 5000
+-- Who has what on them. The game's aura container asks the game itself, not these lists: the
+-- scene draws them further down ("The auras").
+local aurasOf = {}
 for unit, list in pairs(moment.auras) do
 	aurasOf[unit] = {}
 	for _, entry in ipairs(list) do
 		local spell = SPELLS[entry[1]] or error("the scene has no spell " .. tostring(entry[1]))
-		nextID = nextID + 1
-		local aura = { id = nextID, spell = entry[1], left = entry[2], stacks = entry[3] or 0, kind = spell.kind, harmful = spell.harmful or false,
-			removable = spell.removable, total = spell.total }
-		auraByID[nextID] = aura
-		table.insert(aurasOf[unit], aura)
+		table.insert(aurasOf[unit], { spell = entry[1], left = entry[2], stacks = entry[3] or 0, kind = spell.kind or NONE,
+			harmful = spell.harmful or false, removable = spell.removable, total = spell.total })
 	end
-end
-
-function C_UnitAuras.GetUnitAuraInstanceIDs(unit, filter, limit)
-	local ids = {}
-	local harmful = filter:find("HARMFUL", 1, true) ~= nil
-	local removable = filter:find("RAID", 1, true) ~= nil
-	for _, aura in ipairs(aurasOf[unit] or {}) do
-		if aura.harmful == harmful and (not removable or aura.removable) and #ids < (limit or 40) then
-			ids[#ids + 1] = aura.id
-		end
-	end
-	return ids
-end
-
-function C_UnitAuras.GetAuraDataByAuraInstanceID(_, id)
-	local aura = auraByID[id]
-	if aura then
-		return { auraInstanceID = id, name = aura.spell, icon = Icon(aura.spell), applications = aura.stacks,
-			duration = aura.total, expirationTime = now + aura.left, isHarmful = aura.harmful }
-	end
-end
-
-function C_UnitAuras.GetAuraDuration(_, id)
-	local aura = auraByID[id]
-	local duration = C_DurationUtil.CreateDuration()
-	if aura then
-		duration:SetTimeFromEnd(now + aura.left, aura.total)
-	end
-	return duration
-end
-
-function C_UnitAuras.GetAuraApplicationDisplayCount(_, id, minimum)
-	local aura = auraByID[id]
-	local stacks = aura and aura.stacks or 0
-	return stacks >= (minimum or 2) and tostring(stacks) or ""
-end
-
-function C_UnitAuras.GetAuraDispelTypeColor(_, id, curve)
-	local aura = auraByID[id]
-	return aura and curve:Evaluate(aura.kind or NONE) or nil
 end
 
 -- Casts of the others (the player's own is the simulator's).
@@ -406,6 +369,90 @@ if art and art.ranks then
 		local picture = rank and rank:IsShown() and art.ranks[rank:GetAtlas() or ""]
 		if picture then
 			rank:SetTexture(art.folder .. picture)
+		end
+	end
+end
+
+-- The auras. The game's aura container asks the game itself what a unit has on it, and of the
+-- scene's people the simulator knows next to nothing. So the containers are switched off, and
+-- the scene does what they would do: one of the addon's buttons for each aura, in the rows the
+-- game lays them in (debuffs first, the buffs on a fresh row after them), each drawn on the
+-- parts the addon gave that button. The light for a debuff the player can remove likewise.
+local FLOW = { -- the corner a side's rows start from, and which way they run across and along
+	above = { "BOTTOMLEFT", 1, 1 }, below = { "TOPLEFT", 1, -1 }, right = { "TOPLEFT", 1, -1 },
+	left = { "TOPRIGHT", -1, -1 }, inside = { "BOTTOMRIGHT", -1, 1 },
+}
+for _, frame in ipairs(ns.Frame.All()) do
+	local auras = frame.auras
+	if auras then
+		for _, there in pairs(auras.sides) do
+			there.container:SetEnabled(false)
+		end
+		if auras.lamp.host then
+			auras.lamp.host:SetEnabled(false)
+		end
+	end
+end
+A_Admin.AdvanceTime(0.05) -- the containers let go of what the simulator had given them
+
+for _, frame in ipairs(ns.Frame.All()) do
+	local auras, cfg, unit = frame.auras, frame.cfg, frame.unit
+	if auras and unit and frame:IsVisible() then
+		local free, at = {}, {}
+		for side, there in pairs(auras.sides) do
+			free[side] = { debuffs = {}, buffs = {} }
+			at[side] = { column = 0, row = 0, any = false }
+			for _, part in ipairs(there.parts) do
+				part.button:Hide()
+				table.insert(free[side][part.kind], part)
+			end
+		end
+		for _, kind in ipairs({ "debuffs", "buffs" }) do
+			local side = cfg[kind == "debuffs" and "debuffSide" or "buffSide"]
+			local there, here = auras.sides[side], at[side]
+			if there and cfg[kind] > 0 then
+				local corner, across, along = unpack(FLOW[side])
+				local step = cfg.auraSize + (side == "inside" and frame.pixel or 2)
+				if here.any then
+					here.column, here.row = 0, here.row + 1
+				end
+				local count = 0
+				for _, aura in ipairs(aurasOf[unit] or {}) do
+					local part = free[side][kind][count + 1]
+					if aura.harmful == (kind == "debuffs") and count < cfg[kind] and part then
+						count = count + 1
+						if here.column == cfg.auraPerRow then
+							here.column, here.row = 0, here.row + 1
+						end
+						part.button:ClearAllPoints()
+						part.button:SetPoint(corner, there.container, corner, across * here.column * step, along * here.row * step)
+						part.icon:SetTexture(Icon(aura.spell))
+						part.count:SetText(aura.stacks >= 2 and tostring(aura.stacks) or "")
+						local duration = C_DurationUtil.CreateDuration()
+						duration:SetTimeFromEnd(now + aura.left, aura.total)
+						part.cooldown:SetCooldownFromDurationObject(duration, true)
+						if kind == "debuffs" then
+							part.edge:SetVertexColor(ns.Style.debuffKindCurve:Evaluate(aura.kind):GetRGB())
+							part.edge:Show()
+						end
+						part.button:Show()
+						here.column, here.any = here.column + 1, true
+					end
+				end
+			end
+		end
+		local lamp = auras.lamp
+		if lamp.button and cfg.dispel then
+			for _, aura in ipairs(aurasOf[unit] or {}) do
+				if aura.harmful and aura.removable then
+					for _, line in ipairs(lamp.lines) do
+						line:SetVertexColor(ns.Style.debuffKindCurve:Evaluate(aura.kind):GetRGB())
+						line:Show()
+					end
+					lamp.button:Show()
+					break
+				end
+			end
 		end
 	end
 end

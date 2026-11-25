@@ -179,7 +179,9 @@ end
 -- Call out of combat.
 function Group.ApplyLayout()
 	for kind, header in pairs(headers) do
-		Configure(header, kind)
+		-- A header that cannot be set up is reported; its buttons are still dressed, and so is
+		-- the other group.
+		ns.Try(Configure, header, kind)
 		EachButton(header, Frame.Layout)
 	end
 end

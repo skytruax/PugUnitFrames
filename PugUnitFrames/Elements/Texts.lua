@@ -5,10 +5,16 @@ local ADDON, ns = ...
 --
 -- A character of this game has a first name and a surname, twelve letters each at most, and a
 -- creature's name can be longer than that. So a plate with room for two lines gives the upper
--- one to the name alone, the whole width of the bar; the level and the health number share the
--- lower one. A plate too low for that has one line: level and name from the left, the numbers
--- from the right, the name in what the numbers leave. A narrow plate (a raid frame) has the
--- name in the middle, first name over surname, or the first name with the health number under it.
+-- one to the name alone, the whole width of the bar; the health number has the lower one. A
+-- plate too low for that has one line: the name from the left, the numbers from the right, the
+-- name in what the numbers leave. A narrow plate (a raid frame) has the name in the middle,
+-- first name over surname, or the first name with the health number under it.
+--
+-- The level stands on a small plate of its own, a badge: a dark tile with a thin rim, the number
+-- and the rim in the colour of how hard a fight the unit would be (gold for someone who cannot
+-- be fought), the dragon inside it. It sits on the lower edge of the portrait where the frame
+-- has one large enough, and otherwise at the start of the line the level would be written on.
+-- With the badge switched off the level is plain text on that line, as it was before 0.3.2.
 --
 -- The power number sits on the power bar when the bar is tall enough to hold it, and beside the
 -- level or under the health number when it is not.
@@ -26,10 +32,12 @@ Texts.events = {
 Texts.closeEvents = { "UNIT_POWER_FREQUENT" }
 
 local NARROW = Frame.NARROW
-local PAD = 4        -- between an end of the bar and the words
-local NARROW_PAD = 2 -- a narrow plate has less to spare
-local AFTER_RANK = 2 -- between the dragon and what follows it
-local AFTER_LEVEL = 3
+local PAD = 4         -- between an end of the bar and the words
+local NARROW_PAD = 2  -- a narrow plate has less to spare
+local AFTER_RANK = 2  -- between the dragon and the level
+local AFTER_BADGE = 4 -- between the badge and what follows it on the line
+local BADGE_PAD = 4   -- inside the badge, left and right of what it holds
+local FIGURE = 0.64   -- how wide a figure of the level is, as a share of the letter size
 
 -- The game's own pictures, the ones it puts on a nameplate: a gold dragon for an elite and for
 -- a boss, a silver one for a rare elite, a star for a rare creature that is not elite.
@@ -50,48 +58,82 @@ function Texts.Create(frame)
 	holder:SetAllPoints(frame.body)
 	holder:SetFrameLevel(frame.body:GetFrameLevel() + 6)
 	local texts = { holder = holder }
-	for _, key in ipairs({ "level", "name", "health", "power" }) do
+	for _, key in ipairs({ "name", "health", "power" }) do
 		local text = holder:CreateFontString(nil, "OVERLAY")
 		text:SetWordWrap(false)
 		texts[key] = text
 	end
-	texts.rank = holder:CreateTexture(nil, "OVERLAY") -- the dragon
+	-- The level's badge: a dark tile with a thin rim, the level in it and the dragon beside it.
+	-- Without the badge it is the same box with nothing drawn on it, holding the two in a row.
+	local badge = CreateFrame("Frame", nil, holder)
+	badge:SetFrameLevel(holder:GetFrameLevel() + 1)
+	badge.back = badge:CreateTexture(nil, "BACKGROUND")
+	badge.back:SetAllPoints(badge)
+	badge.edge = Frame.MakeEdge(badge, "BORDER")
+	badge:Hide()
+	texts.badge = badge
+	texts.level = badge:CreateFontString(nil, "OVERLAY")
+	texts.level:SetWordWrap(false)
+	texts.rank = badge:CreateTexture(nil, "OVERLAY") -- the dragon
 	texts.rank:Hide()
+	texts.levelLength = 2
 	frame.texts = texts
 end
 
--- Places what stands in a row from the left: the dragon, the level, a power number that has no
--- bar to sit on, and on a plate with one line the name. Each starts where the one before it
--- ends, so the row is laid again when the unit on show gains or loses its dragon.
+-- Places the badge with the level and the dragon in it, a power number that has no bar to sit
+-- on, and on a plate with one line the name. What stands on a line starts where the thing
+-- before it ends, and the badge is as wide as what it holds, so this is done again when the
+-- unit on show gains or loses its dragon, or its level is written with more or fewer figures.
 local function Arrange(frame, ranked)
 	local texts, cfg, health = frame.texts, frame.cfg, frame.health
-	local rank, level, name = texts.rank, texts.level, texts.name
+	local badge, rank, level, name = texts.badge, texts.rank, texts.level, texts.name
+	local showLevel = (cfg.level and not texts.narrow) or false
+	local hasBadge = showLevel or ranked
 	texts.ranked = ranked
+	badge:SetShown(hasBadge)
 	rank:SetShown(ranked)
+	level:SetShown(showLevel)
+	badge:ClearAllPoints()
 	rank:ClearAllPoints()
 	level:ClearAllPoints()
 	name:ClearAllPoints()
 
-	-- What the next thing stands after, at which of its points, and how far from it.
-	local after, point, gap, y = health, "LEFT", PAD, texts.lowY
+	-- The badge is as wide as its dragon, its figures and the room around them.
+	local pad = texts.badged and BADGE_PAD or 0
+	local rankSize = ranked and (texts.badged and texts.rankSize - 2 or texts.rankSize) or 0
+	local figures = showLevel and math.ceil(texts.levelLength * texts.levelSize * FIGURE) or 0
+	local between = (ranked and showLevel) and AFTER_RANK or 0
+	badge:SetSize(math.max(1, 2 * pad + rankSize + between + figures), texts.rankSize)
 	if ranked then
-		rank:SetPoint("LEFT", after, point, gap - 1, y)
-		after, point, gap, y = rank, "RIGHT", AFTER_RANK, 0
+		rank:SetSize(rankSize, rankSize)
+		rank:SetPoint("LEFT", badge, "LEFT", pad, 0)
 	end
-	if cfg.level then
-		level:SetPoint("LEFT", after, point, gap, y)
-		after, point, gap, y = level, "RIGHT", AFTER_LEVEL, 0
+	level:SetPoint("RIGHT", badge, "RIGHT", -pad, 0)
+
+	-- What the next thing on the line stands after, at which of its points, and how far from it.
+	local after, point, gap, y = health, "LEFT", PAD, texts.lowY
+	if hasBadge and texts.onPortrait then
+		-- On the lower edge of the portrait, in the middle of it.
+		local middle = frame.pixel + (cfg.height - 2 * frame.pixel) / 2
+		if cfg.portrait == "left" then
+			badge:SetPoint("BOTTOM", frame.body, "BOTTOMLEFT", middle, 2 * frame.pixel)
+		else
+			badge:SetPoint("BOTTOM", frame.body, "BOTTOMRIGHT", -middle, 2 * frame.pixel)
+		end
+	elseif hasBadge then
+		badge:SetPoint("LEFT", after, point, gap, y)
+		after, point, gap, y = badge, "RIGHT", AFTER_BADGE, 0
 	end
 	if texts.powerBeside then
 		texts.power:ClearAllPoints()
-		texts.power:SetPoint("LEFT", after, point, gap + AFTER_LEVEL, y)
+		texts.power:SetPoint("LEFT", after, point, gap, y)
 	end
 	if texts.twoRows then
 		-- The upper line is the name's alone, from one end of the bar to the other.
 		name:SetPoint("LEFT", health, "LEFT", PAD, texts.nameY)
 		name:SetPoint("RIGHT", health, "RIGHT", -PAD, texts.nameY)
 	else
-		-- One line: the name runs from the level to where the numbers' room begins.
+		-- One line: the name runs from the badge to where the numbers' room begins.
 		name:SetPoint("LEFT", after, point, gap, y)
 		name:SetPoint("RIGHT", health, "RIGHT", texts.nameEnd, 0)
 	end
@@ -113,11 +155,16 @@ function Texts.Layout(frame, cfg, on)
 	local numberSize = Style.fontSize + (narrow and -1 or 0)
 	local powerSize = math.max(6, Style.fontSize - 2)
 
+	-- The level on a plate of its own, and that plate on the portrait, where there is one at
+	-- least twice as high as the badge: on a smaller one it would leave nothing of the face.
+	local badged = (cfg.levelBadge and cfg.level and not narrow) or false
+	local badgeHeight = numberSize + 5
+	local onPortrait = badged and cfg.portrait ~= "none" and cfg.height - 2 * pixel >= 2 * badgeHeight
 	-- The power number goes on the power bar, where the bar is tall enough for it.
 	local onBar = showPower and not narrow and cfg.powerHeight > powerSize
 	-- Two lines, where the health bar has the height and there is something for the lower one.
 	local barHeight = cfg.height - 2 * pixel - (cfg.powerHeight > 0 and cfg.powerHeight + pixel or 0)
-	local lower = cfg.level or showHealth or (showPower and not onBar)
+	local lower = (cfg.level and not onPortrait) or showHealth or (showPower and not onBar)
 	local twoRows = (not narrow and cfg.name and lower and barHeight >= nameSize + numberSize + 5) or false
 
 	-- How far above and below the middle of the health bar the two lines run. They hold to the
@@ -129,8 +176,14 @@ function Texts.Layout(frame, cfg, on)
 	texts.lowY = twoRows and -(math.ceil(numberSize / 2) + 1) or 0
 	frame.nameRow = twoRows and texts.nameY or nil
 
+	-- Beside the name on a tall plate with one line the level is the name's size; anywhere else,
+	-- its badge included, the numbers'.
+	local levelDelta = (not badged and tall and not twoRows) and 1 or 0
+	texts.badged, texts.onPortrait = badged, onPortrait
+	texts.rankSize = badgeHeight
+	texts.levelSize = Style.fontSize + levelDelta
 	Style.SetFont(texts.name, tall and 1 or 0)
-	Style.SetFont(texts.level, (tall and not twoRows) and 1 or 0)
+	Style.SetFont(texts.level, levelDelta)
 	Style.SetFont(texts.health, narrow and -1 or 0)
 	Style.SetFont(texts.power, -2)
 	texts.name:SetTextColor(theme.text[1], theme.text[2], theme.text[3])
@@ -140,10 +193,17 @@ function Texts.Layout(frame, cfg, on)
 	local powerTone = onBar and theme.text or theme.quiet
 	texts.power:SetTextColor(powerTone[1], powerTone[2], powerTone[3])
 
-	for _, key in ipairs({ "level", "name", "health", "power" }) do
+	local badge = texts.badge
+	badge.back:SetShown(badged)
+	badge.back:SetColorTexture(theme.back[1], theme.back[2], theme.back[3], 0.92)
+	for index = 1, 4 do
+		badge.edge[index]:SetShown(badged)
+	end
+	Frame.LayoutEdge(badge.edge, badge, pixel, texts.tint or Style.LEVEL)
+
+	for _, key in ipairs({ "name", "health", "power" }) do
 		texts[key]:ClearAllPoints()
 	end
-	texts.level:SetShown(cfg.level and not narrow)
 	texts.name:SetShown(cfg.name)
 	texts.health:SetShown(showHealth)
 	texts.power:SetShown(showPower and not narrow)
@@ -159,6 +219,7 @@ function Texts.Layout(frame, cfg, on)
 
 	if narrow then
 		-- Name in the middle, the health number under it; no room for more.
+		badge:Hide()
 		texts.rank:Hide()
 		texts.ranked = false
 		texts.name:SetJustifyH("CENTER")
@@ -174,9 +235,7 @@ function Texts.Layout(frame, cfg, on)
 		return
 	end
 
-	local rankSize = numberSize + 5
-	texts.rank:SetSize(rankSize, rankSize)
-	texts.level:SetJustifyH("LEFT")
+	texts.level:SetJustifyH("RIGHT")
 	texts.name:SetJustifyH("LEFT")
 	texts.health:SetJustifyH("RIGHT")
 	texts.power:SetJustifyH("RIGHT")
@@ -223,27 +282,45 @@ function Texts.Layout(frame, cfg, on)
 end
 
 -- "60", "62+" for an elite, "62R" for a rare one and "62R+" for one that is both, "??" for
--- something too far above the player to tell.
+-- something too far above the player to tell. In a badge that has the dragon in it the number
+-- stands alone: the dragon says the rest.
 local CLASSIFICATION_SUFFIX = { elite = "+", rareelite = "R+", worldboss = "+", rare = "R" }
 
 -- How far the game's difficulty colours are lifted towards white. As they come, the red of a
 -- deadly fight is the red of the hostile bar it is written on, and the grey of an easy one is
--- lost on any bar.
+-- lost on any bar. On the dark badge they need less: enough for that grey to be read.
 local LIFT = 0.45
+local BADGE_LIFT = 0.25
 
-local function ShowLevel(text, unit)
+-- Writes the level and colours it, and the rim of its badge with it; `ranked` says that the
+-- dragon is shown beside it. Returns how many characters the level takes, which is what the
+-- badge's width goes by. The level and what kind of creature a unit is are never sealed.
+local function ShowLevel(frame, unit, ranked)
+	local texts = frame.texts
+	local text = texts.level
 	local level = UnitLevel(unit)
-	local label = level and level > 0 and tostring(level) or "??"
-	text:SetText(label .. (CLASSIFICATION_SUFFIX[UnitClassification(unit)] or ""))
+	local suffix = (texts.badged and ranked) and "" or (CLASSIFICATION_SUFFIX[UnitClassification(unit)] or "")
+	local label = (level and level > 0 and tostring(level) or "??") .. suffix
+	text:SetText(label)
+	local r, g, b
 	if UnitCanAttack("player", unit) then
 		-- The game's own colour for how hard a fight it would be.
 		local color = GetCreatureDifficultyColor(level and level > 0 and level or 999)
-		text:SetTextColor(color.r + (1 - color.r) * LIFT, color.g + (1 - color.g) * LIFT, color.b + (1 - color.b) * LIFT)
+		local lift = texts.badged and BADGE_LIFT or LIFT
+		r, g, b = color.r + (1 - color.r) * lift, color.g + (1 - color.g) * lift, color.b + (1 - color.b) * lift
+	elseif texts.badged then
+		-- Someone who cannot be fought: the gold the game writes levels in.
+		r, g, b = Style.LEVEL[1], Style.LEVEL[2], Style.LEVEL[3]
 	else
-		-- Someone who cannot be fought: the same tone as the name, so it reads on any bar.
-		local plain = Style.theme.text
-		text:SetTextColor(plain[1], plain[2], plain[3])
+		-- Beside the name, the same tone as the name, so it reads on any bar.
+		r, g, b = Style.theme.text[1], Style.theme.text[2], Style.theme.text[3]
 	end
+	text:SetTextColor(r, g, b)
+	texts.tint = { r, g, b, 1 }
+	for index = 1, 4 do
+		texts.badge.edge[index]:SetColorTexture(r, g, b, 1)
+	end
+	return #label
 end
 
 -- Puts the picture for the unit's standing on the dragon and says whether it has one. What a
@@ -283,15 +360,14 @@ function Texts.Update(frame, unit, event)
 	if all or IDENTITY_EVENTS[event] then
 		if not texts.narrow then
 			local ranked = ShowRank(frame, unit)
-			if ranked ~= texts.ranked then
+			local length = cfg.level and ShowLevel(frame, unit, ranked) or texts.levelLength
+			if ranked ~= texts.ranked or length ~= texts.levelLength then
+				texts.levelLength = length
 				Arrange(frame, ranked)
 			end
 		end
 		if cfg.name then
 			Sealed.NameToText(texts.name, unit, texts.nameHow)
-		end
-		if cfg.level then
-			ShowLevel(texts.level, unit)
 		end
 	end
 	if (all or HEALTH_EVENTS[event]) and cfg.healthText ~= "none" then

@@ -185,6 +185,12 @@ translations.deDE = {
 	["Questie's icon on quest creatures"] = "Questie-Symbol bei Questgegnern",
 	["Text and portrait"] = "Text und Porträt",
 	["Marks"] = "Markierungen",
+	["Level as a badge (on the portrait)"] = "Stufe als Plakette (auf dem Porträt)",
+	["the game's own"] = "die Schrift des Spiels",
+	["the game's own, for this language's script"] = "die Schrift des Spiels, wegen der Schrift dieser Sprache",
+	["the addon's own"] = "die eigene Schrift des Addons",
+	["the game's own: the addon's font file could not be loaded"] = "die Schrift des Spiels: Die Schriftdatei des Addons ließ sich nicht laden",
+	["the game's own for now: the game has not handed over the addon's font file yet"] = "vorerst die Schrift des Spiels: Das Spiel hat die Schriftdatei des Addons noch nicht herausgegeben",
 }
 
 translations.esES = {
@@ -359,6 +365,12 @@ translations.esES = {
 	["Questie's icon on quest creatures"] = "Icono de Questie en criaturas de misión",
 	["Text and portrait"] = "Texto y retrato",
 	["Marks"] = "Marcas",
+	["Level as a badge (on the portrait)"] = "Nivel como insignia (sobre el retrato)",
+	["the game's own"] = "la del juego",
+	["the game's own, for this language's script"] = "la del juego, por la escritura de este idioma",
+	["the addon's own"] = "la propia del addon",
+	["the game's own: the addon's font file could not be loaded"] = "la del juego: no se pudo cargar el archivo de fuente del addon",
+	["the game's own for now: the game has not handed over the addon's font file yet"] = "la del juego por ahora: el juego aún no ha entregado el archivo de fuente del addon",
 }
 translations.esMX = translations.esES
 
@@ -534,6 +546,12 @@ translations.frFR = {
 	["Questie's icon on quest creatures"] = "Icône de Questie sur les créatures de quête",
 	["Text and portrait"] = "Texte et portrait",
 	["Marks"] = "Marques",
+	["Level as a badge (on the portrait)"] = "Niveau en badge (sur le portrait)",
+	["the game's own"] = "celle du jeu",
+	["the game's own, for this language's script"] = "celle du jeu, pour l'écriture de cette langue",
+	["the addon's own"] = "celle de l'addon",
+	["the game's own: the addon's font file could not be loaded"] = "celle du jeu : le fichier de police de l'addon n'a pas pu être chargé",
+	["the game's own for now: the game has not handed over the addon's font file yet"] = "celle du jeu pour l'instant : le jeu n'a pas encore fourni le fichier de police de l'addon",
 }
 
 for key, text in pairs(translations[GetLocale()] or {}) do

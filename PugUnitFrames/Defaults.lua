@@ -91,6 +91,7 @@ Defaults.UNIT_SPEC = {
 	name = Bool(),
 	surname = Bool(),                 -- a character's surname after the first name (under it on a narrow frame)
 	level = Bool(),
+	levelBadge = Bool(),              -- the level on a small plate of its own, on the portrait where there is one
 	portrait = Choice("none", "left", "right"),
 	mirror = Bool(),                  -- the portrait turned to look the other way
 	buffs = Number(0, 32, 1),         -- how many buff icons at most; 0: none
@@ -144,7 +145,7 @@ Defaults.UNIT_SECTIONS = {
 		"color", "invert", "fill", "powerHeight", "hideNoPower", "heals", "absorbs", "castbar", "castHeight", "points", "totems",
 	} },
 	{ key = "text", keys = {
-		"name", "surname", "level", "healthText", "powerText", "portrait", "mirror",
+		"name", "surname", "level", "levelBadge", "healthText", "powerText", "portrait", "mirror",
 	} },
 	{ key = "marks", keys = {
 		"marks", "leader", "role", "pvp", "elite", "quest", "happiness", "threat", "range", "highlight", "dispel",
@@ -167,7 +168,7 @@ end
 Defaults.UNITS = {
 	player = {
 		enabled = true, x = -290, y = -210, width = 232, height = 46, scale = 1, powerHeight = 10,
-		color = "class", healthText = "both", powerText = "value", name = true, surname = true, level = true, portrait = "left",
+		color = "class", healthText = "both", powerText = "value", name = true, surname = true, level = true, levelBadge = true, portrait = "left",
 		buffs = 0, debuffs = 0, myDebuffs = false, auraSize = 22, auraPerRow = 9, buffSide = "above", debuffSide = "above",
 		castbar = true, castHeight = 16, threat = true, heals = true, marks = true, totems = true,
 		leader = false, role = false, pvp = false,
@@ -175,7 +176,7 @@ Defaults.UNITS = {
 	},
 	target = {
 		enabled = true, x = 290, y = -210, width = 232, height = 46, scale = 1, powerHeight = 10,
-		color = "class", healthText = "both", powerText = "value", name = true, surname = true, level = true, portrait = "right",
+		color = "class", healthText = "both", powerText = "value", name = true, surname = true, level = true, levelBadge = true, portrait = "right",
 		buffs = 9, debuffs = 18, myDebuffs = false, auraSize = 22, auraPerRow = 9, buffSide = "above", debuffSide = "above",
 		castbar = true, castHeight = 16, marks = true, points = true,
 		leader = false, role = false, pvp = false, elite = true, quest = true,
@@ -183,14 +184,14 @@ Defaults.UNITS = {
 	},
 	targettarget = {
 		enabled = true, x = 484, y = -219, width = 140, height = 28, scale = 1, powerHeight = 4,
-		color = "class", healthText = "none", powerText = "none", name = true, surname = true, level = false, portrait = "none",
+		color = "class", healthText = "none", powerText = "none", name = true, surname = true, level = false, levelBadge = true, portrait = "none",
 		buffs = 0, debuffs = 0, myDebuffs = false, auraSize = 18, auraPerRow = 6, buffSide = "below", debuffSide = "below",
 		marks = true, leader = false, role = false, pvp = false, elite = true, quest = true,
 		invert = false, fill = "right", mirror = false, myBuffs = false, absorbs = true, hideNoPower = true,
 	},
 	focus = {
 		enabled = true, x = -306, y = -130, width = 200, height = 40, scale = 1, powerHeight = 6,
-		color = "class", healthText = "percent", powerText = "none", name = true, surname = true, level = false, portrait = "left",
+		color = "class", healthText = "percent", powerText = "none", name = true, surname = true, level = false, levelBadge = true, portrait = "left",
 		buffs = 0, debuffs = 6, myDebuffs = false, auraSize = 20, auraPerRow = 8, buffSide = "above", debuffSide = "above",
 		castbar = true, castHeight = 12, marks = true,
 		leader = false, role = false, pvp = false, elite = true, quest = true,
@@ -198,14 +199,14 @@ Defaults.UNITS = {
 	},
 	pet = {
 		enabled = true, x = -476, y = -219, width = 124, height = 28, scale = 1, powerHeight = 4,
-		color = "reaction", healthText = "none", powerText = "none", name = true, surname = true, level = false, portrait = "none",
+		color = "reaction", healthText = "none", powerText = "none", name = true, surname = true, level = false, levelBadge = true, portrait = "none",
 		buffs = 0, debuffs = 0, myDebuffs = false, auraSize = 18, auraPerRow = 6, buffSide = "below", debuffSide = "below",
 		castbar = false, castHeight = 10, threat = true, heals = true, marks = false,
 		invert = false, fill = "right", mirror = false, myBuffs = false, absorbs = true, calm = 1, happiness = true,
 	},
 	party = {
 		enabled = true, x = -620, y = 160, width = 200, height = 40, scale = 1, powerHeight = 6,
-		color = "class", healthText = "short", powerText = "none", name = true, surname = true, level = false, portrait = "left",
+		color = "class", healthText = "short", powerText = "none", name = true, surname = true, level = false, levelBadge = true, portrait = "left",
 		buffs = 8, debuffs = 4, myDebuffs = false, auraSize = 20, auraPerRow = 8, buffSide = "above", debuffSide = "right",
 		castbar = false, castHeight = 10, threat = true, range = true, heals = true, marks = true, dispel = true,
 		leader = false, role = false, pvp = false,
@@ -214,7 +215,7 @@ Defaults.UNITS = {
 	},
 	raid = {
 		enabled = true, x = -640, y = 250, width = 82, height = 40, scale = 1, powerHeight = 3,
-		color = "class", healthText = "none", powerText = "none", name = true, surname = true, level = false, portrait = "none",
+		color = "class", healthText = "none", powerText = "none", name = true, surname = true, level = false, levelBadge = true, portrait = "none",
 		buffs = 0, debuffs = 2, myDebuffs = false, auraSize = 15, auraPerRow = 2, buffSide = "inside", debuffSide = "inside",
 		threat = true, range = true, heals = true, marks = true, dispel = true,
 		leader = false, role = false, pvp = false,
