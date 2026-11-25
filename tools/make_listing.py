@@ -62,7 +62,8 @@ PLACEHOLDERS = False  # set by --placeholders: draw stand-ins instead of the gam
 def note():
     """The line every picture carries: what it is, and whose the spell icons in it are."""
     line = "Illustration built from the addon's own artwork, not a screenshot."
-    return line + (" Spell icons are placeholders." if PLACEHOLDERS else " Spell icons and raid marks \u00a9 Blizzard Entertainment.")
+    return line + (" Spell icons are placeholders." if PLACEHOLDERS
+                   else " Spell icons, raid marks, portraits and the elite dragon \u00a9 Blizzard Entertainment.")
 
 # ---------------------------------------------------------------------------
 # The addon's look, as Style.lua and Defaults.lua have it (theme Slate)
@@ -224,13 +225,37 @@ def cast_bar(canvas, left, top, k, width, height, spell, done, icon, shield=Fals
     return top + h
 
 
+ABSORB = (0.66, 0.84, 1.00)  # a shield that soaks up damage, as Style.ABSORB has it
+PAD = 4  # between an end of a bar and the words on it, as Texts.lua has it
+
+
+@functools.lru_cache(maxsize=None)
+def face(who, size, mirror=False):
+    """One of the game's stand-in portraits cut the way Portrait.lua cuts a portrait: the round
+    picture's rim off, which leaves a square face."""
+    picture = game_icons.portrait(who)
+    cut = round(picture.width * 0.14)
+    picture = picture.crop((cut, cut, picture.width - cut, picture.height - cut)).resize((size, size), Image.LANCZOS)
+    return picture.transpose(Image.FLIP_LEFT_RIGHT) if mirror else picture
+
+
 def frame(canvas, left, top, k, width, height, power_height, name, colour, share, power=None, power_share=1.0,
-          level=None, right=None, sub=None, leader=False, dead=False, faded=False, heal=0.0, threat=False,
-          cast=None, cast_height=16, auras=(), aura_size=20, aura_side="right", narrow=False, font_size=11,
-          theme=SLATE, texture="Bar-Smooth", lit=None, shield=False, points=0, mark=None, raid_mark=None, shadow=False,
-          level_colour=None):
-    """Draws a frame with its top left corner at (left, top). k is how many picture pixels one
-    of the addon's units takes. Returns the frame's bottom edge in the picture."""
+          surname=None, level=None, health=None, power_text=None, portrait=None, who=None, rank=None,
+          dead=False, faded=False, heal=0.0, absorb=0.0, threat=False,
+          cast=None, cast_height=16, auras=(), buffs=(), aura_size=20, aura_side="right", buff_side=None, per_row=8,
+          narrow=False, font_size=11, theme=SLATE, texture="Bar-Smooth", lit=None, shield=False, points=0, mark=None,
+          raid_mark=None, shadow=False, level_colour=None):
+    """Draws a frame with its top left corner at (left, top), laid out as the addon lays one out
+    since 0.3. k is how many picture pixels one of the addon's units takes. Returns the frame's
+    bottom edge in the picture.
+
+    name, surname     a character has both; a creature has one name
+    level, rank       the level as it is written ("60", "11+") and the dragon before it ("gold", "silver")
+    health, power_text  the numbers as they are written: health on the lower line, power on its bar
+    portrait, who     "left" or "right", and whose stand-in face (tools/game_icons.py)
+    auras, buffs      debuffs and buffs as (spell, kind[, stacks]); aura_side and buff_side say where
+    heal, absorb      healing on its way and a shield, as shares of full health
+    """
     left, top = round(left), round(top)
     px = max(1, round(k))  # the one-pixel edge
     w, h = round(width * k), round(height * k)
@@ -247,6 +272,9 @@ def frame(canvas, left, top, k, width, height, power_height, name, colour, share
     def bar_fill(width, height, colour, alpha=255, share=1.0):
         return globals()["bar_fill"](width, height, colour, alpha, texture, share)
 
+    def length(string, size):
+        return ImageDraw.Draw(layer).textlength(string, font=brand.font(size, "SemiBold"))
+
     if shadow and not faded:
         shadow_under(canvas, (left, top, left + w, top + h))
     if threat:  # the outline lies under the plate and shows two pixels past it
@@ -256,71 +284,124 @@ def frame(canvas, left, top, k, width, height, power_height, name, colour, share
                            (left, top, left + px, top + h), (left + w - px, top, left + w, top + h)):
         rect(layer, x0, y0, x1, y1, EDGE)
 
+    # The portrait is a square at one end, inside the edge; the bars have the rest.
+    square = h - 2 * px if portrait else 0
+    bar_left = left + px + (square + px if portrait == "left" else 0)
+    bar_right = left + w - px - (square + px if portrait == "right" else 0)
+    if portrait and not PLACEHOLDERS:
+        picture = face(who or "human-male", square)
+        layer.alpha_composite(picture, (left + px if portrait == "left" else left + w - px - square, top + px))
+    elif portrait:
+        x0 = left + px if portrait == "left" else left + w - px - square
+        rect(layer, x0, top + px, x0 + square, top + px + square, (52, 58, 66, 255))
+
     power_h = round(power_height * k)
-    bar_left, bar_right = left + px, left + w - px
     health_top = top + px
     health_bottom = top + h - (power_h + 2 * px if power_h > 0 else px)
     bar_w = bar_right - bar_left
+    bar_h = health_bottom - health_top
     # The empty part of the bar is the bar's own colour, darkened; grey for someone dead.
     painted = readable(toned(colour))
     shown = 0.0 if dead else share
-    layer.alpha_composite(bar_fill(bar_w, health_bottom - health_top, dimmed(toned(GONE) if dead else painted)), (bar_left, health_top))
+    layer.alpha_composite(bar_fill(bar_w, bar_h, dimmed(toned(GONE) if dead else painted)), (bar_left, health_top))
     if shown > 0:
-        layer.alpha_composite(bar_fill(bar_w * shown, health_bottom - health_top, painted, share=shown), (bar_left, health_top))
-    if heal > 0 and not dead:
-        reach = min(heal, 1 - shown)
+        layer.alpha_composite(bar_fill(bar_w * shown, bar_h, painted, share=shown), (bar_left, health_top))
+    after = shown
+    if heal > 0 and not dead:  # healing on its way: past the end of the health, as long as the heal is large
+        reach = min(heal, 1 - after)
         if reach > 0:
-            layer.alpha_composite(bar_fill(bar_w * reach, health_bottom - health_top, tuple(round(255 * c) for c in HEAL), 140),
-                                  (bar_left + round(bar_w * shown), health_top))
+            layer.alpha_composite(bar_fill(bar_w * reach, bar_h, tuple(round(255 * c) for c in HEAL), 140),
+                                  (bar_left + round(bar_w * after), health_top))
+            after += reach
+    if absorb > 0 and not dead:  # a shield: the same after that, pale; a cap on the bar's end when it does not fit
+        reach = min(absorb, 1 - after)
+        if reach > 0:
+            layer.alpha_composite(bar_fill(bar_w * reach, bar_h, tuple(round(255 * c) for c in ABSORB), 184),
+                                  (bar_left + round(bar_w * after), health_top))
+        if absorb > 1 - after + 1e-6:
+            cap = round(5 * k)
+            fade = np.zeros((bar_h, cap, 4), np.float32)
+            fade[..., :3] = [255 * c for c in ABSORB]
+            fade[..., 3] = np.linspace(0, 235, cap, dtype=np.float32)[None, :]
+            layer.alpha_composite(Image.fromarray(fade.astype(np.uint8), "RGBA"), (bar_right - cap, health_top))
     if power_h > 0:
         ran_on = toned(POWER[power]) if power else toned(GONE)
         layer.alpha_composite(bar_fill(bar_w, power_h, dimmed(ran_on)), (bar_left, top + h - px - power_h))
         if power and power_share > 0:
             layer.alpha_composite(bar_fill(bar_w * power_share, power_h, ran_on, share=power_share), (bar_left, top + h - px - power_h))
 
+    # The words, as Texts.lua places them.
     middle = (health_top + health_bottom) / 2
-    size, pad = font_size * k, 4 * k
-    name_size = size + (k if not narrow and height >= 40 else 0)  # on a tall plate the name is a size larger
+    tall = not narrow and height >= 40
+    name_units = font_size + (1 if tall else 0)   # on a tall plate the name is a size larger
+    number_units = font_size - (1 if narrow else 0)
+    power_units = max(6, font_size - 2)
+    on_bar = bool(power_text) and not narrow and power_height > power_units
+    bar_units = height - 2 - (power_height + 1 if power_height > 0 else 0)
+    lower = bool(level) or bool(health) or (bool(power_text) and not on_bar)
+    two_rows = not narrow and bool(name) and lower and bar_units >= name_units + number_units + 5
+    name_y = middle - (np.ceil(name_units / 2) + 1) * k if two_rows else middle
+    low_y = middle + (np.ceil(number_units / 2) + 1) * k if two_rows else middle
+    full = name + (" " + surname if surname else "")
+    name_row = None
     if narrow:
-        if right:
-            label(layer, (left + w / 2, middle - size * 0.55), name, size, TEXT, anchor="mm")
-            label(layer, (left + w / 2, middle + size * 0.6), right, size * 0.9, TEXT, anchor="mm")
+        size = font_size * k
+        if health:  # the first name over the number
+            label(layer, ((bar_left + bar_right) / 2, middle - size * 0.55), name, size, TEXT, anchor="mm")
+            label(layer, ((bar_left + bar_right) / 2, middle + size * 0.6), health, number_units * k, TEXT, anchor="mm")
+        elif surname:  # the first name over the surname
+            label(layer, ((bar_left + bar_right) / 2, middle - size * 0.58), name, size, TEXT, anchor="mm")
+            label(layer, ((bar_left + bar_right) / 2, middle + size * 0.58), surname, size, TEXT, anchor="mm")
         else:
-            label(layer, (left + w / 2, middle), name, size, TEXT, anchor="mm")
+            label(layer, ((bar_left + bar_right) / 2, middle), name, size, TEXT, anchor="mm")
     else:
-        x = bar_left + pad
+        x = bar_left + PAD * k
+        if rank and not PLACEHOLDERS:  # the game's dragon before an elite's level
+            side = round((number_units + 5) * k)
+            dragon = game_icons.rank("nameplates-icon-elite-" + rank).resize((side, side), Image.LANCZOS)
+            over(layer, dragon, x - k, low_y - side / 2)
+            x += side - k + 2 * k
         if level:
-            label(layer, (x, middle), level, name_size, level_colour or TEXT)
-            x += ImageDraw.Draw(layer).textlength(level, font=brand.font(name_size, "SemiBold")) + 3 * k
-        label(layer, (x, middle), name, name_size, TEXT)
-        if right and sub:
-            label(layer, (bar_right - pad, middle - size * 0.5), right, size, TEXT, anchor="rm")
-            label(layer, (bar_right - pad, middle + size * 0.62), sub, size * 0.82, QUIET, "SemiBold", "rm")
-        elif right:
-            label(layer, (bar_right - pad, middle), right, size, TEXT, anchor="rm")
+            size = (font_size + (1 if tall and not two_rows else 0)) * k
+            label(layer, (x, low_y), level, size, level_colour or TEXT)
+            x += length(level, size) + 3 * k
+        if power_text and not on_bar and two_rows:  # no bar to sit on: beside the level, the quieter of the words
+            label(layer, (x + 3 * k, low_y), power_text, power_units * k, QUIET)
+        if two_rows:
+            name_row = name_y
+            label(layer, (bar_left + PAD * k, name_y), full, name_units * k, TEXT)
+        else:
+            label(layer, (x, middle), full, name_units * k, TEXT)
+        if health:
+            label(layer, (bar_right - PAD * k, low_y), health, number_units * k, TEXT, anchor="rm")
+        if on_bar:  # the power number on the power bar, written in full white
+            label(layer, (bar_right - PAD * k, top + h - px - power_h / 2), power_text, power_units * k, TEXT, anchor="rm")
 
     if lit:  # a debuff the player can remove: its colour along the rim, two pixels wide
         glow = toned(KIND[lit]) + (255,)
         for x0, y0, x1, y1 in ((left, top, left + w, top + 2 * px), (left, top + h - 2 * px, left + w, top + h),
                                (left, top, left + 2 * px, top + h), (left + w - 2 * px, top, left + w, top + h)):
             rect(layer, x0, y0, x1, y1, glow)
-    if mark:  # resting, in combat, ready, ...: one of the addon's own marks, in the middle or on the rim
+    small = round(max(10, min(16, height * 0.36)) * k)  # Frame.MarkSize
+    big = round(max(12, min(22, height * 0.5)) * k)
+    if mark:  # resting, in combat, ready, ...: one of the addon's own marks, in the middle or on the top edge
         which, where = mark
-        size_px = round(max(12, min(22, height * 0.5)) * k)
-        picture = art("Mark-" + which).resize((size_px, size_px), Image.LANCZOS)
+        picture = art("Mark-" + which)
         if where == "center":
-            layer.alpha_composite(picture, (round(left + w / 2 - size_px / 2), round(top + h / 2 - size_px / 2)))
-        else:  # on the top edge, beside the place of the leader's mark
-            small = round(max(10, min(16, height * 0.36)) * k)
-            over(layer, picture.resize((small, small), Image.LANCZOS), left + small + 2 * k, top - small / 2)
-
-    if leader:
-        crown = round(max(10, min(16, height * 0.36)) * k)
-        over(layer, art("Mark-Leader").resize((crown, crown), Image.LANCZOS), left, top - crown / 2)
-    if raid_mark and not PLACEHOLDERS:  # one of the game's eight: inside a wide frame, riding the edge of a narrow one
-        big = round(max(12, min(22, height * 0.5)) * k)
-        mark_top = top - big / 2 if narrow else top + 2 * px
-        over(layer, game_icons.mark(raid_mark).resize((big, big), Image.LANCZOS), left + w / 2 - big / 2, mark_top)
+            layer.alpha_composite(picture.resize((big, big), Image.LANCZOS), (round(left + w / 2 - big / 2), round(top + h / 2 - big / 2)))
+        elif name_row is not None and portrait != "left":
+            # Two lines of words and the bar's left end at the plate's: the mark rides the right end of the edge.
+            over(layer, picture.resize((small, small), Image.LANCZOS), left + w - small, top - small / 2)
+        else:  # over the portrait at the left end, or at the left end of the edge
+            over(layer, picture.resize((small, small), Image.LANCZOS), left, top - small / 2)
+    if raid_mark and not PLACEHOLDERS:  # one of the game's eight
+        if name_row is not None:  # two lines: it closes the name's line, at the right
+            size = min(big, round(16 * k))
+            over(layer, game_icons.mark(raid_mark).resize((size, size), Image.LANCZOS), bar_right - PAD * k - size, name_row - size / 2)
+        elif not narrow and (aura_side == "above" and auras or (buff_side or aura_side) == "above" and buffs):
+            over(layer, game_icons.mark(raid_mark).resize((big, big), Image.LANCZOS), left + w / 2 - big / 2, top + 2 * px)
+        else:  # one line, or a narrow plate: it rides the middle of the top edge
+            over(layer, game_icons.mark(raid_mark).resize((big, big), Image.LANCZOS), left + w / 2 - big / 2, top - big / 2)
 
     bottom = top + h
     if cast:
@@ -340,22 +421,31 @@ def frame(canvas, left, top, k, width, height, power_height, name, colour, share
                 layer.alpha_composite(bar_fill(pip_w, pip_h, (245, 199, 64)), (x0, pip_top))
         bottom = pip_top + pip_h
 
+    # Icons, as the game's aura container lays them out for Auras.lua: the debuffs first, the
+    # buffs after them, on a fresh row where they share a side.
     step = round((aura_size + 2) * k)
-    for index, aura in enumerate(auras):
-        spell, kind = aura[0], aura[1]
-        icon = tile(aura_size * k, spell, KIND[kind] if kind else None)
-        if len(aura) > 2:  # how many stacks, bottom right as on the addon's icons
-            label(icon, (icon.width - round(1.5 * k), icon.height - round(5.5 * k)), aura[2], max(7, (aura_size * 0.5) * k), anchor="rm")
-        if aura_side == "right":
-            over(layer, icon, left + w + round(4 * k) + index * step, top)
-        elif aura_side == "left":
-            over(layer, icon, left - round(4 * k) - icon.width - index * step, top)
-        elif aura_side == "above":
-            over(layer, icon, left + index * step, top - round(3 * k) - icon.height)
-        elif aura_side == "below":
-            over(layer, icon, left + index * step, bottom + round(3 * k))
-        else:  # inside: from the bottom right corner of the health bar, towards the left
-            over(layer, icon, bar_right - px - (index + 1) * (icon.width + px) + px, health_bottom - px - icon.height)
+    placed = {}  # side -> rows used so far
+    for kind_index, group in enumerate((auras, buffs)):
+        side = aura_side if kind_index == 0 else (buff_side or aura_side)
+        first_row = placed.get(side, 0)
+        for index, aura in enumerate(group):
+            spell, kind = aura[0], aura[1]
+            icon = tile(aura_size * k, spell, KIND[kind] if kind else None)
+            if len(aura) > 2:  # how many stacks, bottom right as on the addon's icons
+                label(icon, (icon.width - round(1.5 * k), icon.height - round(5.5 * k)), aura[2], max(7, (aura_size * 0.5) * k), anchor="rm")
+            column, row = index % per_row, first_row + index // per_row
+            if side == "right":
+                over(layer, icon, left + w + round(4 * k) + column * step, top + row * step)
+            elif side == "left":
+                over(layer, icon, left - round(4 * k) - icon.width - column * step, top + row * step)
+            elif side == "above":
+                over(layer, icon, left + column * step, top - round(3 * k) - icon.height - row * step)
+            elif side == "below":
+                over(layer, icon, left + column * step, bottom + round(3 * k) + row * step)
+            else:  # inside: from the bottom right corner of the health bar, towards the left
+                over(layer, icon, bar_right - px - (column + 1) * (icon.width + px) + px, health_bottom - px - icon.height - row * (icon.height + px))
+        if group:
+            placed[side] = first_row + (len(group) + per_row - 1) // per_row
 
     if faded:  # out of range
         layer.putalpha(layer.getchannel("A").point(lambda v: int(v * 0.45)))
@@ -368,22 +458,79 @@ def frame(canvas, left, top, k, width, height, power_height, name, colour, share
 # ---------------------------------------------------------------------------
 # The auras on show: (spell, kind of debuff or None for a buff[, stacks]). The spells are in tools/game_icons.py.
 CURSE, POISON, MAGIC, BLEED = ("Curse of Agony", "curse"), ("Deadly Poison", "poison", "3"), ("Frost Nova", "magic"), ("Rend", "none")
-BUFFS = [("Blessing of Might", None), ("Arcane Intellect", None), ("Mark of the Wild", None)]
+SUNDER = ("Sunder Armor", "none", "3")
+FORT, WILD, WIT, MIGHT = ("Power Word: Fortitude", None), ("Mark of the Wild", None), ("Arcane Intellect", None), ("Blessing of Might", None)
+SHOUT, RENEW, WORD = ("Battle Shout", None), ("Renew", None), ("Power Word: Shield", None)
+BUFFS = [MIGHT, WIT, WILD]
 
+# The party of the simulator's picture: a character has a first name and a surname, a portrait, the
+# buffs in a row above the plate and the debuffs beside it, and health written as an amount.
 PARTY = [
-    dict(name="Thryn", colour=CLASS["WARRIOR"], share=0.64, power="RAGE", power_share=0.45, right="64%", threat=True,
-         auras=[CURSE]),
-    dict(name="Lioren", colour=CLASS["PRIEST"], share=1.0, power="MANA", power_share=0.72, right="100%"),
-    dict(name="Maeve", colour=CLASS["MAGE"], share=0.38, power="MANA", power_share=0.30, right="38%", heal=0.30,
-         auras=[POISON, MAGIC]),
-    dict(name="Brask", colour=CLASS["HUNTER"], share=0.86, power="MANA", power_share=0.90, right="86%", faded=True),
+    dict(name="Thryn", surname="Ironbeard", who="dwarf-male", colour=CLASS["WARRIOR"], share=0.64, power="RAGE", power_share=0.45,
+         health="3264", threat=True, auras=[BLEED, ("Sunder Armor", "none", "2")], buffs=[FORT, WILD, MIGHT, SHOUT]),
+    dict(name="Lioren", surname="Dawnwhisper", who="nightelf-male", colour=CLASS["PRIEST"], share=1.0, power="MANA", power_share=0.72,
+         health="3100", absorb=0.3, buffs=[FORT, WILD, WIT, WORD]),
+    dict(name="Maeve", surname="Copperpot", who="gnome-female", colour=CLASS["MAGE"], share=0.38, power="MANA", power_share=0.30,
+         health="1368", heal=0.30, lit="poison", auras=[POISON, MAGIC], buffs=[FORT, WILD, WIT, RENEW]),
+    dict(name="Brask", surname="Holloway", who="human-male", colour=CLASS["HUNTER"], share=0.86, power="MANA", power_share=0.90,
+         health="3440", faded=True, buffs=[FORT, WILD, MIGHT]),
+]
+PARTY_PITCH = 40 + 12 + 3 + 20  # a plate, the gap, and the row of buffs above the next member
+
+
+def party_frame(canvas, left, top, k, member, **extra):
+    """A party member's frame as it starts out: 200 x 40 with a portrait, buffs above, debuffs beside."""
+    told = dict(portrait="left", aura_side="right", buff_side="above", aura_size=20, per_row=8)
+    told.update(member)
+    told.update(extra)
+    return frame(canvas, left, top, k, 200, 40, 6, **told)
+
+
+def player_frame(canvas, left, top, k, **extra):
+    told = dict(surname="Brightmoor", who="human-female", portrait="left", level="60", health="3550  71%", power_text="2310")
+    told.update(extra)
+    return frame(canvas, left, top, k, 232, 46, 10, "Halla", CLASS["PALADIN"], 0.71, "MANA", 0.58, **told)
+
+
+def target_frame(canvas, left, top, k, **extra):
+    """A hostile elite: its power bar is put away (a creature that gathers no rage has none to show)."""
+    told = dict(who="creature", portrait="right", rank="gold", level="11+", level_colour=EASY, health="279  42%",
+                auras=[BLEED, SUNDER, MAGIC, CURSE, POISON, ("Immolate", "magic")], buffs=[SHOUT], aura_size=22, aura_side="above",
+                per_row=9, raid_mark=8)
+    told.update(extra)
+    return frame(canvas, left, top, k, 232, 46, 0, "Hogger", HOSTILE, 0.42, **told)
+
+
+def focus_frame(canvas, left, top, k, **extra):
+    told = dict(surname="Vilecaller", who="orc-male", portrait="left", health="77%", raid_mark=1, auras=[("Viper Sting", "poison"), ("Immolate", "magic")],
+                aura_side="above", aura_size=20, cast=("Shadow Bolt", 0.55, "Shadow Bolt"), cast_height=12)
+    told.update(extra)
+    return frame(canvas, left, top, k, 200, 40, 6, "Morgash", CLASS["WARLOCK"], 0.77, "MANA", 0.62, **told)
+
+
+# A raid: first name, surname, class, share of health.
+RAID_20 = [
+    ("Thryn", "Ironbeard", "WARRIOR", 0.64), ("Lioren", "Dawnwhisper", "PRIEST", 1.0), ("Maeve", "Copperpot", "MAGE", 0.38),
+    ("Brask", "Holloway", "HUNTER", 0.86), ("Odda", "Stormcaller", "SHAMAN", 0.92), ("Wren", "Thistledown", "DRUID", 1.0),
+    ("Sable", "Quickblade", "ROGUE", 0.71), ("Ivo", "Grimward", "WARLOCK", 0.0), ("Halla", "Brightmoor", "PALADIN", 0.55),
+    ("Cade", "Marrowick", "WARRIOR", 1.0), ("Tamsin", "Vale", "PRIEST", 0.9), ("Rook", "Ashford", "HUNTER", 1.0),
+    ("Eira", "Frostmere", "MAGE", 0.47), ("Bram", "Stonefist", "SHAMAN", 1.0), ("Nell", "Greenbough", "DRUID", 0.8),
+    ("Garr", "Blackthorn", "ROGUE", 0.95), ("Pia", "Sunvale", "PALADIN", 1.0), ("Dov", "Nightfall", "WARLOCK", 0.6),
+    ("Sten", "Hallowell", "WARRIOR", 1.0), ("Yara", "Windrider", "MAGE", 0.88),
 ]
 
-RAID = [
-    ("Thryn", "WARRIOR", 0.64), ("Lioren", "PRIEST", 1.0), ("Maeve", "MAGE", 0.38), ("Brask", "HUNTER", 0.86), ("Odda", "SHAMAN", 0.92),
-    ("Wren", "DRUID", 1.0), ("Sable", "ROGUE", 0.71), ("Ivo", "WARLOCK", 0.0), ("Halla", "PALADIN", 0.55), ("Cade", "WARRIOR", 1.0),
-    ("Tamsin", "PRIEST", 0.9), ("Rook", "HUNTER", 1.0), ("Eira", "MAGE", 0.47), ("Bram", "SHAMAN", 1.0), ("Nell", "DRUID", 0.8),
-]
+
+def raid_grid(canvas, left, top, k, members, columns_of=5, shadow=False, ready=()):
+    """Raid frames, five to a column, first name over surname: a mark or two, someone dead, someone
+    hit, someone out of range, a debuff the player can remove."""
+    for index, (name, surname, cls, share) in enumerate(members):
+        column, row = divmod(index, columns_of)
+        dead = share == 0
+        frame(canvas, left + round(column * 88 * k), top + round(row * 44 * k), k, 82, 40, 3, name, CLASS[cls], share, "MANA", 1.0,
+              surname=None if dead else surname, health="Dead" if dead else None, dead=dead, narrow=True, font_size=10,
+              threat=name == "Halla", faded=name in ("Rook", "Bram"), lit="magic" if name == "Eira" else None,
+              auras=[("Polymorph", "magic")] if name == "Eira" else (), aura_size=15, aura_side="inside",
+              mark=("Ready", "center") if name in ready else None, raid_mark={"Thryn": 1, "Lioren": 5}.get(name), shadow=shadow)
 
 
 def stage(canvas, cx, cy, k):
@@ -392,29 +539,18 @@ def stage(canvas, cx, cy, k):
     def at(x, y):
         return round(cx + x * k), round(cy + y * k)
 
-    # Party: four frames of 172 x 40, twelve apart.
     for index, member in enumerate(PARTY):
-        left, top = at(-590, -98 + index * 52)
-        frame(canvas, left, top, k, 172, 40, 6, shadow=True, **member)
+        left, top = at(-532, -104 + index * PARTY_PITCH)
+        party_frame(canvas, left, top, k, member, shadow=True)
 
-    # Player, with a cast under way; the target beside it with its buffs and debuffs above.
-    left, top = at(-330, -34)
-    frame(canvas, left, top, k, 232, 46, 9, "Halla", CLASS["PALADIN"], 0.71, "MANA", 0.58, level="60", right="3,550  71%", sub="2,310",
-          leader=True, cast=("Holy Light", 0.62, "Holy Light"), shadow=True)
-    left, top = at(-74, -34)
-    frame(canvas, left, top, k, 232, 46, 9, "Hogger", HOSTILE, 0.42, "RAGE", 0.35, level="11+", right="279  42%", sub="35",
-          auras=[BLEED, CURSE, POISON, MAGIC] + BUFFS[:2], aura_size=22, aura_side="above", raid_mark=8, points=3, shadow=True,
-          level_colour=EASY)
+    # The player, with a cast under way; the target beside it with its debuffs and buffs above.
+    left, top = at(-254, 6)
+    player_frame(canvas, left, top, k, cast=("Holy Light", 0.62, "Holy Light"), mark=("Combat", "rim"), shadow=True)
+    left, top = at(2, 6)
+    target_frame(canvas, left, top, k, points=3, shadow=True)
 
-    # Raid: narrow frames of 82 x 40, five to a column.
-    for index, (name, cls, share) in enumerate(RAID):
-        column, row = divmod(index, 5)
-        left, top = at(200 + column * 88, -98 + row * 44)
-        frame(canvas, left, top, k, 82, 40, 3, name, CLASS[cls], share, "MANA", 1.0, dead=share == 0, narrow=True,
-              right="Dead" if share == 0 else None, font_size=10,
-              auras=[("Polymorph", "magic")] if name == "Eira" else (), aura_size=15, aura_side="inside",
-              threat=name == "Halla", faded=name in ("Rook", "Bram"), lit="magic" if name == "Eira" else None,
-              raid_mark={"Thryn": 1}.get(name), shadow=True)
+    left, top = at(274, -104)
+    raid_grid(canvas, left, top, k, RAID_20[:15], shadow=True)
 
 
 # ---------------------------------------------------------------------------
@@ -448,7 +584,7 @@ def hero(w=W, h=H, k=2.0, title_y=128, title_size=150, tagline_size=46, stage_y=
     veil((8, 5, 8), np.clip(1 - y / (title_y + title_size * 1.25), 0, 1) ** 1.3 * 0.72)
     veil((8, 5, 8), np.clip((y - (h - 0.13 * h)) / (0.13 * h), 0, 1) ** 1.4 * 0.80)
 
-    stage(canvas, w / 2 + 66 * k, stage_y, k)
+    stage(canvas, w / 2, stage_y, k)
 
     # The emblem and the name side by side, the pair of them centred.
     size = title_size * 1.22
@@ -611,59 +747,37 @@ def game_screen(canvas, box, bars=True):
         brand.text(canvas, (x1 - 40 - 100, y1 - 16), "Menus and bags", 17, SOFT, "Medium")
 
 
-RAID_20 = list(zip(
-    ["Thryn", "Lioren", "Maeve", "Brask", "Odda", "Wren", "Sable", "Ivo", "Halla", "Cade",
-     "Tamsin", "Rook", "Eira", "Bram", "Nell", "Garr", "Pia", "Dov", "Sten", "Yara"],
-    ["WARRIOR", "PRIEST", "MAGE", "HUNTER", "SHAMAN", "DRUID", "ROGUE", "WARLOCK", "PALADIN", "WARRIOR",
-     "PRIEST", "HUNTER", "MAGE", "SHAMAN", "DRUID", "ROGUE", "PALADIN", "WARLOCK", "WARRIOR", "MAGE"],
-    [0.64, 1.0, 0.38, 0.86, 0.92, 1.0, 0.71, 0.0, 0.55, 1.0, 0.9, 1.0, 0.47, 1.0, 0.8, 0.95, 1.0, 0.6, 1.0, 0.88]))
-
-
-def raid_grid(canvas, left, top, k, members, columns_of=5):
-    """Raid frames, five to a column: a mark or two, someone dead, someone hit, someone out of range."""
-    for index, (name, cls, share) in enumerate(members):
-        column, row = divmod(index, columns_of)
-        frame(canvas, left + round(column * 88 * k), top + round(row * 44 * k), k, 82, 40, 3, name, CLASS[cls], share, "MANA", 1.0,
-              dead=share == 0, narrow=True, right="Dead" if share == 0 else None, font_size=10,
-              threat=name == "Halla", faded=name in ("Rook", "Bram"), lit="magic" if name == "Eira" else None,
-              auras=[("Polymorph", "magic")] if name == "Eira" else (), aura_size=15, aura_side="inside",
-              mark=("Ready", "center") if name in ("Wren", "Cade") else None, raid_mark={"Thryn": 1, "Lioren": 5}.get(name))
-
-
 def frames():
     canvas = slide([("Seven frames, ", WHITE), ("yours to arrange.", GOLD)],
                    "Player, target, target of target, focus, pet, party and raid. Switch each off, size it, scale it, move it.")
     x0, y0, x1, y1 = 110, 330, 1810, 1000
     game_screen(canvas, (x0, y0, x1, y1))
 
-    raid_grid(canvas, x0 + 40, y0 + 36, 1.05, RAID_20[:15])
-    small_caps(canvas, (x0 + 40 + 290, y0 + 52), "Raid")
-    brand.text(canvas, (x0 + 40 + 290, y0 + 80), "10, 20 or 40", 19, SOFT, "Medium", "lm")
+    raid_grid(canvas, x0 + 40, y0 + 34, 1.0, RAID_20[:15])
+    small_caps(canvas, (x0 + 40 + 276, y0 + 50), "Raid")
+    brand.text(canvas, (x0 + 40 + 276, y0 + 78), "10, 20 or 40", 19, SOFT, "Medium", "lm")
 
-    k = 1.3
+    k = 1.12
     for index, member in enumerate(PARTY):
-        frame(canvas, x0 + 40, y0 + 300 + index * round(52 * k), k, 172, 40, 6, **member)
-    small_caps(canvas, (x0 + 40, y0 + 300 + 4 * round(52 * k) + 4), "Party")
+        party_frame(canvas, x0 + 40, y0 + 308 + index * round(PARTY_PITCH * k), k, member)
+    small_caps(canvas, (x0 + 40 + round(200 * k) + 70, y0 + 308 + 3 * round(PARTY_PITCH * k) + 22), "Party")
 
-    k = 1.5
-    frame(canvas, x0 + 610, y0 + 286, k, 174, 34, 6, "Maeve", CLASS["MAGE"], 0.38, "MANA", 0.30, right="38%",
-          cast=("Frostbolt", 0.35, "Frostbolt"), cast_height=12)
-    small_caps(canvas, (x0 + 610 + round(174 * k) + 18, y0 + 286 + 26), "Focus")
+    k = 1.4
+    focus_frame(canvas, x0 + 660, y0 + 190, k)
+    small_caps(canvas, (x0 + 660 + round(200 * k) + 18, y0 + 190 + 28), "Focus")
 
-    frame(canvas, x0 + 396, y0 + 458, k, 124, 28, 4, "Ember", (0.35, 0.74, 0.38), 0.9, "FOCUS", 0.7)
-    small_caps(canvas, (x0 + 396 + round(124 * k) / 2, y0 + 458 + 66), "Pet", anchor="mm")
+    frame(canvas, x0 + 454, y0 + 432, k, 124, 28, 4, "Ember", (0.35, 0.74, 0.38), 0.9, "FOCUS", 0.7)
+    small_caps(canvas, (x0 + 454 + round(124 * k) / 2, y0 + 432 + 62), "Pet", anchor="mm")
 
-    bottom = frame(canvas, x0 + 610, y0 + 436, k, 232, 46, 9, "Halla", CLASS["PALADIN"], 0.71, "MANA", 0.58, level="60",
-                   right="3,550  71%", sub="2,310", leader=True, cast=("Holy Light", 0.62, "Holy Light"), mark=("Rest", "rim"))
-    small_caps(canvas, (x0 + 610 + round(232 * k) / 2, bottom + 26), "Player", anchor="mm")
+    bottom = player_frame(canvas, x0 + 660, y0 + 420, k, cast=("Holy Light", 0.62, "Holy Light"), mark=("Rest", "rim"))
+    small_caps(canvas, (x0 + 660 + round(232 * k) / 2, bottom + 26), "Player", anchor="mm")
 
-    bottom = frame(canvas, x0 + 1010, y0 + 436, k, 232, 46, 9, "Hogger", HOSTILE, 0.42, "RAGE", 0.35, level="11+", right="279  42%",
-                   sub="35", auras=[BLEED, CURSE, POISON, MAGIC] + BUFFS, aura_size=22, aura_side="above", points=3, raid_mark=8,
-                   level_colour=EASY)
-    small_caps(canvas, (x0 + 1010 + round(232 * k) / 2, bottom + 26), "Target", anchor="mm")
+    bottom = target_frame(canvas, x0 + 1014, y0 + 420, k, points=3)
+    small_caps(canvas, (x0 + 1014 + round(232 * k) / 2, bottom + 26), "Target", anchor="mm")
 
-    frame(canvas, x0 + 1010 + round(232 * k) + 16, y0 + 458, k, 124, 28, 4, "Halla", CLASS["PALADIN"], 0.71, "MANA", 0.58, right="71%")
-    small_caps(canvas, (x0 + 1010 + round(232 * k) + 16 + round(124 * k) / 2, y0 + 458 + 66), "Target of target", anchor="mm")
+    frame(canvas, x0 + 1014 + round(232 * k) + 16, y0 + 432, k, 140, 28, 4, "Halla", CLASS["PALADIN"], 0.71, "MANA", 0.58,
+          surname="Brightmoor")
+    small_caps(canvas, (x0 + 1014 + round(232 * k) + 16 + round(140 * k) / 2, y0 + 432 + 62), "Target of target", anchor="mm")
     return canvas
 
 
@@ -671,26 +785,26 @@ def groups():
     canvas = slide([("Your group, ", WHITE), ("at a glance.", GOLD)],
                    "Party and raid frames tell you who is hurt, who is being hit, who is out of reach, and whom you can help.")
     party = (70, 330, 1030, 1000)
-    card(canvas, party, "Party", "with yourself among them, or when alone, if you like")
-    k = 2.5
+    card(canvas, party, "Party", "buffs above, debuffs beside, health as an amount")
+    k = 1.9
     told = [
-        ("Thryn", "WARRIOR", 0.64, "RAGE", 0.45, dict(threat=True), "Being attacked", "an outline, amber to red"),
-        ("Lioren", "PRIEST", 0.55, "MANA", 0.72, dict(heal=0.28), "Healing on its way", "past the end of the bar"),
-        ("Maeve", "MAGE", 0.80, "MANA", 0.30, dict(lit="poison", auras=[("Viper Sting", "poison")]), "A debuff you can remove",
+        (PARTY[0], dict(), "Being attacked", "an outline, amber to red"),
+        (PARTY[1], dict(share=0.55, health="1705", heal=0.22, absorb=0.14), "Healing on its way, a shield", "each drawn past the end of the health"),
+        (PARTY[2], dict(share=0.80, health="2880", heal=0.0, auras=[("Viper Sting", "poison")]), "A debuff you can remove",
          "the frame lights up in its colour"),
-        ("Brask", "HUNTER", 0.86, "MANA", 0.90, dict(faded=True), "Out of range", "the frame fades"),
+        (PARTY[3], dict(), "Out of range", "the frame fades"),
     ]
-    for index, (name, cls, share, power, power_share, extra, title, sub) in enumerate(told):
-        top = 424 + index * 136
-        frame(canvas, 110, top, k, 172, 40, 6, name, CLASS[cls], share, power, power_share, right="%d%%" % round(share * 100), **extra)
-        said(canvas, 110 + round(172 * k) + 82, top + 34, title, sub)
+    for index, (member, extra, title, sub) in enumerate(told):
+        top = 468 + index * 132
+        party_frame(canvas, 110, top, k, member, **extra)
+        said(canvas, 110 + round(200 * k) + 112, top + 22, title, sub)
 
     raid = (1060, 330, 1850, 1000)
     card(canvas, raid, "Raid", "10, 20 or 40 players")
     rk = 1.95
-    raid_grid(canvas, raid[0] + round((raid[2] - raid[0] - (3 * 88 + 82) * rk) / 2), 424, rk, RAID_20)
+    raid_grid(canvas, raid[0] + round((raid[2] - raid[0] - (3 * 88 + 82) * rk) / 2), 424, rk, RAID_20, ready=("Tamsin", "Pia"))
     brand.text(canvas, ((raid[0] + raid[2]) / 2, 902), "Drawn larger in a small raid", 27, WHITE, "Bold")
-    brand.text(canvas, ((raid[0] + raid[2]) / 2, 942), "ready checks, raid marks, and dead or offline said in words", 21, SOFT, "Medium")
+    brand.text(canvas, ((raid[0] + raid[2]) / 2, 942), "first name over surname, raid marks, ready checks, dead said in words", 21, SOFT, "Medium")
     return canvas
 
 
@@ -699,9 +813,9 @@ def combat():
                    "In a fight the game seals health, names, casts and auras from addons. These frames are written around that.")
     points = [
         ("Health, names and casts keep drawing", "What the game seals goes straight back to the game to be drawn."),
+        ("Buffs and debuffs keep drawing", "The game's own aura container draws them, on buttons the addon dresses."),
         ("A late joiner gets a frame at once", "Party and raid are the game's own secure group frames."),
         ("Nothing of the game's is hooked", "Its menus are left alone, with controller play in mind."),
-        ("No libraries, no borrowed code", "Written from scratch for this client."),
         ("It tells you when something is wrong", "/pug status lists any error it caught."),
     ]
     for index, (title, sub) in enumerate(points):
@@ -711,11 +825,9 @@ def combat():
     card(canvas, box, "In the middle of a fight")
     k = 2.9
     left = box[0] + round((box[2] - box[0] - 232 * k) / 2)
-    top = 606
-    small_caps(canvas, (left, top - round(25 * k) - 26), "Debuffs, rimmed by kind")
-    bottom = frame(canvas, left, top, k, 232, 46, 9, "Hogger", HOSTILE, 0.42, "RAGE", 0.35, level="11+", right="279  42%", sub="35",
-                   auras=[BLEED, CURSE, POISON, MAGIC], aura_size=22, aura_side="above", raid_mark=8,
-                   cast=("Enrage", 0.48, "Enrage"), shield=True, threat=True, level_colour=EASY)
+    top = 640
+    small_caps(canvas, (left, top - round(51 * k) - 22), "Debuffs rimmed by kind, its buffs above them")
+    bottom = target_frame(canvas, left, top, k, cast=("Enrage", 0.48, "Enrage"), shield=True, threat=True)
     small_caps(canvas, (left, bottom + 34), "A shield: this cast cannot be interrupted")
     small_caps(canvas, (left, bottom + 72), "The red outline: it is on you", THREAT_TEXT)
     return canvas
@@ -740,7 +852,7 @@ def auras():
         brand.text(canvas, (x + size / 2, 600), name, 28, WHITE, "Bold")
 
     casts = (70, 680, 950, 1000)
-    card(canvas, casts, "Cast bars", "player, target, focus, pet")
+    card(canvas, casts, "Cast bars", "player, target, focus, pet, party")
     k = 2.05
     rows = [("Holy Light", 0.62, "Holy Light", False, False, "a cast fills, a channel drains"),
             ("Enrage", 0.44, "Enrage", True, False, "a shield: cannot be interrupted"),
@@ -751,16 +863,17 @@ def auras():
         brand.text(canvas, (110 + round(232 * k) + 26, y + round(18 * k) / 2), told, 21, SOFT, "Medium", "lm")
 
     where = (980, 680, 1850, 1000)
-    card(canvas, where, "Icons where you want them")
-    k = 1.34
-    places = [("above", "Above"), ("below", "Below"), ("right", "Beside"), ("inside", "On the frame")]
-    for index, (side, name) in enumerate(places):
+    card(canvas, where, "Icons where you want them", "a side for each kind")
+    k = 1.3
+    places = [("above", "right", "Buffs above"), ("below", "below", "Both below"), ("right", "right", "Both beside"), ("inside", "inside", "On the frame")]
+    for index, (buff_side, debuff_side, name) in enumerate(places):
         left = where[0] + 36 + index * 208
-        shown = [CURSE, MAGIC] if side != "right" else [CURSE]
-        width = 132 if side != "right" else 108
-        frame(canvas, left, 822, k, width, 40, 6, "Maeve", CLASS["MAGE"], 0.62, "MANA", 0.4, auras=shown,
-              aura_size=20 if side != "inside" else 16, aura_side=side, font_size=11)
-        brand.text(canvas, (left + round(132 * k) / 2, 956), name, 24, WHITE, "Bold")
+        beside = "right" in (buff_side, debuff_side)
+        width = 112 if beside else 136
+        frame(canvas, left, 836, k, width, 40, 6, "Maeve", CLASS["MAGE"], 0.62, "MANA", 0.4,
+              auras=[CURSE], buffs=[WIT, WILD] if buff_side != "right" else [WIT], aura_side=debuff_side, buff_side=buff_side,
+              aura_size=20 if buff_side != "inside" else 15, per_row=3, font_size=11)
+        brand.text(canvas, (left + round(136 * k) / 2, 968), name, 23, WHITE, "Bold")
     return canvas
 
 
@@ -769,16 +882,18 @@ def looks():
                    "Slate, Night and Hearth, with smooth, flat or glass bars: all drawn for this addon. Colour by class, by foe, or by health.")
     k = 2.2
     textures = [("Bar-Smooth", "Smooth"), ("Bar-Flat", "Flat"), ("Bar-Glass", "Glass")]
-    people = [("PALADIN", "Halla", 0.71, "MANA", 0.58), ("SHAMAN", "Odda", 0.86, "MANA", 0.74), ("DRUID", "Wren", 0.48, "ENERGY", 0.9)]
+    people = [("PALADIN", "Halla", "Brightmoor", "human-female", 0.71, "MANA", 0.58, "3550  71%", "2310"),
+              ("SHAMAN", "Odda", "Stormcaller", "orc-male", 0.86, "MANA", 0.74, "4128  86%", "3010"),
+              ("DRUID", "Wren", "Thistledown", "nightelf-male", 0.48, "ENERGY", 0.9, "1920  48%", "90")]
     for column, (theme_name, theme) in enumerate(THEMES.items()):
         box = (60 + column * 607, 330, 60 + column * 607 + 587, 1000)
         card(canvas, box, theme_name, "theme")
         left = box[0] + round((587 - 232 * k) / 2)
-        for row, ((texture, texture_name), (cls, name, share, power, power_share)) in enumerate(zip(textures, people)):
+        for row, ((texture, texture_name), (cls, name, surname, who, share, power, power_share, health, power_text)) in enumerate(zip(textures, people)):
             top = 452 + row * 178
             small_caps(canvas, (left, top - 20), texture_name, DIM, 18)
-            frame(canvas, left, top, k, 232, 46, 9, name, CLASS[cls], share, power, power_share, level="60",
-                  right="%d%%" % round(share * 100), theme=theme, texture=texture, leader=row == 0)
+            frame(canvas, left, top, k, 232, 46, 10, name, CLASS[cls], share, power, power_share, surname=surname, who=who, portrait="left",
+                  level="60", health=health, power_text=power_text, theme=theme, texture=texture)
     return canvas
 
 
@@ -789,20 +904,20 @@ def arrange():
     card(canvas, box, "Every frame gets a handle", "/pug unlock")
     sx0, sy0, sx1, sy1 = box[0] + 34, box[1] + 92, box[2] - 34, box[3] - 34
     game_screen(canvas, (sx0, sy0, sx1, sy1))
-    handles = [("Party", 36, 34, 172, 196), ("Pet", 222, 270, 124, 28), ("Focus", 362, 190, 174, 34),
-               ("Player", 362, 262, 232, 46), ("Target of target", 866, 384, 124, 28)]
+    handles = [("Party", 36, 34, 200, 265), ("Pet", 250, 271, 124, 28), ("Focus", 386, 184, 200, 40),
+               ("Player", 386, 262, 232, 46), ("Target of target", 894, 385, 140, 28)]
 
     def handle(name, x, y, w, h, alpha=90, edge=(115, 242, 178, 230)):
         left, top = sx0 + x, sy0 + y
         canvas.alpha_composite(Image.new("RGBA", (w, h), (64, 178, 128, alpha)), (left, top))
         ImageDraw.Draw(canvas).rectangle([left, top, left + w - 1, top + h - 1], outline=edge, width=2)
         if name:
-            brand.text(canvas, (left + w / 2, top + h / 2), name, 21 if w > 200 else 15, GOLD, "Bold")
+            brand.text(canvas, (left + w / 2, top + h / 2), name, 21 if w >= 200 else 15, GOLD, "Bold")
 
     for name, x, y, w, h in handles:
         handle(name, x, y, w, h)
     # The target's handle on its way: where it was, the way it went, where it is now, and the pointer.
-    was, now = (626, 262), (626, 376)
+    was, now = (650, 262), (650, 376)
     draw = ImageDraw.Draw(canvas)
     for step in range(0, 232, 16):  # the old place, dashed
         draw.line([(sx0 + was[0] + step, sy0 + was[1]), (sx0 + was[0] + min(step + 9, 232), sy0 + was[1])], fill=(115, 242, 178, 120), width=2)

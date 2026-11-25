@@ -124,8 +124,8 @@ on your target works as it does without the addon: the game's own target frame, 
 belongs to, is set aside unseen and not hidden.
 
 <sub>These six pictures are illustrations, not screenshots, drawn by <code>tools/make_listing.py</code>
-from the addon's own textures and layout numbers. The spell icons and raid marks in them are Blizzard's.
-They were drawn for version 0.2 and do not show the portraits and the two lines of text of 0.3 yet.</sub>
+from the addon's own textures and layout numbers, as the frames look since version 0.3. The spell icons,
+raid marks, portraits and the elite dragon in them are Blizzard's.</sub>
 
 ## Install
 

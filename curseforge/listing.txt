@@ -52,10 +52,9 @@ Images, in this order
     and 02-frames.png to 08-logo.png (1920 x 1080 each). 09-in-play is the addon's own code
     drawing a fight in the simulator; the others are illustrations. Each says on the picture what
     it is, and credits the game's spell icons and raid marks on the frames to Blizzard.
-    09-in-play.png changed with 0.3.0 (portraits, two lines of text, the party's buffs). The one
-    made for 0.3.2 showed the level on a badge; the badge is off by default since, and the picture
-    is back to the plain level: if you uploaded the 0.3.2 one, upload this one over it.
-    All nine changed with the name: any uploaded before 0.2.0 say Free Unit Frames.
+    All of them were drawn again on 2026-11-24, after 0.3.3, for the look the frames have since
+    0.3 (portraits, first name and surname on a line of their own, the party's buffs above each
+    member, shields after the health): upload all nine again, in place of whatever is there.
 
 Files
     0.1.0 (uploaded by hand) and 0.1.1 (by the release workflow) are the addon under its first
