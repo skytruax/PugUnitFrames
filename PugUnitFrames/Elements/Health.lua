@@ -80,11 +80,11 @@ function Health.Layout(frame, cfg)
 	elseif leftward then
 		heal:SetPoint("TOPRIGHT", fill, "TOPLEFT")
 		heal:SetPoint("BOTTOMRIGHT", fill, "BOTTOMLEFT")
-		heal:SetWidth(frame.barWidth)
+		heal:SetWidth(math.max(1, frame.barWidth))
 	else
 		heal:SetPoint("TOPLEFT", fill, "TOPRIGHT")
 		heal:SetPoint("BOTTOMLEFT", fill, "BOTTOMRIGHT")
-		heal:SetWidth(frame.barWidth)
+		heal:SetWidth(math.max(1, frame.barWidth))
 	end
 	heal:SetStatusBarTexture(Style.texture)
 	heal:SetOrientation(orientation)

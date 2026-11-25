@@ -20,7 +20,7 @@ import brand  # noqa: E402
 
 NOTE = (
     "Composite, not a screenshot: the frames were drawn by the addon's own code in a simulator and laid over a picture of the game.",
-    "Picture, spell icons and raid marks \u00a9 Blizzard Entertainment.",
+    "Picture, spell icons, raid marks, portraits and the elite dragon \u00a9 Blizzard Entertainment.",
 )
 
 

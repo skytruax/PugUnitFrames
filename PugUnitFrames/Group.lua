@@ -78,6 +78,21 @@ local function Corner(cfg)
 end
 Group.Corner = Corner
 
+-- How far apart the members of a group stand, and its columns: the gap the settings ask for,
+-- and on top of it whatever a member has standing outside its plate towards the next one (rows
+-- of icons, a cast bar). The gap in the settings is then what it says, the clear room between
+-- one member's things and the next member's, wherever the icons are put.
+local function Gaps(cfg)
+	local room = ns.Elements.Auras.Room(cfg)
+	local upright = room.above + room.below + (cfg.castbar and cfg.castHeight + 3 or 0)
+	local level = room.left + room.right
+	if VERTICAL[cfg.growth] then
+		return cfg.spacing + upright, (cfg.columnSpacing or 0) + level
+	end
+	return cfg.spacing + level, (cfg.columnSpacing or 0) + upright
+end
+Group.Gaps = Gaps
+
 -- How much larger raid frames are drawn in a small raid.
 local function RaidScale(cfg)
 	local members = ns.Sealed.GroupSize()
@@ -113,6 +128,7 @@ local function Configure(header, kind)
 	local cfg = ns.db.units[kind]
 	local growth = GROWTH[cfg.growth]
 	local scale = kind == "raid" and RaidScale(cfg) or cfg.scale
+	local between, betweenColumns = Gaps(cfg)
 
 	-- The header is told nothing while it is hidden; shown again at the end, it lays out once.
 	header:Hide()
@@ -126,8 +142,8 @@ local function Configure(header, kind)
 	end)
 
 	header:SetAttribute("point", growth.point)
-	header:SetAttribute("xOffset", growth.x * cfg.spacing)
-	header:SetAttribute("yOffset", growth.y * cfg.spacing)
+	header:SetAttribute("xOffset", growth.x * between)
+	header:SetAttribute("yOffset", growth.y * between)
 	if kind == "party" then
 		header:SetAttribute("showParty", true)
 		header:SetAttribute("showRaid", false)
@@ -146,7 +162,7 @@ local function Configure(header, kind)
 		header:SetAttribute("groupingOrder", RAID_GROUPS)
 		header:SetAttribute("unitsPerColumn", cfg.perColumn)
 		header:SetAttribute("maxColumns", math.ceil(MAX_RAID / cfg.perColumn))
-		header:SetAttribute("columnSpacing", cfg.columnSpacing)
+		header:SetAttribute("columnSpacing", betweenColumns)
 		header:SetAttribute("columnAnchorPoint", COLUMN_ANCHOR[ColumnGrowth(cfg)])
 	end
 

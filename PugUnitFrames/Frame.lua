@@ -210,6 +210,12 @@ function Frame.TakeAbove(frame, height)
 	return offset + 3
 end
 
+-- The size of the small marks that ride a plate's top edge (Marks.lua, Quest.lua), which stand
+-- side by side there and so have to agree on it.
+function Frame.MarkSize(cfg)
+	return math.max(10, math.min(16, cfg.height * 0.36))
+end
+
 -- A one-pixel line around a region, drawn just inside its bounds. Returns the four textures.
 function Frame.MakeEdge(parent, layer)
 	local edge = {}
@@ -348,6 +354,9 @@ function Frame.Layout(frame)
 	frame.barWidth = cfg.width - frame.barLeft - frame.barRight
 	frame.powerHeight = cfg.powerHeight
 	frame.below, frame.above = 0, 0
+	-- Texts.lua says here how high above the middle of the health bar the name's line runs, when
+	-- the plate has two lines of text; the marks keep clear of it.
+	frame.nameRow = nil
 	for _, element in ipairs(elements) do
 		local name = element.name
 		local wanted = element.Wanted(cfg, frame.kind) and true or false

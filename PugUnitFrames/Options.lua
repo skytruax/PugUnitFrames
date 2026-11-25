@@ -26,13 +26,15 @@ local SETTING_LABELS = {
 	powerHeight = "Power bar height", hideNoPower = "Hide an empty power bar",
 	color = "Health colour", invert = "Dark bar, colour where health is missing", fill = "Bars fill",
 	healthText = "Health text", powerText = "Power text",
-	name = "Name", level = "Level", portrait = "Portrait", mirror = "Mirror the portrait",
+	name = "Name", surname = "Surname", level = "Level", portrait = "Portrait", mirror = "Mirror the portrait",
 	buffs = "Buffs shown", debuffs = "Debuffs shown", myBuffs = "Only my buffs", myDebuffs = "Only my debuffs",
-	auraSize = "Icon size", auraPerRow = "Icons per row", auraSide = "Icons go",
+	auraSize = "Icon size", auraPerRow = "Icons per row", buffSide = "Buffs go", debuffSide = "Debuffs go",
 	castbar = "Cast bar", castHeight = "Cast bar height",
 	threat = "Outline when attacked", range = "Fade when out of range", heals = "Healing on its way",
 	absorbs = "Shields on the health bar",
-	marks = "Marks (raid icon, leader, role, PvP, combat)", dispel = "Light up debuffs I can remove",
+	marks = "Marks (raid icon, combat, ready check)", dispel = "Light up debuffs I can remove",
+	leader = "Leader's mark", role = "Role mark (tank, healer, damage)", pvp = "PvP flag",
+	elite = "Dragon on elites and rares", quest = "Questie's icon on quest creatures",
 	happiness = "Pet's mood", highlight = "Outline the one I have targeted",
 	points = "Combo points", totems = "Totems",
 	growth = "Members go", spacing = "Gap between members", showPlayer = "Include me", showSolo = "Show when alone",
@@ -42,7 +44,7 @@ local SETTING_LABELS = {
 }
 
 -- The sections a frame's settings are shown in (Defaults.UNIT_SECTIONS).
-local SECTION_LABELS = { frame = "Frame", bars = "Bars", text = "Text and marks", icons = "Icons" }
+local SECTION_LABELS = { frame = "Frame", bars = "Bars", text = "Text and portrait", marks = "Marks", icons = "Icons" }
 
 local CHOICE_LABELS = {
 	theme = { slate = "Slate", night = "Night", hearth = "Hearth" },
@@ -54,7 +56,8 @@ local CHOICE_LABELS = {
 	healthText = { none = "None", value = "Exact (1,234,567)", short = "Short (1234K)", percent = "Percent (87%)", both = "Short and percent", max = "Short / maximum", deficit = "What is missing" },
 	powerText = { none = "None", value = "Exact (1,234,567)", short = "Short (1234K)", percent = "Percent (87%)", max = "Short / maximum" },
 	portrait = { none = "None", left = "Left", right = "Right" },
-	auraSide = { below = "Below", above = "Above", right = "Right", left = "Left", inside = "On the frame" },
+	buffSide = { below = "Below", above = "Above", right = "Right", left = "Left", inside = "On the frame" },
+	debuffSide = { below = "Below", above = "Above", right = "Right", left = "Left", inside = "On the frame" },
 	growth = { down = "Down", up = "Up", right = "Right", left = "Left" },
 	columnGrowth = { down = "Down", up = "Up", right = "Right", left = "Left" },
 }

@@ -164,9 +164,41 @@ end
 ---------------------------------------------------------------------------
 -- Who the unit is
 ---------------------------------------------------------------------------
-function Sealed.NameToText(text, unit)
-	local name = UnitName(unit)
-	text:SetText(name)
+-- On this client a character has a first name and a surname, and the game hands them over as
+-- two answers: the second, which other clients use for a realm, is the surname here. The game's
+-- own frames join the two with this separator (NameUtil.FormatUnitNameForDisplay, in the
+-- Blizzard_FrameXMLUtil of this client).
+local SEPARATORS = Constants and Constants.CharacterNameSeparatorConsts
+local SURNAME_SEPARATOR = SEPARATORS and SEPARATORS.CHARACTERNAME_SURNAME_SEPARATOR or " "
+
+-- Whether the unit is the player's own character, as far as the game will say.
+local function IsOwnCharacter(unit)
+	if unit == "player" then
+		return true
+	end
+	local same = UnitIsUnit(unit, "player")
+	return not issecretvalue(same) and same == true
+end
+
+-- Writes the unit's name on a text. how:
+--   "full"     first name and surname on one line, as the game's own frames write them
+--   "stacked"  the surname on a line of its own under the first name (a narrow plate)
+--   "first"    the first name alone
+-- Only a character has a surname, and a character's two names are never sealed. The name the
+-- game does seal is a creature's, which has one part: sealed, it goes to the text untouched.
+function Sealed.NameToText(text, unit, how)
+	local name, surname = UnitName(unit)
+	if how == "first" or issecretvalue(name) or issecretvalue(surname) or name == nil or surname == nil or surname == "" then
+		text:SetText(name)
+		return
+	end
+	-- A player can ask the game not to show their own surname. Its own player frame then leaves
+	-- it off, and so does this one.
+	if IsOwnCharacter(unit) and RegionalUniqueNamesEnabled() and not C_PlayerInfo.ShouldDisplaySurname() then
+		text:SetText(name)
+		return
+	end
+	text:SetText(name .. (how == "stacked" and "\n" or SURNAME_SEPARATOR) .. surname)
 end
 
 -- The unit's class colour as r, g, b, or nothing when the client will not say. The numbers can
@@ -193,6 +225,21 @@ function Sealed.PlayerClassFile()
 		return nil
 	end
 	return classFile
+end
+
+-- The unit's GUID if it is a creature of the world and the game lets that be read, else nil.
+-- The game seals a creature's GUID where it restricts addons (in a dungeon, say); a player's or
+-- a pet's is of no use to whoever asks which creature this is.
+function Sealed.CreatureGUID(unit)
+	local guid = UnitGUID(unit)
+	if issecretvalue(guid) or type(guid) ~= "string" then
+		return nil
+	end
+	local kind = guid:match("^(%a+)%-")
+	if kind == "Creature" or kind == "Vehicle" then
+		return guid
+	end
+	return nil
 end
 
 -- Shows a mark while the unit leads its group.

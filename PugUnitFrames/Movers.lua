@@ -28,8 +28,9 @@ local function Footprint(kind)
 		members, columns, scale = cfg.perColumn, math.ceil(40 / cfg.perColumn), ns.Group.RaidScale(cfg)
 	end
 	local vertical = cfg.growth == "down" or cfg.growth == "up"
-	local along = members * (vertical and cfg.height or cfg.width) + (members - 1) * cfg.spacing
-	local across = columns * (vertical and cfg.width or cfg.height) + (columns - 1) * (cfg.columnSpacing or 0)
+	local between, betweenColumns = ns.Group.Gaps(cfg)
+	local along = members * (vertical and cfg.height or cfg.width) + (members - 1) * between
+	local across = columns * (vertical and cfg.width or cfg.height) + (columns - 1) * betweenColumns
 	local width, height = vertical and across or along, vertical and along or across
 	return ns.Group.Corner(cfg), cfg.x, cfg.y, width * scale, height * scale
 end

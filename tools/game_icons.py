@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The game's own spell icons and raid marks, for the pictures.
+"""The game's own spell icons, raid marks, stand-in portraits and elite dragons, for the pictures.
 
 The icons are Blizzard Entertainment's artwork. They appear in the pictures the way they appear in
 any screenshot of the game; they are not part of the addon and are not covered by this
@@ -65,6 +65,29 @@ MARKS = {
 }
 
 
+# Portraits. In the game a portrait is drawn from the unit's own model, which no picture made
+# outside the game has. These are the faces the game itself puts in a portrait's place until it
+# has drawn one, one for each people and one for a creature. In the mirror's CHARACTERFRAME folder.
+PORTRAITS = {
+    "human-female": "TEMPORARYPORTRAIT-FEMALE-HUMAN.PNG",
+    "human-male": "TEMPORARYPORTRAIT-MALE-HUMAN.PNG",
+    "dwarf-male": "TEMPORARYPORTRAIT-MALE-DWARF.PNG",
+    "nightelf-male": "TEMPORARYPORTRAIT-MALE-NIGHTELF.PNG",
+    "gnome-female": "TEMPORARYPORTRAIT-FEMALE-GNOME.PNG",
+    "orc-male": "TEMPORARYPORTRAIT-MALE-ORC.PNG",
+    "creature": "TemporaryPortrait-Monster.PNG",
+}
+
+# The dragons the game puts on the nameplate of an elite (gold) or a rare elite (silver), which
+# the addon shows beside such a creature's level by the name the game has for each. Both are cells
+# of one sheet in the mirror's TARGETINGFRAME folder: left, top, right, bottom.
+RANK_SHEET = "Nameplates.PNG"
+RANKS = {
+    "nameplates-icon-elite-gold": (0, 45, 40, 81),
+    "nameplates-icon-elite-silver": (0, 81, 40, 117),
+}
+
+
 def fetch(folder, filename):
     """Path of the cached copy of one of the mirror's files, downloading it first if it is not there."""
     target = os.path.join(CACHE, filename)
@@ -92,10 +115,25 @@ def mark(number):
     return Image.open(fetch("TARGETINGFRAME", MARKS[number])).convert("RGBA")
 
 
+def portrait(name):
+    """One of the game's stand-in portraits as an RGBA image (64 x 64, a round face on a dark disc)."""
+    return Image.open(fetch("CHARACTERFRAME", PORTRAITS[name])).convert("RGBA")
+
+
+def rank(atlas):
+    """The dragon the game knows by this name, cut out of its sheet, as an RGBA image."""
+    return Image.open(fetch("TARGETINGFRAME", RANK_SHEET)).convert("RGBA").crop(RANKS[atlas])
+
+
 if __name__ == "__main__":
     for spell in FILES:
         icon(spell)
     for number in MARKS:
         mark(number)
-    print("%d icons and %d raid marks in %s" % (len(FILES), len(MARKS), os.path.relpath(CACHE, ROOT)))
+    for name in PORTRAITS:
+        portrait(name)
+    for atlas in RANKS:
+        rank(atlas)
+    print("%d icons, %d raid marks, %d portraits and %d dragons in %s"
+          % (len(FILES), len(MARKS), len(PORTRAITS), len(RANKS), os.path.relpath(CACHE, ROOT)))
     sys.exit(0)

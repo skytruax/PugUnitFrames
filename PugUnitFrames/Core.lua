@@ -143,7 +143,7 @@ end)
 -- Saved settings
 ---------------------------------------------------------------------------
 -- PugUnitFramesDB = {                      -- shared by every character on the account
---     schema   = 1,
+--     schema   = 2,                        -- how the profiles are laid out; 1 was version 0.2
 --     profiles = { [name] = profile },     -- every setting lives in a profile (Defaults.lua)
 -- }
 -- PugUnitFramesCharDB = { profile = name } -- per character: which profile it uses
@@ -151,7 +151,7 @@ end)
 -- The per-character file is what ties a character to its profile, so the addon never has to ask
 -- the game for the character's name: that is one of the answers the game can seal, and a reload
 -- in the middle of a fight would then have nothing to look the profile up by.
-local SCHEMA = 1
+local SCHEMA = 2
 local DEFAULT_PROFILE = "Default"
 local MAX_PROFILE_NAME = 32
 
@@ -168,12 +168,15 @@ local function LoadDatabase()
 		saved = {}
 	end
 	if type(saved.profiles) ~= "table" then saved.profiles = {} end
+	-- Profiles written by an older version are brought along first (Defaults.Migrate). A file
+	-- with no number, or one that is not a number, is read as the oldest layout.
+	local from = type(saved.schema) == "number" and saved.schema or 1
 	saved.schema = SCHEMA
 	for name, profile in pairs(saved.profiles) do
 		if not ns.IsProfileName(name) or type(profile) ~= "table" then
 			saved.profiles[name] = nil
 		else
-			ns.Defaults.Sanitize(profile)
+			ns.Defaults.Sanitize(ns.Defaults.Migrate(profile, from))
 		end
 	end
 

@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.3.0
+
+What you see when you log in has changed. Every part of it is a setting, and can be switched back.
+
+- **First name and surname.** A character on Forever has both, and the frames wrote only the first. They write both now, as the game's own frames do. On a raid frame the surname has a line of its own under the first name. If you have the game hide your own surname, your own frame leaves it off as well. "Surname" is a setting of each frame.
+- **Room for a whole name.** Where a frame has the height, the name has a line to itself, as wide as the health bar, with the level and the health number on the line under it and the power number on the power bar. A long creature name is written out where it used to be cut short, and the party frame starts wider so that two names of twelve letters fit beside a portrait.
+- **Portraits** on the player, the target (at the right end, as the game has it), the focus and each party member. Options > Frames > Text and portrait.
+- **A dragon beside the level of an elite or rare creature**: the game's own, as on its nameplates. Gold for an elite or a boss, silver for a rare elite, a star for a rare creature. The "+" and "R" after the level stay.
+- **Questie's quest icon.** A creature that one of your quests needs carries the icon Questie puts on its nameplate, in the top right corner of the target, target of target and focus frames. It needs Questie to be installed. In a dungeon the game does not tell addons which creature a unit is, and there is no icon there.
+- **The leader's mark, the role mark and the PvP flag start switched off**, and each has its own setting now (Options > Frames > Marks). Raid icons, resting, in combat and ready-check answers are as before.
+- **Party: buffs above each member**, in a row as on the target, with the debuffs still beside the frame; and health written as an amount, not a percentage.
+- Buffs and debuffs each have their own side of a frame ("Buffs go", "Debuffs go"), in place of one setting for both.
+- The members of a group stand apart by the gap you set plus whatever stands between them (a row of icons, a cast bar), so one member's icons no longer lie on the next member's frame. A gap you had set by hand is taken down by what stood between the frames, so they stay as far apart as you had them.
+- The target of target starts wider and without a health number, so that a name fits on it; the focus frame starts larger, with room for a portrait and a long name.
+- On a frame with two lines of text a raid mark sits at the end of the name's line, clear of the name and of the icons above the frame, and the small marks on the frame's top edge stand over its portrait, clear of where the name begins.
+- The frame settings have a fifth section, Marks.
+
+Your settings: a setting you had never changed moves to its new starting value, and whatever you had chosen stays as you chose it. A party whose icons you had set up keeps them exactly as they were. There is no telling a setting left alone from one set to the same value on purpose, so if you had, say, kept portraits off deliberately, switch them off once more. Profile text exported from 0.2 can still be pasted in.
+
 ## v0.2.0
 
 - A new name: Pug Unit Frames. It was Free Unit Frames, a name that turned out to be in use already. A pug is a small dog, and a PUG is a pick-up group. It is a homage to PitBull Unit Frames, which has not come to Forever, and it is not that project.

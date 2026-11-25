@@ -568,7 +568,13 @@ end
 -- Texture ------------------------------------------------------------------
 Inherit(Texture, Region)
 -- SecretArguments = "AllowedWhenTainted" for all of these.
-function Texture:SetTexture(texture) self.texture = texture end
+function Texture:SetTexture(texture) self.texture = texture self.atlas = nil end
+-- A picture out of one of the game's own sheets, by name.
+function Texture:SetAtlas(atlas, useAtlasSize)
+	Plain("SetAtlas's own size flag", useAtlasSize)
+	self.atlas = atlas
+	self.texture = nil
+end
 function Texture:SetColorTexture(r, g, b, a) self.color = { r, g, b, a } end
 function Texture:SetVertexColor(r, g, b, a) self.vertex = { r, g, b, a } end
 function Texture:SetTexCoord(...) self.coords = { ... } end
@@ -599,6 +605,7 @@ end
 function FontString:SetFontObject(name) Plain("SetFontObject", name) self.fontObject = name end
 function FontString:SetJustifyH(justify) Plain("SetJustifyH", justify) self.justify = justify end
 function FontString:SetWordWrap(wrap) Plain("SetWordWrap", wrap) self.wrap = wrap end
+function FontString:SetMaxLines(lines) Plain("SetMaxLines", lines) assert(type(lines) == "number") self.maxLines = lines end
 function FontString:SetShadowColor(...) Plain("SetShadowColor", ...) end
 function FontString:SetShadowOffset(...) Plain("SetShadowOffset", ...) end
 -- SecretArguments = "AllowedWhenTainted"
@@ -1284,7 +1291,10 @@ local function Unit(token, what)
 end
 
 -- The conditions Blizzard documents (SecretPredicatesDocumentation.lua).
-local function IdentitySealed(unit) return not (unit.playerControlled or unit.inGroup) end
+-- Who a unit is: sealed for anything that is not a player's and not in the group. Players of
+-- this client report that in the open world a creature's name and GUID can be read all the same,
+-- and that it is inside dungeons that they cannot: M.openWorld = true stands for the first.
+local function IdentitySealed(unit) return not M.openWorld and not (unit.playerControlled or unit.inGroup) end
 local function HealthMaxSealed(unit) return not unit.playerControlled end
 local function PowerSealed(unit) return not M.plainPower[unit.powerType] end
 local function CastSealed(token) return token ~= "player" and token ~= "pet" end
@@ -1327,12 +1337,20 @@ function UnitIsUnit(token, other)
 	local unit, second = Unit(token, "UnitIsUnit"), Unit(other, "UnitIsUnit")
 	return SealIf(M.sealComparisons, unit ~= nil and second ~= nil and unit.name == second.name)
 end
+-- A GUID as the game writes one: a creature's carries the number of its kind (unit.npc) in the
+-- sixth place, a player's has three parts, a pet's starts with "Pet".
 function UnitGUID(token)
 	local unit = Unit(token, "UnitGUID")
 	if not unit then
 		return nil
 	end
-	return SealIf(not (unit.playerControlled or unit.inGroup), "GUID-" .. unit.name)
+	local guid
+	if unit.isPlayer then
+		guid = "Player-4444-" .. unit.name
+	else
+		guid = ("%s-0-4444-0-12-%d-00001A2B3C"):format(unit.isPet and "Pet" or "Creature", unit.npc or 0)
+	end
+	return SealIf(IdentitySealed(unit), guid)
 end
 C_PetInfo = {
 	GetPetHappiness = function()
@@ -1464,13 +1482,23 @@ function GetComboPoints(attacker, target)
 end
 
 -- Identity: sealed unless the unit is a player's or in the group.
+-- On this client the second answer is a character's surname (unit.surname); a creature has none.
 function UnitName(token)
 	local unit = Unit(token, "UnitName")
 	if not unit then
 		return nil
 	end
-	return SealIf(IdentitySealed(unit), unit.name)
+	local sealed = IdentitySealed(unit)
+	return SealIf(sealed, unit.name), SealIf(sealed and unit.surname ~= nil, unit.surname)
 end
+-- Characters are named by first name and surname, unique across a region, and a player may hide
+-- their own surname (M.hideOwnSurname).
+function RegionalUniqueNamesEnabled() return not M.realmNames end
+C_PlayerInfo = {
+	ShouldDisplaySurname = function() return not M.hideOwnSurname end,
+}
+Constants = Constants or {}
+Constants.CharacterNameSeparatorConsts = { CHARACTERNAME_SURNAME_SEPARATOR = " ", CHARACTERNAME_REALMNAME_SEPARATOR = "-" }
 function UnitClass(token)
 	local unit = Unit(token, "UnitClass")
 	if not unit then

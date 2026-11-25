@@ -69,3 +69,8 @@ Shim(C_PetInfo, "GetPetHappiness", function() end)
 Shim(_G, "UnitHealthMissing", function(unit)
 	return UnitHealthMax(unit) - UnitHealth(unit)
 end)
+
+-- A player may have the game leave their own surname off. The simulator has no such setting:
+-- shown, which is how the game starts out.
+C_PlayerInfo = C_PlayerInfo or {}
+Shim(C_PlayerInfo, "ShouldDisplaySurname", function() return true end)

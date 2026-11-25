@@ -1,9 +1,17 @@
 local ADDON, ns = ...
 
--- The words on the plate: level and name, and the health and power numbers.
+-- The words on the plate: the name, the level (with a dragon beside it for an elite or a rare
+-- creature), and the health and power numbers.
 --
--- A wide frame has the level and name on the left and the numbers on the right, health over
--- power. A narrow one (a raid frame) has the name in the middle and the health number under it.
+-- A character of this game has a first name and a surname, twelve letters each at most, and a
+-- creature's name can be longer than that. So a plate with room for two lines gives the upper
+-- one to the name alone, the whole width of the bar; the level and the health number share the
+-- lower one. A plate too low for that has one line: level and name from the left, the numbers
+-- from the right, the name in what the numbers leave. A narrow plate (a raid frame) has the
+-- name in the middle, first name over surname, or the first name with the health number under it.
+--
+-- The power number sits on the power bar when the bar is tall enough to hold it, and beside the
+-- level or under the health number when it is not.
 local Frame, Style, Sealed = ns.Frame, ns.Style, ns.Sealed
 local L = ns.L
 
@@ -18,10 +26,22 @@ Texts.events = {
 Texts.closeEvents = { "UNIT_POWER_FREQUENT" }
 
 local NARROW = Frame.NARROW
-local PAD = 4
+local PAD = 4        -- between an end of the bar and the words
+local NARROW_PAD = 2 -- a narrow plate has less to spare
+local AFTER_RANK = 2 -- between the dragon and what follows it
+local AFTER_LEVEL = 3
+
+-- The game's own pictures, the ones it puts on a nameplate: a gold dragon for an elite and for
+-- a boss, a silver one for a rare elite, a star for a rare creature that is not elite.
+local RANK_ART = {
+	elite = "nameplates-icon-elite-gold",
+	worldboss = "nameplates-icon-elite-gold",
+	rareelite = "nameplates-icon-elite-silver",
+	rare = "UI-HUD-UnitFrame-Target-PortraitOn-Boss-Rare-Star",
+}
 
 function Texts.Wanted(cfg)
-	return cfg.name or cfg.level or cfg.healthText ~= "none" or cfg.powerText ~= "none"
+	return cfg.name or cfg.level or cfg.healthText ~= "none" or cfg.powerText ~= "none" or (cfg.elite and true or false)
 end
 
 function Texts.Create(frame)
@@ -35,7 +55,46 @@ function Texts.Create(frame)
 		text:SetWordWrap(false)
 		texts[key] = text
 	end
+	texts.rank = holder:CreateTexture(nil, "OVERLAY") -- the dragon
+	texts.rank:Hide()
 	frame.texts = texts
+end
+
+-- Places what stands in a row from the left: the dragon, the level, a power number that has no
+-- bar to sit on, and on a plate with one line the name. Each starts where the one before it
+-- ends, so the row is laid again when the unit on show gains or loses its dragon.
+local function Arrange(frame, ranked)
+	local texts, cfg, health = frame.texts, frame.cfg, frame.health
+	local rank, level, name = texts.rank, texts.level, texts.name
+	texts.ranked = ranked
+	rank:SetShown(ranked)
+	rank:ClearAllPoints()
+	level:ClearAllPoints()
+	name:ClearAllPoints()
+
+	-- What the next thing stands after, at which of its points, and how far from it.
+	local after, point, gap, y = health, "LEFT", PAD, texts.lowY
+	if ranked then
+		rank:SetPoint("LEFT", after, point, gap - 1, y)
+		after, point, gap, y = rank, "RIGHT", AFTER_RANK, 0
+	end
+	if cfg.level then
+		level:SetPoint("LEFT", after, point, gap, y)
+		after, point, gap, y = level, "RIGHT", AFTER_LEVEL, 0
+	end
+	if texts.powerBeside then
+		texts.power:ClearAllPoints()
+		texts.power:SetPoint("LEFT", after, point, gap + AFTER_LEVEL, y)
+	end
+	if texts.twoRows then
+		-- The upper line is the name's alone, from one end of the bar to the other.
+		name:SetPoint("LEFT", health, "LEFT", PAD, texts.nameY)
+		name:SetPoint("RIGHT", health, "RIGHT", -PAD, texts.nameY)
+	else
+		-- One line: the name runs from the level to where the numbers' room begins.
+		name:SetPoint("LEFT", after, point, gap, y)
+		name:SetPoint("RIGHT", health, "RIGHT", texts.nameEnd, 0)
+	end
 end
 
 function Texts.Layout(frame, cfg, on)
@@ -44,34 +103,66 @@ function Texts.Layout(frame, cfg, on)
 	if not on then
 		return
 	end
-	local health = frame.health
+	local health, pixel = frame.health, frame.pixel
 	local narrow = cfg.width < NARROW
 	local showHealth, showPower = cfg.healthText ~= "none", cfg.powerText ~= "none"
 
-	-- On a tall plate the name is set a size larger than the numbers beside it.
+	-- On a tall plate the name is set a size larger than the numbers.
 	local tall = not narrow and cfg.height >= 40
-	Style.SetFont(texts.level, tall and 1 or 0)
+	local nameSize = Style.fontSize + (tall and 1 or 0)
+	local numberSize = Style.fontSize + (narrow and -1 or 0)
+	local powerSize = math.max(6, Style.fontSize - 2)
+
+	-- The power number goes on the power bar, where the bar is tall enough for it.
+	local onBar = showPower and not narrow and cfg.powerHeight > powerSize
+	-- Two lines, where the health bar has the height and there is something for the lower one.
+	local barHeight = cfg.height - 2 * pixel - (cfg.powerHeight > 0 and cfg.powerHeight + pixel or 0)
+	local lower = cfg.level or showHealth or (showPower and not onBar)
+	local twoRows = (not narrow and cfg.name and lower and barHeight >= nameSize + numberSize + 5) or false
+
+	-- How far above and below the middle of the health bar the two lines run. They hold to the
+	-- middle, not to the bar's edges, so they stay together when the bar grows (a power bar put
+	-- away) or shrinks.
+	texts.narrow = narrow
+	texts.twoRows = twoRows
+	texts.nameY = twoRows and math.ceil(nameSize / 2) + 1 or 0
+	texts.lowY = twoRows and -(math.ceil(numberSize / 2) + 1) or 0
+	frame.nameRow = twoRows and texts.nameY or nil
+
 	Style.SetFont(texts.name, tall and 1 or 0)
+	Style.SetFont(texts.level, (tall and not twoRows) and 1 or 0)
 	Style.SetFont(texts.health, narrow and -1 or 0)
 	Style.SetFont(texts.power, -2)
 	texts.name:SetTextColor(theme.text[1], theme.text[2], theme.text[3])
 	texts.health:SetTextColor(theme.text[1], theme.text[2], theme.text[3])
-	texts.power:SetTextColor(theme.quiet[1], theme.quiet[2], theme.quiet[3])
+	-- On its bar the power number has the bar's colour behind it and is written in full white;
+	-- beside the other words it is the quieter of them.
+	local powerTone = onBar and theme.text or theme.quiet
+	texts.power:SetTextColor(powerTone[1], powerTone[2], powerTone[3])
 
 	for _, key in ipairs({ "level", "name", "health", "power" }) do
 		texts[key]:ClearAllPoints()
 	end
-	texts.level:SetShown(cfg.level)
+	texts.level:SetShown(cfg.level and not narrow)
 	texts.name:SetShown(cfg.name)
 	texts.health:SetShown(showHealth)
-	texts.power:SetShown(showPower)
+	texts.power:SetShown(showPower and not narrow)
+	texts.rankable = (cfg.elite and not narrow) or false
+	texts.powerBeside = false
+	-- How the name is written (Sealed.NameToText). A narrow plate has no room for both names on
+	-- one line: the surname goes on a line of its own, where there is no health number under
+	-- the name to need that line.
+	local stacked = (narrow and cfg.surname and not showHealth) or false
+	texts.nameHow = (not cfg.surname and "first") or (not narrow and "full") or (stacked and "stacked") or "first"
+	texts.name:SetWordWrap(stacked)
+	texts.name:SetMaxLines(stacked and 2 or 1)
 
 	if narrow then
 		-- Name in the middle, the health number under it; no room for more.
-		texts.level:Hide()
-		texts.power:Hide()
+		texts.rank:Hide()
+		texts.ranked = false
 		texts.name:SetJustifyH("CENTER")
-		texts.name:SetWidth(frame.barWidth - 2 * PAD)
+		texts.name:SetWidth(math.max(1, frame.barWidth - 2 * NARROW_PAD))
 		texts.health:SetJustifyH("CENTER")
 		if cfg.name and showHealth then
 			texts.name:SetPoint("BOTTOM", health, "CENTER", 0, 1)
@@ -83,34 +174,52 @@ function Texts.Layout(frame, cfg, on)
 		return
 	end
 
-	-- The numbers take what they need on the right; the name gets the rest and is cut short
-	-- with an ellipsis by the game if it does not fit.
-	local numbers = 0
-	if showHealth then
-		numbers = (cfg.healthText == "both" or cfg.healthText == "max") and 0.46 or 0.30
-	elseif showPower then
-		numbers = 0.30
-	end
+	local rankSize = numberSize + 5
+	texts.rank:SetSize(rankSize, rankSize)
+	texts.level:SetJustifyH("LEFT")
+	texts.name:SetJustifyH("LEFT")
 	texts.health:SetJustifyH("RIGHT")
 	texts.power:SetJustifyH("RIGHT")
-	if showHealth and showPower then
-		texts.health:SetPoint("BOTTOMRIGHT", health, "RIGHT", -PAD, 0)
-		texts.power:SetPoint("TOPRIGHT", health, "RIGHT", -PAD, -1)
-	else
-		texts.health:SetPoint("RIGHT", health, "RIGHT", -PAD, 0)
-		texts.power:SetPoint("RIGHT", health, "RIGHT", -PAD, 0)
-	end
 
-	texts.level:SetJustifyH("LEFT")
-	texts.level:SetPoint("LEFT", health, "LEFT", PAD, 0)
-	texts.name:SetJustifyH("LEFT")
-	if cfg.level then
-		texts.name:SetPoint("LEFT", texts.level, "RIGHT", 3, 0)
-	else
-		texts.name:SetPoint("LEFT", health, "LEFT", PAD, 0)
+	-- The numbers, from the right. On a plate with one line, a power number that has no bar to
+	-- sit on goes under the health number, the two as a column.
+	local column = showHealth and showPower and not onBar and not twoRows
+	if showHealth then
+		if column then
+			texts.health:SetPoint("BOTTOMRIGHT", health, "RIGHT", -PAD, 0)
+		else
+			texts.health:SetPoint("RIGHT", health, "RIGHT", -PAD, texts.lowY)
+		end
 	end
-	local levelRoom = cfg.level and Style.fontSize * 2.5 or 0
-	texts.name:SetWidth(math.max(10, frame.barWidth * (1 - numbers) - 2 * PAD - levelRoom))
+	local powerBesideName = false
+	if showPower then
+		if onBar then
+			texts.power:SetPoint("RIGHT", frame.power, "RIGHT", -PAD, 0)
+		elseif twoRows then
+			-- On the lower line, after the level: Arrange places it.
+			texts.powerBeside = true
+			texts.power:SetJustifyH("LEFT")
+		elseif column then
+			texts.power:SetPoint("TOPRIGHT", health, "RIGHT", -PAD, -1)
+		else
+			texts.power:SetPoint("RIGHT", health, "RIGHT", -PAD, 0)
+			powerBesideName = true
+		end
+	end
+	-- On a plate with one line the name ends where the numbers' room begins. How wide a number
+	-- comes out is the game's to know (it can be sealed, and the size of a text that holds a
+	-- sealed number is sealed with it), so the name is not tied to the number itself: the
+	-- numbers have a share of the bar, a larger one for the styles that write two numbers.
+	local share = 0
+	if showHealth then
+		share = (cfg.healthText == "both" or cfg.healthText == "max") and 0.46 or 0.30
+	elseif powerBesideName then
+		share = 0.30
+	end
+	texts.nameEnd = -(PAD + frame.barWidth * share)
+
+	-- Without a dragon for now: Texts.Update puts it there for a unit that has one.
+	Arrange(frame, false)
 end
 
 -- "60", "62+" for an elite, "62R" for a rare one and "62R+" for one that is both, "??" for
@@ -137,6 +246,18 @@ local function ShowLevel(text, unit)
 	end
 end
 
+-- Puts the picture for the unit's standing on the dragon and says whether it has one. What a
+-- creature is (elite, rare, a boss) is never sealed.
+local function ShowRank(frame, unit)
+	local texts = frame.texts
+	local art = texts.rankable and RANK_ART[UnitClassification(unit)]
+	if art then
+		texts.rank:SetAtlas(art)
+		return true
+	end
+	return false
+end
+
 -- Dead, a ghost or offline, or nothing: these are never sealed.
 local function StatusOf(unit)
 	if not UnitIsConnected(unit) then
@@ -160,8 +281,14 @@ function Texts.Update(frame, unit, event)
 	local status = StatusOf(unit)
 
 	if all or IDENTITY_EVENTS[event] then
+		if not texts.narrow then
+			local ranked = ShowRank(frame, unit)
+			if ranked ~= texts.ranked then
+				Arrange(frame, ranked)
+			end
+		end
 		if cfg.name then
-			Sealed.NameToText(texts.name, unit)
+			Sealed.NameToText(texts.name, unit, texts.nameHow)
 		end
 		if cfg.level then
 			ShowLevel(texts.level, unit)
@@ -187,7 +314,7 @@ function Texts.Update(frame, unit, event)
 		if status then
 			texts.name:SetText(status)
 		elseif not all then
-			Sealed.NameToText(texts.name, unit)
+			Sealed.NameToText(texts.name, unit, texts.nameHow)
 		end
 	end
 end

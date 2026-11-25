@@ -353,7 +353,7 @@ Test("dead, ghost and offline are said in words, with an empty bar", function()
 
 	M.units.party1.connected = true
 	M.Fire("UNIT_CONNECTION", "party1")
-	Equal("80%", Value(button.texts.health.text), "back to the number")
+	Equal("2,000", Value(button.texts.health.text), "back to the number")
 end)
 
 Test("healing on its way is drawn past the end of the health bar", function()
@@ -423,16 +423,26 @@ Test("a raid mark is one cell of the game's sheet, chosen by a sealed number", f
 	False(mark:IsShown(), "mark taken off")
 end)
 
-Test("the raid mark sits inside a wide frame and rides the edge of a narrow one", function()
+Test("the raid mark closes the name's line on a plate with two lines, and rides the edge of the others", function()
 	local ns = Login()
-	Equal("TOP", PugUnitFrames_player.marks.raid.anchors[1][1], "inside, clear of icons above the plate")
+	local mark = PugUnitFrames_player.marks.raid
+	Equal("RIGHT", mark.anchors[1][1], "inside, clear of icons above the plate")
+	Equal(PugUnitFrames_player.health, mark.anchors[1][2])
+	Equal(PugUnitFrames_player.texts.name.anchors[1][5], mark.anchors[1][5], "on the name's line")
+	Target(HOGGER)
+	M.SetUnit("targettarget", Friend(9))
+	M.UpdateUnitWatch()
+	Equal("CENTER", PugUnitFrames_targettarget.marks.raid.anchors[1][1], "one line of text: on the edge, clear of the name")
+	Equal("TOP", PugUnitFrames_targettarget.marks.raid.anchors[1][3])
 	Raid(3)
 	local button = ns.Group.Get("raid"):GetAttribute("child1")
-	Equal("CENTER", button.marks.raid.anchors[1][1], "on the edge, clear of the name")
+	Equal("CENTER", button.marks.raid.anchors[1][1], "a narrow frame: on the edge too")
 end)
 
 Test("leader, combat and resting marks follow the game", function()
 	local ns = Login()
+	ns.db.units.player.leader = true
+	ns.Refresh()
 	local marks = PugUnitFrames_player.marks
 	Equal(0, marks.leader.alpha, "not the leader")
 	M.units.player.leader = true
@@ -914,6 +924,8 @@ end)
 Test("a group grows the way the settings say, anchored by the corner that stays put", function()
 	local ns = Login()
 	local cfg, header = ns.db.units.party, ns.Group.Get("party")
+	cfg.buffs = 0 -- no row of icons between the members: the gap is the gap
+	ns.Refresh()
 	Equal("TOP", header:GetAttribute("point"), "members go down")
 	Equal(-cfg.spacing, header:GetAttribute("yOffset"))
 	Equal("TOPLEFT", header.anchors[1][1])
@@ -1086,7 +1098,8 @@ Test("a group's handle takes the room of a full group and is measured from its c
 	local cfg, handle = ns.db.units.party, Handle("party")
 	Equal("TOPLEFT", handle.point)
 	Equal(cfg.width, handle:GetWidth())
-	Equal(4 * cfg.height + 3 * cfg.spacing, handle:GetHeight(), "four members")
+	local row = 3 + cfg.auraSize -- the row of buffs above each member
+	Equal(4 * cfg.height + 3 * (cfg.spacing + row), handle:GetHeight(), "four members, and the room between them")
 	handle.dropped = { "TOPLEFT", UIParent, "CENTER", -500, 300 }
 	handle:GetScript("OnDragStop")(handle)
 	handle.dropped = nil
@@ -1166,7 +1179,7 @@ Test("on a narrow screen, fresh settings start inside it; chosen places are left
 	Equal(-500, units.party.x, "the party starts twelve in from the left edge")
 	Equal(-500, units.raid.x)
 	Equal(-438, units.pet.x, "the pet frame's left edge is twelve in")
-	Equal(438, units.targettarget.x, "and the frame on the far right likewise")
+	Equal(430, units.targettarget.x, "and the frame on the far right likewise")
 	Equal(-290, units.player.x, "what fits stays where it was laid out")
 
 	True(ns.Profiles.Switch("Mine"))
@@ -1193,7 +1206,7 @@ Test("a profile goes out as text and comes back the same", function()
 	ns.db.units.raid.perColumn = 8
 	ns.db.hide.pet = false
 	local text = ns.Profiles.Export(ns.db)
-	Equal("PUGUF1:", text:sub(1, 7))
+	Equal("PUGUF2:", text:sub(1, 7))
 	local copy = ns.Profiles.Import("  " .. text:sub(1, 40) .. "\n" .. text:sub(41) .. "  ")
 	True(copy, "read back, spaces and line breaks and all")
 	Equal("night", copy.theme)
@@ -1213,11 +1226,13 @@ Test("text that is not a profile is turned away with a reason, and changes nothi
 	Refused(nil)
 	Refused("")
 	Refused("hello there")
-	Refused("PUGUF1:not base64 at all!")
-	Refused("PUGUF1:abcd")                               -- decodes, but is not packed data
-	Refused("PUGUF1:" .. C_EncodingUtil.EncodeBase64("Z{{{")) -- unpacks, but is not a table
-	Refused("PUGUF1:" .. C_EncodingUtil.EncodeBase64("Z12"))  -- a number, not settings
-	Refused("PUGUF1:" .. ("ab"):rep(40000))
+	Refused("PUGUF2:not base64 at all!")
+	Refused("PUGUF2:abcd")                               -- decodes, but is not packed data
+	Refused("PUGUF2:" .. C_EncodingUtil.EncodeBase64("Z{{{")) -- unpacks, but is not a table
+	Refused("PUGUF2:" .. C_EncodingUtil.EncodeBase64("Z12"))  -- a number, not settings
+	Refused("PUGUF2:" .. ("ab"):rep(40000))
+	Refused("PUGUF1:not base64 at all!")                 -- the older mark is read, and checked the same
+	Refused("PUGUF3:abcd")                               -- a mark this version does not know
 	Equal(before, ns.Profiles.Export(ns.db))
 	Equal(0, #M.luaErrors, "being handed rubbish is not an error in the addon")
 end)
@@ -1225,7 +1240,7 @@ end)
 Test("an imported profile is checked like a saved one", function()
 	local ns = Login()
 	local hostile = { theme = "night", fontSize = 500, units = { player = { width = -5, healthText = "everything" }, raid = 7 }, payload = { 1, 2, 3 } }
-	local text = "PUGUF1:" .. C_EncodingUtil.EncodeBase64(C_EncodingUtil.CompressString(C_EncodingUtil.SerializeCBOR(hostile)))
+	local text = "PUGUF2:" .. C_EncodingUtil.EncodeBase64(C_EncodingUtil.CompressString(C_EncodingUtil.SerializeCBOR(hostile)))
 	local settings = ns.Profiles.Import(text)
 	Equal("night", settings.theme)
 	Equal(11, settings.fontSize)
@@ -1340,7 +1355,20 @@ Test("the frames page shows each kind of frame the controls it has, and they wor
 	False(page.controls.perColumn:IsShown())
 	page.sections.icons:Click()
 	True(page.controls.myBuffs:IsShown())
+	True(page.controls.buffSide:IsShown(), "buffs and debuffs each have their side")
+	True(page.controls.debuffSide:IsShown())
 	False(page.controls.color:IsShown())
+	page.sections.marks:Click()
+	True(page.controls.leader:IsShown(), "the leader's mark, the role and the flag each have a switch")
+	True(page.controls.role:IsShown())
+	True(page.controls.pvp:IsShown())
+	False(page.controls.quest:IsShown(), "raid members are not quest creatures")
+	page.tabs.target:Click()
+	True(page.controls.quest:IsShown())
+	True(page.controls.elite:IsShown())
+	page.controls.elite:SetChecked(false)
+	page.controls.elite:Click()
+	Equal(false, ns.db.units.target.elite)
 	-- Every setting is on exactly one section.
 	local seen = {}
 	for _, section in ipairs(ns.Defaults.UNIT_SECTIONS) do
@@ -1689,16 +1717,23 @@ end)
 
 Test("portraits are drawn by the game for the unit on show", function()
 	local ns = Login()
-	Equal(nil, PugUnitFrames_player.portrait, "none by default")
-	ns.db.units.player.portrait = "left"
-	ns.Refresh()
 	local picture = PugUnitFrames_player.portrait
-	True(picture:IsShown())
+	True(picture and picture:IsShown(), "there from the start")
 	Equal("player", picture.portraitOf)
+	Equal("TOPLEFT", picture.anchors[1][1], "at the left end of the player's plate")
 	True(PugUnitFrames_player.barLeft > 40, "the bars make room for it")
 	ns.db.units.player.portrait = "none"
 	ns.Refresh()
 	False(picture:IsShown())
+	Equal(PugUnitFrames_player.pixel, PugUnitFrames_player.barLeft, "and have the room back")
+
+	Target(HOGGER)
+	Party(1)
+	Equal("TOPRIGHT", PugUnitFrames_target.portrait.anchors[1][1], "the target's at the right end, as the game has it")
+	Equal("target", PugUnitFrames_target.portrait.portraitOf)
+	Equal("party1", PartyButton(ns, 1).portrait.portraitOf, "party members have theirs")
+	Equal(nil, PugUnitFrames_pet.portrait, "the small frames start without")
+	Equal(nil, PugUnitFrames_targettarget.portrait)
 end)
 
 Test("a narrow frame with no health number still says that someone is dead", function()
@@ -1800,8 +1835,8 @@ end)
 Test("the game's ping key over a frame pings the frame's unit", function()
 	local ns = Login()
 	Party(1)
-	Equal("GUID-Uther", M.PingOver(PugUnitFrames_player))
-	Equal("GUID-Friend1", M.PingOver(PartyButton(ns, 1)), "a member's button, made by the game in or out of a fight")
+	Equal("Player-4444-Uther", M.PingOver(PugUnitFrames_player))
+	Equal("Player-4444-Friend1", M.PingOver(PartyButton(ns, 1)), "a member's button, made by the game in or out of a fight")
 	Target(HOGGER)
 	True(IsSealed(M.PingOver(PugUnitFrames_target)), "a creature's identity stays sealed on the way: we never see it")
 	Equal(0, #ns.GetProblems())
@@ -2006,6 +2041,8 @@ end)
 ---------------------------------------------------------------------------
 Test("a group member's part shows as a mark, and nobody's outside the group", function()
 	local ns = Login()
+	ns.db.units.party.role, ns.db.units.target.role = true, true
+	ns.Refresh()
 	Party(2)
 	M.units.party1.role = "HEALER"
 	M.Fire("PLAYER_ROLES_ASSIGNED")
@@ -2038,7 +2075,9 @@ Test("the party can be put in order of the parts its members play", function()
 end)
 
 Test("someone marked for fighting other players carries a flag in their side's colour", function()
-	Login()
+	local ns = Login()
+	ns.db.units.player.pvp, ns.db.units.target.pvp = true, true
+	ns.Refresh()
 	local flag = PugUnitFrames_player.marks.pvp
 	Equal(0, flag.alpha, "not marked, no flag")
 	M.units.player.pvp, M.units.player.faction = true, "Alliance"
@@ -2179,4 +2218,738 @@ Test("stack counts are outlined, time left can be a number, and buffs can be the
 	False(icons[1].cooldown.hideNumbers, "the game writes the time left on the icon")
 	Equal(4, #icons, "three debuffs, and of three buffs the one that is the player's")
 	Equal(123, icons[4].icon.texture)
+end)
+
+---------------------------------------------------------------------------
+-- Version 0.3: portraits, names in full, dragons, quest icons, the party's buffs and numbers
+---------------------------------------------------------------------------
+local function Packed(profile)
+	return C_EncodingUtil.EncodeBase64(C_EncodingUtil.CompressString(C_EncodingUtil.SerializeCBOR(profile)))
+end
+
+local function Creature(fields, npc)
+	local unit = CopyTable(fields)
+	unit.npc = npc
+	return unit
+end
+
+-- A stand-in for Questie as this addon meets it: its loader, and the one function of its
+-- nameplate module that says which icon a creature gets. Returns the list of GUIDs it was asked about.
+local function Questie(icons)
+	local asked = {}
+	QuestieLoader = {
+		ImportModule = function(_, name)
+			if name ~= "QuestieNameplate" then
+				return { private = {} }
+			end
+			return {
+				GetIcon = function(guid)
+					asked[#asked + 1] = guid
+					return icons[tonumber(guid:match("^%a+%-%d+%-%d+%-%d+%-%d+%-(%d+)%-"))]
+				end,
+			}
+		end,
+	}
+	return asked
+end
+
+Test("a tall plate gives the name a line of its own, the whole width of the bar", function()
+	Login()
+	local frame = PugUnitFrames_player
+	local texts = frame.texts
+	local name = texts.name
+	Equal(2, #name.anchors, "held at both ends")
+	Equal("LEFT", name.anchors[1][1])
+	Equal(frame.health, name.anchors[1][2], "from one end of the health bar")
+	Equal("RIGHT", name.anchors[2][1])
+	Equal(frame.health, name.anchors[2][2], "to the other")
+	Equal("RIGHT", name.anchors[2][3])
+	True(name.anchors[1][5] > 0, "above the middle of the bar")
+	Equal(nil, name.width, "and no width of its own to cut it short")
+
+	True(texts.health.anchors[1][5] < 0, "the health number on the line below")
+	Equal(frame.health, texts.level.anchors[1][2], "which the level starts")
+	True(texts.level.anchors[1][5] < 0)
+	Equal(frame.power, texts.power.anchors[1][2], "and the power number is on the power bar")
+	True(frame.nameRow > 0, "the marks are told where the name's line runs")
+end)
+
+Test("a power bar too thin for its number leaves it beside the level", function()
+	local ns = Login()
+	local frame = PugUnitFrames_player
+	ns.db.units.player.powerHeight = 6
+	ns.Refresh()
+	local texts = frame.texts
+	Equal(texts.level, texts.power.anchors[1][2], "after the level, on the lower line")
+	Equal("LEFT", texts.power.justify)
+	ns.db.units.player.level = false
+	ns.Refresh()
+	Equal(frame.health, texts.power.anchors[1][2], "or at the start of it")
+	Equal(0, #ns.GetProblems())
+end)
+
+Test("a low plate has one line: the name has the whole bar, or what the numbers' share leaves", function()
+	local ns = Login()
+	Target(HOGGER)
+	M.SetUnit("targettarget", Friend(9))
+	M.UpdateUnitWatch()
+	local frame, cfg = PugUnitFrames_targettarget, ns.db.units.targettarget
+	local texts = frame.texts
+	Equal("none", cfg.healthText, "no number on it to begin with: the name has the plate")
+	Equal(frame.health, texts.name.anchors[1][2])
+	Equal(frame.health, texts.name.anchors[2][2], "to the end of the bar")
+	Near(-4, texts.name.anchors[2][4])
+	Equal(nil, frame.nameRow, "one line")
+
+	cfg.healthText = "percent"
+	ns.Refresh()
+	Equal(0, texts.name.anchors[1][5], "one line, on the middle of the bar")
+	Equal(frame.health, texts.name.anchors[2][2], "the name is tied to the bar, never to a number whose width the game may seal")
+	Near(-(4 + frame.barWidth * 0.30), texts.name.anchors[2][4], "and ends where the number's share of the bar begins")
+	Equal(nil, texts.name.width)
+	cfg.healthText = "both"
+	ns.Refresh()
+	Near(-(4 + frame.barWidth * 0.46), texts.name.anchors[2][4], "two numbers have a larger share")
+
+	cfg.level, cfg.powerText = true, "value"
+	ns.Refresh()
+	Equal(texts.level, texts.name.anchors[1][2], "after the level")
+	Equal("BOTTOMRIGHT", texts.health.anchors[1][1], "health over power, a column at the right")
+	Equal("TOPRIGHT", texts.power.anchors[1][1])
+	Equal(frame.health, texts.power.anchors[1][2])
+	Equal(0, #ns.GetProblems())
+end)
+
+Test("a raid frame keeps its name in the middle, with nearly the whole plate to itself", function()
+	local ns = Login()
+	Raid(3)
+	local button = ns.Group.Get("raid"):GetAttribute("child1")
+	Equal("CENTER", button.texts.name.justify)
+	Equal(button.barWidth - 4, button.texts.name.width)
+	False(button.texts.rank:IsShown())
+end)
+
+Test("an elite or a rare creature has the game's dragon beside its level", function()
+	local ns = Login()
+	Target(HOGGER)
+	local frame = PugUnitFrames_target
+	local texts = frame.texts
+	True(texts.rank:IsShown(), "an elite")
+	Equal("nameplates-icon-elite-gold", texts.rank.atlas, "the gold dragon of the game's nameplates")
+	Equal(frame.health, texts.rank.anchors[1][2], "it starts the lower line")
+	True(texts.rank.anchors[1][5] < 0)
+	Equal(texts.rank, texts.level.anchors[1][2], "and the level stands after it")
+	Equal("11+", texts.level.text, "which says it as well")
+
+	M.units.target.classification = "rare"
+	M.Fire("UNIT_CLASSIFICATION_CHANGED", "target")
+	Equal("UI-HUD-UnitFrame-Target-PortraitOn-Boss-Rare-Star", texts.rank.atlas, "a star for a rare creature that is not elite")
+	M.units.target.classification = "rareelite"
+	M.Fire("UNIT_CLASSIFICATION_CHANGED", "target")
+	Equal("nameplates-icon-elite-silver", texts.rank.atlas, "a silver dragon for a rare elite")
+	M.units.target.classification = "worldboss"
+	M.Fire("UNIT_CLASSIFICATION_CHANGED", "target")
+	Equal("nameplates-icon-elite-gold", texts.rank.atlas, "gold for a boss")
+
+	Target({ name = "Mottled Boar", level = 3, reaction = 2, canAttack = true })
+	False(texts.rank:IsShown(), "an ordinary creature has none")
+	Equal(frame.health, texts.level.anchors[1][2], "and its level starts the line itself")
+	Target(Friend(5, { inGroup = false }))
+	False(texts.rank:IsShown(), "nor has a player")
+
+	Target(HOGGER)
+	True(texts.rank:IsShown())
+	ns.db.units.target.elite = false
+	ns.Refresh()
+	False(texts.rank:IsShown(), "switched off")
+	Equal(frame.health, texts.level.anchors[1][2])
+	Equal("11+", texts.level.text, "the level still says it")
+	Equal(0, #ns.GetProblems())
+end)
+
+Test("on a plate with one line the dragon stands before the name", function()
+	local ns = Login()
+	Target(Friend(5, { inGroup = false }))
+	M.SetUnit("targettarget", HOGGER)
+	M.UpdateUnitWatch()
+	local frame = PugUnitFrames_targettarget
+	local texts = frame.texts
+	True(texts.rank:IsShown())
+	Equal(0, texts.rank.anchors[1][5], "on the one line")
+	Equal(texts.rank, texts.name.anchors[1][2], "the name follows it")
+	M.SetUnit("targettarget", Friend(9))
+	M.Advance(0.3)
+	False(texts.rank:IsShown(), "gone with the creature")
+	Equal(frame.health, texts.name.anchors[1][2], "and the name is back at the start")
+	Equal(0, #ns.GetProblems())
+end)
+
+Test("a creature that a quest needs carries Questie's icon, where the game says which creature it is", function()
+	local icons = { [448] = "Interface\\Addons\\Questie\\Icons\\slay.blp" }
+	local asked = Questie(icons)
+	M.openWorld = true
+	local ns = Login()
+	Target(Creature(HOGGER, 448))
+	local icon = PugUnitFrames_target.quest.icon
+	True(icon:IsShown(), "Hogger is wanted")
+	Equal(icons[448], icon.texture, "Questie's own picture for what is wanted of him")
+	Equal("Creature-0-4444-0-12-448-00001A2B3C", asked[#asked], "asked by the creature's GUID, as Questie's nameplates ask")
+	Equal("TOPRIGHT", icon.anchors[1][3], "in the plate's top right corner")
+
+	-- The quest log changes; Questie works it through a moment after the game says so.
+	M.Fire("QUEST_LOG_UPDATE")
+	True(icon:IsShown(), "still wanted")
+	icons[448] = nil
+	M.Advance(1)
+	True(icon:IsShown(), "Questie has caught up, the frame has not looked yet")
+	M.Advance(1)
+	False(icon:IsShown(), "looked again: the quest is done")
+
+	Target(Creature({ name = "Mottled Boar", level = 3, reaction = 2, canAttack = true }, 3098))
+	False(icon:IsShown(), "a creature no quest needs")
+	Target(Creature(HOGGER, 448))
+	icons[448] = "Interface\\Addons\\Questie\\Icons\\loot.blp"
+	M.Fire("QUEST_LOG_UPDATE")
+	Equal(icons[448], icon.texture, "a new quest, a new icon")
+
+	local before = #asked
+	Target(Friend(5, { inGroup = false }))
+	False(icon:IsShown(), "a player is not a quest creature")
+	Equal(before, #asked, "and Questie is not asked about one")
+	Equal(0, #ns.GetProblems())
+end)
+
+Test("where the game seals which creature a unit is, there is no quest icon and nothing goes wrong", function()
+	local asked = Questie({ [448] = "Interface\\Addons\\Questie\\Icons\\slay.blp" })
+	local ns = Login() -- the stand-in's strict rule: a creature's GUID is sealed
+	Target(Creature(HOGGER, 448))
+	False(PugUnitFrames_target.quest.icon:IsShown())
+	Equal(0, #asked, "Questie is never handed a sealed value")
+	M.Fire("QUEST_LOG_UPDATE")
+	M.Advance(2)
+	Equal(0, #asked)
+	Equal(0, #ns.GetProblems())
+end)
+
+Test("without Questie, or with one that lacks the function, there is no quest icon", function()
+	M.openWorld = true
+	local ns = Login()
+	Target(Creature(HOGGER, 448))
+	False(PugUnitFrames_target.quest.icon:IsShown(), "no Questie")
+	QuestieLoader = { ImportModule = function() return { private = {} } end }
+	Target(Creature(HOGGER, 448))
+	False(PugUnitFrames_target.quest.icon:IsShown(), "a Questie that cannot be asked")
+	ns.db.units.target.quest = false
+	ns.Refresh()
+	False(PugUnitFrames_target.quest.holder:IsShown(), "and it can be switched off")
+	Equal(0, #ns.GetProblems())
+end)
+
+Test("the target's target, redrawn several times a second, asks Questie about a creature once a second at most", function()
+	local asked = Questie({ [448] = "Interface\\Addons\\Questie\\Icons\\slay.blp" })
+	M.openWorld = true
+	Login()
+	Target(Friend(5, { inGroup = false }))
+	M.SetUnit("targettarget", Creature(HOGGER, 448))
+	M.UpdateUnitWatch()
+	True(PugUnitFrames_targettarget.quest.icon:IsShown())
+	local before = #asked
+	M.Advance(0.9)
+	Equal(before, #asked, "three redraws, no question")
+	M.Advance(0.5)
+	True(#asked > before, "asked again after a second")
+	M.SetUnit("targettarget", Creature({ name = "Mottled Boar", level = 3, reaction = 2, canAttack = true }, 3098))
+	M.Advance(0.3)
+	False(PugUnitFrames_targettarget.quest.icon:IsShown(), "a different creature is asked about at once")
+end)
+
+Test("the leader's mark, the role and the flag start switched off, and the marks that are on close up", function()
+	local ns = Login()
+	local cfg, marks = ns.db.units.player, PugUnitFrames_player.marks
+	M.units.player.leader, M.units.player.role = true, "TANK"
+	M.units.player.pvp, M.units.player.faction, M.units.player.combat = true, "Alliance", true
+	M.Fire("PARTY_LEADER_CHANGED")
+	M.Fire("PLAYER_ROLES_ASSIGNED")
+	M.Fire("UNIT_FACTION", "player")
+	False(marks.leader:IsShown(), "no leader's mark")
+	False(marks.role:IsShown(), "no role")
+	False(marks.pvp:IsShown(), "no flag")
+	True(marks.state:IsShown(), "in combat is still said")
+	local small = ns.Frame.MarkSize(cfg)
+	Equal("TOPLEFT", marks.state.anchors[1][3], "over the portrait at the plate's left end")
+	Near(small * 0.5, marks.state.anchors[1][4], "first along the edge, with no gap left for the leader's mark")
+
+	cfg.leader, cfg.role, cfg.pvp = true, true, true
+	ns.Refresh()
+	True(marks.leader:IsShown())
+	Equal(1, marks.leader.alpha)
+	True(marks.role:IsShown())
+	True(marks.role.texture:find("Mark-Tank", 1, true))
+	True(marks.pvp:IsShown())
+	Equal(1, marks.pvp.alpha)
+	Near(small * 1.5 + 2, marks.state.anchors[1][4], "second now, behind the leader's mark")
+	Near(small * 2.5 + 4, marks.role.anchors[1][4], "the role third")
+
+	-- Each switch stands alone: with the other marks off, the leader's is still there.
+	cfg.marks, cfg.role, cfg.pvp = false, false, false
+	ns.Refresh()
+	M.units.player.raidMark = 8
+	M.Fire("RAID_TARGET_UPDATE")
+	False(marks.raid:IsShown(), "raid marks are off")
+	False(marks.state:IsShown())
+	True(marks.leader:IsShown())
+	Equal(1, marks.leader.alpha)
+	Equal(0, #ns.GetProblems())
+end)
+
+Test("the flag makes room for the quest icon, which has the corner", function()
+	local ns = Login()
+	Target(HOGGER)
+	ns.db.units.target.pvp = true
+	ns.Refresh()
+	local frame, small = PugUnitFrames_target, ns.Frame.MarkSize(ns.db.units.target)
+	Near(-small * 0.5, frame.quest.icon.anchors[1][4], "the quest icon in the corner")
+	Near(-(small * 1.5 + 2), frame.marks.pvp.anchors[1][4], "the flag beside it")
+	ns.db.units.target.quest = false
+	ns.Refresh()
+	Near(-small * 0.5, frame.marks.pvp.anchors[1][4], "and in the corner when there is no quest icon")
+end)
+
+Test("a party member's buffs stand above the plate, as the target's do, and the debuffs beside it", function()
+	local ns = Login()
+	Party(2)
+	local cfg, header, button = ns.db.units.party, ns.Group.Get("party"), PartyButton(ns, 1)
+	M.units.party1.auras = CopyTable(AURAS)
+	M.Fire("UNIT_AURA", "party1")
+	M.Advance(0)
+	local icons = ShownIcons(button)
+	Equal(5, #icons, "three debuffs and two buffs")
+	Equal(113, icons[3].icon.texture, "the debuffs first")
+	Equal("TOPLEFT", icons[1].anchors[1][1])
+	Equal("TOPRIGHT", icons[1].anchors[1][3], "to the right of the plate")
+	Equal(121, icons[4].icon.texture, "then the buffs")
+	Equal("BOTTOMLEFT", icons[4].anchors[1][1])
+	Equal("TOPLEFT", icons[4].anchors[1][3], "above the plate")
+	Equal(0, icons[4].anchors[1][4], "from its left end, on a row of their own")
+	Equal(cfg.auraSize + 2, icons[5].anchors[1][4])
+
+	-- The members stand far enough apart for that row, whatever the gap is set to.
+	local row = 3 + cfg.auraSize
+	Equal(-(cfg.spacing + row), header:GetAttribute("yOffset"))
+	cfg.castbar = true
+	ns.Refresh()
+	Equal(-(cfg.spacing + row + cfg.castHeight + 3), header:GetAttribute("yOffset"), "and for a cast bar under the plate")
+	cfg.castbar, cfg.buffs = false, 0
+	ns.Refresh()
+	Equal(-cfg.spacing, header:GetAttribute("yOffset"), "and close up when nothing stands between them")
+
+	-- Put on the debuffs' side, the buffs start a fresh row after them, as they always did.
+	cfg.buffs, cfg.buffSide = 8, "right"
+	ns.Refresh()
+	icons = ShownIcons(button)
+	Equal("TOPRIGHT", icons[4].anchors[1][3])
+	Equal(-(cfg.auraSize + 2), icons[4].anchors[1][5], "one row down")
+	Equal(-(cfg.spacing + 2), header:GetAttribute("yOffset"), "two rows beside the plate hang two below it, and the members stand that much further apart")
+	cfg.buffs = 0
+	ns.Refresh()
+	Equal(-cfg.spacing, header:GetAttribute("yOffset"), "one row beside the plate takes no room between members who stand one under another")
+	cfg.buffs = 8
+	cfg.growth = "right"
+	ns.Refresh()
+	Equal(cfg.spacing + 4 + 8 * (cfg.auraSize + 2) - 2, header:GetAttribute("xOffset"), "but they do between members who stand side by side")
+	Equal(0, #ns.GetProblems())
+end)
+
+Test("a party member's health is written as an amount, with the name on the line above it", function()
+	local ns = Login()
+	Party(1)
+	local button = PartyButton(ns, 1)
+	Equal("2,000", Value(button.texts.health.text), "an amount, not a share")
+	Equal("Friend1", button.texts.name.text)
+	True(button.texts.name.anchors[1][5] > 0, "the name above")
+	True(button.texts.health.anchors[1][5] < 0, "the number below")
+	True(button.portrait:IsShown(), "and a portrait")
+end)
+
+Test("a profile from version 0.2 moves to the new starting values where it was never changed, and keeps what was chosen", function()
+	PugUnitFramesDB = { schema = 1, profiles = { Default = { units = {
+		player = { portrait = "none", powerHeight = 9, auraSide = "above" },
+		target = { portrait = "left", powerHeight = 12, auraSide = "below", buffs = 9 },
+		targettarget = { healthText = "percent", width = 124, x = 476, auraSide = "below" },
+		focus = { portrait = "none", width = 174, height = 34, x = -200, auraSide = "above" },
+		pet = { auraSide = "left" },
+		party = { portrait = "none", healthText = "percent", buffs = 0, width = 172, auraPerRow = 4, auraSide = "right", spacing = 20 },
+		raid = { auraSide = "inside", debuffs = 3 },
+	} } } }
+	local ns = Login()
+	local units = ns.db.units
+	Equal("left", units.player.portrait, "never changed: the new start")
+	Equal(10, units.player.powerHeight)
+	Equal("left", units.target.portrait, "chosen: kept")
+	Equal(12, units.target.powerHeight)
+	Equal("below", units.target.buffSide, "where the icons were put, both kinds stay")
+	Equal("below", units.target.debuffSide)
+	Equal("none", units.targettarget.healthText)
+	Equal(140, units.targettarget.width)
+	Equal(484, units.targettarget.x, "a frame that grows keeps its near edge where it was")
+	Equal(200, units.focus.width)
+	Equal(40, units.focus.height)
+	Equal(-200, units.focus.x, "unless the player had moved it")
+	Equal("left", units.pet.buffSide)
+	Equal("left", units.pet.debuffSide)
+	Equal("left", units.party.portrait)
+	Equal("short", units.party.healthText)
+	Equal(8, units.party.buffs)
+	Equal(200, units.party.width)
+	Equal(8, units.party.auraPerRow)
+	Equal("above", units.party.buffSide, "the party's buffs, never set up, go above")
+	Equal("right", units.party.debuffSide, "its debuffs stay beside the plate")
+	Equal(20, units.party.spacing)
+	Equal(3, units.raid.debuffs)
+	Equal("inside", units.raid.debuffSide)
+	Equal(nil, units.party.auraSide, "the old setting is gone")
+	Equal(2, PugUnitFramesDB.schema)
+	Equal(0, #ns.GetProblems())
+end)
+
+Test("a party that had its buffs set up keeps them where they were", function()
+	PugUnitFramesDB = { schema = 1, profiles = { Default = { units = {
+		party = { buffs = 6, auraSide = "right", healthText = "both" },
+	} } } }
+	local ns = Login()
+	local party = ns.db.units.party
+	Equal(6, party.buffs)
+	Equal("right", party.buffSide, "beside the plate, with the debuffs, as before")
+	Equal("right", party.debuffSide)
+	Equal("both", party.healthText)
+end)
+
+Test("the move to new starting values happens once: a setting put back afterwards stays", function()
+	PugUnitFramesDB = { schema = 2, profiles = { Default = { units = {
+		player = { portrait = "none", powerHeight = 9 },
+		party = { healthText = "percent", buffs = 0, portrait = "none" },
+	} } } }
+	local ns = Login()
+	Equal("none", ns.db.units.player.portrait)
+	Equal(9, ns.db.units.player.powerHeight)
+	Equal("percent", ns.db.units.party.healthText)
+	Equal(0, ns.db.units.party.buffs)
+	Equal("none", ns.db.units.party.portrait)
+end)
+
+Test("profile text from version 0.2 is still read, and brought along the same way", function()
+	local ns = Login()
+	local old = { theme = "night", units = {
+		party = { healthText = "percent", auraSide = "below", buffs = 3 },
+		player = { portrait = "none" },
+	} }
+	local settings = ns.Profiles.Import("PUGUF1:" .. Packed(old))
+	True(settings, "read")
+	Equal("night", settings.theme)
+	Equal("short", settings.units.party.healthText)
+	Equal("below", settings.units.party.buffSide)
+	Equal("below", settings.units.party.debuffSide)
+	Equal(3, settings.units.party.buffs)
+	Equal("left", settings.units.player.portrait)
+
+	local now = ns.Profiles.Import("PUGUF2:" .. Packed({ units = { player = { portrait = "none" } } }))
+	Equal("none", now.units.player.portrait, "text from this version is taken as it is")
+end)
+
+Test("any mix of settings lays out and draws without an error, in and out of a fight", function()
+	Questie({ [448] = "Interface\\Addons\\Questie\\Icons\\slay.blp" })
+	M.openWorld = true
+	local ns = Login("SHAMAN")
+	Party(3)
+	Target(WithAuras(Creature(HOGGER, 448), AURAS))
+	M.SetUnit("targettarget", Friend(9))
+	M.SetUnit("focus", Creature(HOGGER, 448))
+	M.SetUnit("pet", { name = "Wolf", playerControlled = true, reaction = 5, isPet = true })
+	M.UpdateUnitWatch()
+
+	-- The same "random" settings every run: a small generator with a fixed start.
+	local state = 20261124
+	local function Pick(count)
+		state = (state * 1103515245 + 12345) % 2147483648
+		return math.floor(state / 65536) % count + 1
+	end
+	local sizes = { width = { 60, 82, 124, 180, 232, 400 }, height = { 16, 24, 28, 34, 40, 46, 80 }, powerHeight = { 0, 3, 6, 9, 10, 14, 30 } }
+	local fonts = { 8, 11, 14, 18 }
+	for round = 1, 60 do
+		ns.db.fontSize = fonts[Pick(#fonts)]
+		for _, kind in ipairs(ns.Defaults.KINDS) do
+			local cfg = ns.db.units[kind]
+			for key, spec in pairs(ns.Defaults.UNIT_SPEC) do
+				if cfg[key] ~= nil and key ~= "enabled" and key ~= "x" and key ~= "y" then
+					if spec.type == "bool" then
+						cfg[key] = Pick(2) == 1
+					elseif spec.type == "choice" then
+						cfg[key] = spec.choices[Pick(#spec.choices)]
+					elseif sizes[key] then
+						cfg[key] = sizes[key][Pick(#sizes[key])]
+					elseif key == "buffs" or key == "debuffs" then
+						cfg[key] = Pick(10) - 1
+					elseif key == "auraPerRow" then
+						cfg[key] = Pick(9)
+					end
+				end
+			end
+		end
+		ns.Refresh()
+		M.Advance(0.3)
+		-- Every third round the fight is on while things change on the frames.
+		if round % 3 == 0 then
+			M.SetCombat(true)
+			M.units.target.classification = ({ "normal", "elite", "rare", "rareelite", "worldboss" })[Pick(5)]
+			M.Fire("UNIT_CLASSIFICATION_CHANGED", "target")
+			M.Fire("QUEST_LOG_UPDATE")
+			M.Fire("UNIT_HEALTH", "target")
+			M.Fire("UNIT_AURA", "party1")
+			M.Fire("PARTY_LEADER_CHANGED")
+			M.Advance(2)
+			M.SetCombat(false)
+		end
+		if #ns.GetProblems() > 0 then
+			error("round " .. round .. ": " .. ns.GetProblems()[1].text)
+		end
+		Equal(0, #M.blocked, "round " .. round .. ": nothing refused")
+	end
+end)
+
+---------------------------------------------------------------------------
+-- First name and surname
+---------------------------------------------------------------------------
+Test("a character's first name and surname are both written, as the game's own frames write them", function()
+	Player("PALADIN", { name = "Halla", surname = "Brightmoor" })
+	local ns = Login()
+	Equal("Halla Brightmoor", PugUnitFrames_player.texts.name.text)
+	M.partySize = 2
+	M.SetUnit("party1", Friend(1, { name = "Thryn", surname = "Ironbeard" }))
+	M.SetUnit("party2", Friend(2, { name = "Maeve" }))
+	M.RosterChanged()
+	Equal("Thryn Ironbeard", PartyButton(ns, 1).texts.name.text)
+	Equal("Maeve", PartyButton(ns, 2).texts.name.text, "someone the game gives no surname for has none")
+	Target(Friend(5, { name = "Lioren", surname = "Dawnwhisper", inGroup = false }))
+	Equal("Lioren Dawnwhisper", PugUnitFrames_target.texts.name.text, "a stranger's too")
+	M.SetUnit("targettarget", Friend(1, { name = "Thryn", surname = "Ironbeard" }))
+	M.UpdateUnitWatch()
+	Equal("Thryn Ironbeard", PugUnitFrames_targettarget.texts.name.text)
+
+	ns.db.units.target.surname = false
+	ns.Refresh()
+	Equal("Lioren", PugUnitFrames_target.texts.name.text, "switched off: the first name alone")
+	Equal("Halla Brightmoor", PugUnitFrames_player.texts.name.text, "frame by frame")
+	Equal(0, #ns.GetProblems())
+end)
+
+Test("a creature's sealed name goes to the frame untouched, and nothing is joined to it", function()
+	Login()
+	Target(HOGGER)
+	local name = PugUnitFrames_target.texts.name.text
+	Sealed(name, "a creature's name")
+	Equal("Hogger", Value(name))
+	M.openWorld = true
+	Target(HOGGER)
+	Equal("Hogger", PugUnitFrames_target.texts.name.text, "plain where the game says it plainly, and still one name")
+end)
+
+Test("a player who has the game hide their own surname sees their first name on their frame", function()
+	Player("PALADIN", { name = "Halla", surname = "Brightmoor" })
+	M.hideOwnSurname = true
+	local ns = Login()
+	Equal("Halla", PugUnitFrames_player.texts.name.text)
+	M.partySize = 1
+	M.SetUnit("party1", Friend(1, { name = "Thryn", surname = "Ironbeard" }))
+	M.RosterChanged()
+	Equal("Thryn Ironbeard", PartyButton(ns, 1).texts.name.text, "everybody else's is written")
+	-- The player's own raid frame is the player too, whatever the unit is called.
+	Raid(2)
+	M.SetUnit("raid1", { name = "Halla", surname = "Brightmoor", class = "PALADIN", isPlayer = true, playerControlled = true, inGroup = true, reaction = 5 })
+	M.RosterChanged()
+	local button = ns.Group.Get("raid"):GetAttribute("child1")
+	Equal("Halla", button.texts.name.text)
+	M.hideOwnSurname = false
+	M.Fire("UNIT_NAME_UPDATE", "raid1")
+	Equal("Halla\nBrightmoor", button.texts.name.text)
+	Equal(0, #ns.GetProblems())
+end)
+
+Test("a raid frame writes the surname on a line of its own, or the first name alone over a health number", function()
+	local ns = Login()
+	M.partySize, M.raidSize = 0, 2
+	M.SetUnit("raid1", Friend(1, { name = "Thryn", surname = "Ironbeard" }))
+	M.SetUnit("raid2", Friend(2, { name = "Maeve", surname = "Copperpot" }))
+	M.RosterChanged()
+	local button = ns.Group.Get("raid"):GetAttribute("child1")
+	local name = button.texts.name
+	Equal("Thryn\nIronbeard", name.text, "first name over surname: twelve letters each fit a narrow plate, twenty-five on one line do not")
+	True(name.wrap, "two lines")
+	Equal(2, name.maxLines)
+	Equal("CENTER", name.anchors[1][1])
+
+	M.units.raid1.dead = true
+	M.Fire("UNIT_HEALTH", "raid1")
+	Equal(ns.L["Dead"], name.text)
+	M.units.raid1.dead = false
+	M.Fire("UNIT_HEALTH", "raid1")
+	Equal("Thryn\nIronbeard", name.text, "and both names come back")
+
+	ns.db.units.raid.healthText = "percent"
+	ns.Refresh()
+	Equal("Thryn", name.text, "the line under the name is the health number's")
+	False(name.wrap)
+	ns.db.units.raid.healthText, ns.db.units.raid.surname = "none", false
+	ns.Refresh()
+	Equal("Thryn", name.text, "or switched off")
+	-- A wide frame has both on one line.
+	Equal(false, PugUnitFrames_player.texts.name.wrap)
+	Equal(0, #ns.GetProblems())
+end)
+
+Test("the party frame starts wide enough for a first name and a surname beside a portrait", function()
+	local ns = Login()
+	Party(1)
+	local button = PartyButton(ns, 1)
+	Equal(200, ns.db.units.party.width)
+	-- The longest a name may be is twelve letters, a space and twelve more: about 166 units in the
+	-- addon's font at this size. Typical names are well under the 150 the line has.
+	True(button.barWidth - 8 >= 150, "the name's line")
+end)
+
+---------------------------------------------------------------------------
+-- Marks and the name's line; gaps of a group; what a second reading found
+---------------------------------------------------------------------------
+Test("the marks on the top edge keep off the start of the name", function()
+	local ns = Login()
+	Target(WithAuras(HOGGER, AURAS))
+	M.units.target.combat = true
+	M.Fire("UNIT_FLAGS", "target")
+	local frame, cfg = PugUnitFrames_target, ns.db.units.target
+	local marks, small = frame.marks, ns.Frame.MarkSize(cfg)
+	True(marks.state:IsShown(), "the target is fighting")
+	-- The target's portrait is at the right end, so the name begins at the plate's left corner:
+	-- the marks ride the edge over the portrait, beside the quest icon.
+	Equal("TOPRIGHT", marks.state.anchors[1][3])
+	Near(-(small * 0.5 + (small + 2)), marks.state.anchors[1][4], "second from the corner, after the quest icon")
+	True(small + 2 + small <= frame.barRight, "both are over the portrait, not over the bar")
+	Near(-4, marks.raid.anchors[1][4], "so the raid mark need not make room")
+
+	-- With no portrait the row stays at the right end, and the raid mark steps aside for it.
+	cfg.portrait = "none"
+	ns.Refresh()
+	Equal("TOPRIGHT", marks.state.anchors[1][3])
+	Near(-(4 + 2 * (small + 2) - (frame.barRight - frame.pixel)), marks.raid.anchors[1][4], "left of the quest icon and the combat mark")
+
+	-- A portrait at the left end has the row over itself, as on the player's frame.
+	cfg.portrait = "left"
+	ns.Refresh()
+	Equal("TOPLEFT", marks.state.anchors[1][3])
+	Near(small * 0.5, marks.state.anchors[1][4])
+	Equal("TOPLEFT", PugUnitFrames_player.marks.state.anchors[1][3])
+
+	-- One line of text sits on the middle of the bar, out of the marks' reach: the row is at the left.
+	cfg.portrait, cfg.height = "none", 28
+	ns.Refresh()
+	Equal(nil, frame.nameRow)
+	Equal("TOPLEFT", marks.state.anchors[1][3])
+	Equal(0, #ns.GetProblems())
+end)
+
+Test("on a plate with one line and icons above it, the raid mark stays inside, clear of the icons", function()
+	local ns = Login()
+	Target(WithAuras(HOGGER, AURAS))
+	local cfg, mark = ns.db.units.target, PugUnitFrames_target.marks.raid
+	cfg.height = 28 -- too low for two lines; the target's icons stand above
+	ns.Refresh()
+	Equal(nil, PugUnitFrames_target.nameRow)
+	Equal("TOP", mark.anchors[1][1], "inside, under the top edge")
+	cfg.buffSide, cfg.debuffSide = "below", "below"
+	ns.Refresh()
+	Equal("CENTER", mark.anchors[1][1], "with nothing above the plate it rides the edge, clear of the name")
+end)
+
+Test("the room icons take is counted across the way they face too", function()
+	local ns = Login()
+	local Room = ns.Elements.Auras.Room
+	local cfg = CopyTable(ns.db.units.party)
+	cfg.buffs, cfg.debuffs, cfg.debuffSide, cfg.auraPerRow, cfg.auraSize, cfg.height, cfg.width = 0, 20, "right", 8, 20, 40, 200
+	local room = Room(cfg)
+	Equal(4 + 8 * 22 - 2, room.right, "eight to a row beside the plate")
+	Equal(3 * 22 - 2 - 40, room.below, "three rows hang lower than a plate of forty")
+	cfg.debuffs, cfg.debuffSide, cfg.auraPerRow, cfg.width = 12, "above", 12, 200
+	room = Room(cfg)
+	Equal(3 + 22 - 2, room.above)
+	Equal(12 * 22 - 2 - 200, room.right, "a row above that runs past the plate's right end")
+	Equal(0, room.below)
+end)
+
+Test("a gap the player had set keeps the members of a group as far apart as they were", function()
+	PugUnitFramesDB = { schema = 1, profiles = { Default = { units = {
+		-- A party in a row, its debuffs beside each member, the gap raised by hand to make room for them.
+		party = { growth = "right", spacing = 92, debuffs = 4, buffs = 0, auraPerRow = 4, auraSize = 20, auraSide = "right" },
+		-- A raid whose gaps were never touched.
+		raid = { spacing = 4, columnSpacing = 6, auraSide = "inside" },
+	} } } }
+	local ns = Login()
+	local party = ns.db.units.party
+	Equal(92 - (4 + 4 * 22 - 2), party.spacing, "taken down by what stood between the plates")
+	Equal(92, ns.Group.Get("party"):GetAttribute("xOffset"), "so that the plates are as far apart as before")
+	Equal(4, ns.db.units.raid.spacing)
+	Equal(6, ns.db.units.raid.columnSpacing)
+
+	-- A party with a cast bar under each member and the gap raised to make room for it.
+	PugUnitFramesDB = { schema = 1, profiles = { Default = { units = { party = { castbar = true, castHeight = 10, spacing = 30, auraSide = "inside", debuffs = 2 } } } } }
+	local again = LoadAddon()
+	M.Fire("ADDON_LOADED", "PugUnitFrames")
+	Equal(30 - 13, again.db.units.party.spacing)
+end)
+
+Test("a party whose icons had been set up keeps every one of their settings", function()
+	PugUnitFramesDB = { schema = 1, profiles = { Default = { units = {
+		party = { debuffs = 8, buffs = 0, auraPerRow = 4, auraSize = 20, auraSide = "right", portrait = "none" },
+	} } } }
+	local ns = Login()
+	local party = ns.db.units.party
+	Equal(8, party.debuffs)
+	Equal(4, party.auraPerRow, "two rows of four stay two rows of four")
+	Equal(0, party.buffs, "and no buffs are switched on over a layout someone made")
+	Equal("right", party.buffSide)
+	Equal("right", party.debuffSide)
+	Equal("left", party.portrait, "what had nothing to do with the icons still moves")
+end)
+
+Test("the look at Questie comes a moment after the last change of the quest log, not after the first", function()
+	local icons = { [448] = "Interface\\Addons\\Questie\\Icons\\slay.blp" }
+	local asked = Questie(icons)
+	M.openWorld = true
+	Login()
+	Target(Creature(HOGGER, 448))
+	M.Advance(10) -- past the look that follows coming into the world
+	local icon = PugUnitFrames_target.quest.icon
+	True(icon:IsShown())
+	M.Fire("QUEST_LOG_UPDATE")
+	M.Advance(1.2)
+	M.Fire("QUEST_LOG_UPDATE") -- a burst: the last word comes late
+	icons[448] = nil           -- and Questie works it through after that
+	M.Advance(0.5)
+	True(icon:IsShown(), "1.7 seconds after the first, 0.5 after the last: not yet")
+	M.Advance(1.2)
+	False(icon:IsShown(), "a moment after the last")
+	local before = #asked
+	M.Advance(5)
+	Equal(before, #asked, "and then no more until something changes")
+end)
+
+Test("coming into the world with a target kept, Questie is asked again once it has had time to wake", function()
+	local icons = {}
+	Questie(icons)
+	M.openWorld = true
+	M.SetUnit("target", Creature(HOGGER, 448))
+	Login()
+	M.UpdateUnitWatch()
+	local icon = PugUnitFrames_target.quest.icon
+	False(icon:IsShown(), "Questie has nothing yet")
+	icons[448] = "Interface\\Addons\\Questie\\Icons\\slay.blp"
+	M.Advance(9)
+	True(icon:IsShown(), "it has now")
 end)

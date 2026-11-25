@@ -35,7 +35,7 @@ function Mood.Layout(frame, cfg, on)
 	face:ClearAllPoints()
 	face:SetSize(size, size)
 	-- To the right of the plate, or to its left when that is where the icons go.
-	if cfg.auraSide == "right" then
+	if cfg.buffSide == "right" or cfg.debuffSide == "right" then
 		face:SetPoint("RIGHT", frame.body, "LEFT", -GAP, 0)
 	else
 		face:SetPoint("LEFT", frame.body, "RIGHT", GAP, 0)

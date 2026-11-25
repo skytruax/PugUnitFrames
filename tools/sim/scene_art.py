@@ -11,6 +11,8 @@ scratch copy of the addon that run.sh makes, never into the addon you ship:
     OUT_DIR/icons/<spell>.png   the game's own icons for the spells of the scene (tools/game_icons.py
                                 fetches each once from a public mirror into tools/.icon-cache/)
     OUT_DIR/marks.png           the game's sheet of raid marks, put together from its eight marks
+    OUT_DIR/portraits/<who>.png the faces the game shows in a portrait's place until it has drawn a unit's own
+    OUT_DIR/ranks/<name>.png    the dragons of an elite and a rare elite, by the game's names for them
     OUT_DIR/backdrop.png        the world behind the frames: the painted city of the listing pictures
                                 (tools/brand.py), or PICTURE, any picture of your own, fitted to the screen
     OUT_DIR/../SimArt.lua       tells the scene (tests/sim/screenshot.lua) what is there
@@ -67,6 +69,28 @@ def marks(out):
     return "marks.png"
 
 
+def portraits(out):
+    """The game's stand-in portraits, by whom they show."""
+    folder = os.path.join(out, "portraits")
+    os.makedirs(folder, exist_ok=True)
+    written = {}
+    for name in sorted(game_icons.PORTRAITS):
+        game_icons.portrait(name).save(os.path.join(folder, name + ".png"))
+        written[name] = "portraits\\\\" + name + ".png"
+    return written
+
+
+def ranks(out):
+    """The dragons of an elite and a rare elite, each stretched onto a square as the addon's region is."""
+    folder = os.path.join(out, "ranks")
+    os.makedirs(folder, exist_ok=True)
+    written = {}
+    for atlas in sorted(game_icons.RANKS):
+        game_icons.rank(atlas).resize((64, 64), Image.LANCZOS).save(os.path.join(folder, atlas + ".png"))
+        written[atlas] = "ranks\\\\" + atlas + ".png"
+    return written
+
+
 def backdrop(out, source=None):
     """The world behind the frames. A picture of your own is scaled until it covers the screen and
     cut to its middle; nothing else is done to it."""
@@ -95,6 +119,8 @@ def main(arguments):
     os.makedirs(out, exist_ok=True)
     listed = icons(out)
     sheet = marks(out)
+    faces = portraits(out)
+    dragons = ranks(out)
     world = backdrop(out, arguments[2] if len(arguments) == 3 else None)
     fonts(font_folder)
 
@@ -102,10 +128,16 @@ def main(arguments):
              '\tfolder = "%s",' % IN_GAME, '\tmarks = "%s",' % sheet, '\tbackdrop = "%s",' % world, "\ticons = {"]
     for name, path in sorted(listed.items()):
         lines.append('\t\t["%s"] = "%s",' % (name, path))
+    lines += ["\t},", "\tportraits = {"]
+    for name, path in sorted(faces.items()):
+        lines.append('\t\t["%s"] = "%s",' % (name, path))
+    lines += ["\t},", "\tranks = {"]
+    for name, path in sorted(dragons.items()):
+        lines.append('\t\t["%s"] = "%s",' % (name, path))
     lines += ["\t},", "}", ""]
     with open(os.path.join(os.path.dirname(out), "..", "..", "SimArt.lua"), "w", encoding="utf-8") as handle:
         handle.write("\n".join(lines))
-    print("scene art: %d icons, the raid marks, a backdrop and the font" % len(listed))
+    print("scene art: %d icons, the raid marks, %d portraits, %d dragons, a backdrop and the font" % (len(listed), len(faces), len(dragons)))
 
 
 if __name__ == "__main__":

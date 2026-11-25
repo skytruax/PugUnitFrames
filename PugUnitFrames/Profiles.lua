@@ -8,7 +8,10 @@ local L = ns.L
 local Defaults = ns.Defaults
 
 -- An exported profile starts with this, so text that is something else is turned away at once.
-local MARK = "PUGUF1:"
+-- The number is how the profile is laid out. Text exported by version 0.2 starts with the older
+-- mark: it is still read, and brought along as a saved profile of that version is.
+local MARK = "PUGUF2:"
+local OLD_MARKS = { ["PUGUF1:"] = 1 }
 local MAX_IMPORT = 60000 -- characters; a real export is a few hundred
 
 ---------------------------------------------------------------------------
@@ -45,8 +48,10 @@ function Profiles.Import(text)
 	if #text > MAX_IMPORT then
 		return nil, L["That text is far too long to be a profile."]
 	end
-	if text:sub(1, #MARK) ~= MARK then
-		return nil, L["That is not a Pug Unit Frames profile: it should start with PUGUF1:"]
+	local mark = text:sub(1, #MARK) -- every mark is as long as this one
+	local from = mark == MARK and 2 or OLD_MARKS[mark]
+	if not from then
+		return nil, L["That is not a Pug Unit Frames profile: it should start with PUGUF2:"]
 	end
 	-- Damaged text makes the game's decoders raise an error. Here that is an answer, not a
 	-- fault: the player is told what the game said, and nothing is changed.
@@ -57,7 +62,7 @@ function Profiles.Import(text)
 	if type(result) ~= "table" then
 		return nil, L["That profile text is damaged and could not be read:"] .. " " .. L["it does not hold settings."]
 	end
-	return Defaults.Sanitize(result)
+	return Defaults.Sanitize(Defaults.Migrate(result, from))
 end
 
 ---------------------------------------------------------------------------

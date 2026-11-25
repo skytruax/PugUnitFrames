@@ -89,6 +89,7 @@ Defaults.UNIT_SPEC = {
 	healthText = Choice("none", "value", "short", "percent", "both", "max", "deficit"),
 	powerText = Choice("none", "value", "short", "percent", "max"),
 	name = Bool(),
+	surname = Bool(),                 -- a character's surname after the first name (under it on a narrow frame)
 	level = Bool(),
 	portrait = Choice("none", "left", "right"),
 	mirror = Bool(),                  -- the portrait turned to look the other way
@@ -96,7 +97,8 @@ Defaults.UNIT_SPEC = {
 	debuffs = Number(0, 32, 1),
 	auraSize = Number(10, 44, 1),
 	auraPerRow = Number(1, 20, 1),
-	auraSide = Choice("below", "above", "right", "left", "inside"),
+	buffSide = Choice("below", "above", "right", "left", "inside"),   -- where the buff icons stand
+	debuffSide = Choice("below", "above", "right", "left", "inside"), -- and the debuff icons
 	myBuffs = Bool(),                 -- of the buffs, only the ones the player cast
 	myDebuffs = Bool(),               -- of the debuffs, only the ones the player put there
 	castbar = Bool(),
@@ -105,7 +107,12 @@ Defaults.UNIT_SPEC = {
 	range = Bool(),                   -- fade a group member who is out of range
 	heals = Bool(),                   -- healing on its way, past the end of the health bar
 	absorbs = Bool(),                 -- shields that soak up damage, as a band along the top of the health bar
-	marks = Bool(),                   -- raid mark, leader, role, PvP flag, resting, in combat
+	marks = Bool(),                   -- raid mark, resting, in combat, ready check, resurrection
+	leader = Bool(),                  -- the group leader's mark
+	role = Bool(),                    -- tank, healer or damage
+	pvp = Bool(),                     -- a flag on someone marked for fighting other players
+	elite = Bool(),                   -- a dragon beside the level of an elite or rare creature
+	quest = Bool(),                   -- Questie's icon on a creature that a quest of the player's needs
 	happiness = Bool(),               -- a hunter's pet: how it feels
 	highlight = Bool(),               -- a bright line around the group member the player has targeted
 	calm = Number(0.1, 1, 0.05),      -- how solid the frame is drawn outside a fight with no target; 1: always in full
@@ -137,11 +144,13 @@ Defaults.UNIT_SECTIONS = {
 		"color", "invert", "fill", "powerHeight", "hideNoPower", "heals", "absorbs", "castbar", "castHeight", "points", "totems",
 	} },
 	{ key = "text", keys = {
-		"name", "level", "healthText", "powerText", "portrait", "mirror",
-		"marks", "happiness", "threat", "range", "highlight", "dispel",
+		"name", "surname", "level", "healthText", "powerText", "portrait", "mirror",
+	} },
+	{ key = "marks", keys = {
+		"marks", "leader", "role", "pvp", "elite", "quest", "happiness", "threat", "range", "highlight", "dispel",
 	} },
 	{ key = "icons", keys = {
-		"buffs", "myBuffs", "debuffs", "myDebuffs", "auraSize", "auraPerRow", "auraSide",
+		"buffs", "buffSide", "myBuffs", "debuffs", "debuffSide", "myDebuffs", "auraSize", "auraPerRow",
 	} },
 }
 
@@ -153,54 +162,62 @@ for _, section in ipairs(Defaults.UNIT_SECTIONS) do
 	end
 end
 
+-- How each frame starts out. Version 0.3 changed some of this (portraits, the party's buffs and
+-- health numbers, room for long names): Defaults.Migrate below brings older profiles along.
 Defaults.UNITS = {
 	player = {
-		enabled = true, x = -290, y = -210, width = 232, height = 46, scale = 1, powerHeight = 9,
-		color = "class", healthText = "both", powerText = "value", name = true, level = true, portrait = "none",
-		buffs = 0, debuffs = 0, myDebuffs = false, auraSize = 22, auraPerRow = 9, auraSide = "above",
+		enabled = true, x = -290, y = -210, width = 232, height = 46, scale = 1, powerHeight = 10,
+		color = "class", healthText = "both", powerText = "value", name = true, surname = true, level = true, portrait = "left",
+		buffs = 0, debuffs = 0, myDebuffs = false, auraSize = 22, auraPerRow = 9, buffSide = "above", debuffSide = "above",
 		castbar = true, castHeight = 16, threat = true, heals = true, marks = true, totems = true,
+		leader = false, role = false, pvp = false,
 		invert = false, fill = "right", mirror = false, myBuffs = false, absorbs = true, calm = 1, hideInGroup = false,
 	},
 	target = {
-		enabled = true, x = 290, y = -210, width = 232, height = 46, scale = 1, powerHeight = 9,
-		color = "class", healthText = "both", powerText = "value", name = true, level = true, portrait = "none",
-		buffs = 9, debuffs = 18, myDebuffs = false, auraSize = 22, auraPerRow = 9, auraSide = "above",
+		enabled = true, x = 290, y = -210, width = 232, height = 46, scale = 1, powerHeight = 10,
+		color = "class", healthText = "both", powerText = "value", name = true, surname = true, level = true, portrait = "right",
+		buffs = 9, debuffs = 18, myDebuffs = false, auraSize = 22, auraPerRow = 9, buffSide = "above", debuffSide = "above",
 		castbar = true, castHeight = 16, marks = true, points = true,
+		leader = false, role = false, pvp = false, elite = true, quest = true,
 		invert = false, fill = "right", mirror = false, myBuffs = false, absorbs = true, hideNoPower = true,
 	},
 	targettarget = {
-		enabled = true, x = 476, y = -219, width = 124, height = 28, scale = 1, powerHeight = 4,
-		color = "class", healthText = "percent", powerText = "none", name = true, level = false, portrait = "none",
-		buffs = 0, debuffs = 0, myDebuffs = false, auraSize = 18, auraPerRow = 6, auraSide = "below", marks = true,
+		enabled = true, x = 484, y = -219, width = 140, height = 28, scale = 1, powerHeight = 4,
+		color = "class", healthText = "none", powerText = "none", name = true, surname = true, level = false, portrait = "none",
+		buffs = 0, debuffs = 0, myDebuffs = false, auraSize = 18, auraPerRow = 6, buffSide = "below", debuffSide = "below",
+		marks = true, leader = false, role = false, pvp = false, elite = true, quest = true,
 		invert = false, fill = "right", mirror = false, myBuffs = false, absorbs = true, hideNoPower = true,
 	},
 	focus = {
-		enabled = true, x = -319, y = -130, width = 174, height = 34, scale = 1, powerHeight = 6,
-		color = "class", healthText = "percent", powerText = "none", name = true, level = false, portrait = "none",
-		buffs = 0, debuffs = 6, myDebuffs = false, auraSize = 20, auraPerRow = 8, auraSide = "above",
+		enabled = true, x = -306, y = -130, width = 200, height = 40, scale = 1, powerHeight = 6,
+		color = "class", healthText = "percent", powerText = "none", name = true, surname = true, level = false, portrait = "left",
+		buffs = 0, debuffs = 6, myDebuffs = false, auraSize = 20, auraPerRow = 8, buffSide = "above", debuffSide = "above",
 		castbar = true, castHeight = 12, marks = true,
+		leader = false, role = false, pvp = false, elite = true, quest = true,
 		invert = false, fill = "right", mirror = false, myBuffs = false, absorbs = true, hideNoPower = true,
 	},
 	pet = {
 		enabled = true, x = -476, y = -219, width = 124, height = 28, scale = 1, powerHeight = 4,
-		color = "reaction", healthText = "none", powerText = "none", name = true, level = false, portrait = "none",
-		buffs = 0, debuffs = 0, myDebuffs = false, auraSize = 18, auraPerRow = 6, auraSide = "below",
+		color = "reaction", healthText = "none", powerText = "none", name = true, surname = true, level = false, portrait = "none",
+		buffs = 0, debuffs = 0, myDebuffs = false, auraSize = 18, auraPerRow = 6, buffSide = "below", debuffSide = "below",
 		castbar = false, castHeight = 10, threat = true, heals = true, marks = false,
 		invert = false, fill = "right", mirror = false, myBuffs = false, absorbs = true, calm = 1, happiness = true,
 	},
 	party = {
-		enabled = true, x = -620, y = 160, width = 172, height = 40, scale = 1, powerHeight = 6,
-		color = "class", healthText = "percent", powerText = "none", name = true, level = false, portrait = "none",
-		buffs = 0, debuffs = 4, myDebuffs = false, auraSize = 20, auraPerRow = 4, auraSide = "right",
+		enabled = true, x = -620, y = 160, width = 200, height = 40, scale = 1, powerHeight = 6,
+		color = "class", healthText = "short", powerText = "none", name = true, surname = true, level = false, portrait = "left",
+		buffs = 8, debuffs = 4, myDebuffs = false, auraSize = 20, auraPerRow = 8, buffSide = "above", debuffSide = "right",
 		castbar = false, castHeight = 10, threat = true, range = true, heals = true, marks = true, dispel = true,
+		leader = false, role = false, pvp = false,
 		growth = "down", spacing = 12, showPlayer = false, showSolo = false,
 		invert = false, fill = "right", mirror = false, myBuffs = false, absorbs = true, highlight = true, byRole = false,
 	},
 	raid = {
 		enabled = true, x = -640, y = 250, width = 82, height = 40, scale = 1, powerHeight = 3,
-		color = "class", healthText = "none", powerText = "none", name = true, level = false, portrait = "none",
-		buffs = 0, debuffs = 2, myDebuffs = false, auraSize = 15, auraPerRow = 2, auraSide = "inside",
+		color = "class", healthText = "none", powerText = "none", name = true, surname = true, level = false, portrait = "none",
+		buffs = 0, debuffs = 2, myDebuffs = false, auraSize = 15, auraPerRow = 2, buffSide = "inside", debuffSide = "inside",
 		threat = true, range = true, heals = true, marks = true, dispel = true,
+		leader = false, role = false, pvp = false,
 		growth = "down", spacing = 4, perColumn = 5, columnGrowth = "right", columnSpacing = 6,
 		scaleSmall = 1.3, scaleMid = 1.15,
 		invert = false, fill = "right", mirror = false, myBuffs = false, absorbs = true, highlight = true,
@@ -241,6 +258,108 @@ local function Conform(into, defaults, specs)
 		end
 	end
 	return into
+end
+
+---------------------------------------------------------------------------
+-- Profiles from an older version
+---------------------------------------------------------------------------
+-- The saved file carries a number that says how its profiles are laid out (Core.lua). This is
+-- what changed between 1 (version 0.2) and 2 (version 0.3).
+--
+-- Some frames start out differently now. A setting that still holds its old starting value is
+-- taken for one the player never touched, and moves to the new one; whatever the player chose
+-- stays as chosen. There is no telling a value left alone from one deliberately set to the same,
+-- so someone who wanted no portrait gets one, once, and can switch it off again.
+local OLD_STARTS = {
+	player = { portrait = "none", powerHeight = 9 },
+	target = { portrait = "none", powerHeight = 9 },
+	targettarget = { healthText = "percent", width = 124, x = 476 },
+	focus = { portrait = "none", width = 174, height = 34, x = -319 },
+	party = { portrait = "none", healthText = "percent", buffs = 0, width = 172, auraPerRow = 4 },
+}
+-- Buffs and debuffs shared one setting for where their icons stand ("auraSide").
+local OLD_AURA_SIDE = {
+	player = "above", target = "above", targettarget = "below", focus = "above", pet = "below", party = "right", raid = "inside",
+}
+-- The party's icons start out differently as a set (buffs above each member now, eight icons
+-- to a row). The set moves only as a whole: a party whose icons were set up in any way keeps
+-- every one of these as it was.
+local OLD_ICONS = { party = { buffs = 0, debuffs = 4, auraPerRow = 4, auraSize = 20, auraSide = "right" } }
+local ICON_KEYS = { buffs = true, auraPerRow = true }
+-- The gap between the members of a group, and between its columns, was the whole distance from
+-- one plate to the next. It is now the clear room between them: what stands outside a plate
+-- (rows of icons, a cast bar) is added to it (Group.lua). A gap the player had set is taken
+-- down by what stood between the plates then, so that the members stay as far apart as they
+-- were; a gap never touched is left to grow, which is what keeps icons off the next plate.
+local OLD_GAPS = { party = { spacing = 12 }, raid = { spacing = 4, columnSpacing = 6 } }
+
+-- How much stood between two members of a group, and between two columns, under the old
+-- settings of a frame: asked of the code that lays groups out, of a copy of the settings with
+-- whatever is missing filled in as it started then, and checked.
+local function OldRoom(kind, cfg)
+	local probe = {}
+	for key, value in pairs(cfg) do
+		probe[key] = value
+	end
+	for _, olds in ipairs({ OLD_STARTS[kind] or {}, OLD_ICONS[kind] or {} }) do
+		for key, old in pairs(olds) do
+			if probe[key] == nil then
+				probe[key] = old
+			end
+		end
+	end
+	local side = probe.auraSide or OLD_AURA_SIDE[kind]
+	probe.buffSide, probe.debuffSide = side, side
+	Conform(probe, Defaults.UNITS[kind], Defaults.UNIT_SPEC)
+	local between, betweenColumns = ns.Group.Gaps(probe)
+	return between - probe.spacing, betweenColumns - (probe.columnSpacing or 0)
+end
+
+-- Brings a profile written under layout number `from` up to this version's. Returns the same
+-- table. What it holds has not been checked yet (Sanitize does that next), so nothing in it is
+-- taken for granted.
+function Defaults.Migrate(profile, from)
+	if from >= 2 or type(profile) ~= "table" or type(profile.units) ~= "table" then
+		return profile
+	end
+	for kind, cfg in pairs(profile.units) do
+		local starts = Defaults.UNITS[kind] and type(cfg) == "table" and (OLD_STARTS[kind] or {})
+		if starts then
+			-- A gap the player chose keeps the members as far apart as they were.
+			local gaps = OLD_GAPS[kind]
+			if gaps then
+				local room, columnRoom = OldRoom(kind, cfg)
+				if type(cfg.spacing) == "number" and cfg.spacing ~= gaps.spacing then
+					cfg.spacing = math.max(0, cfg.spacing - room)
+				end
+				if type(cfg.columnSpacing) == "number" and cfg.columnSpacing ~= gaps.columnSpacing then
+					cfg.columnSpacing = math.max(0, cfg.columnSpacing - columnRoom)
+				end
+			end
+
+			local untouchedIcons = true
+			for key, old in pairs(OLD_ICONS[kind] or {}) do
+				untouchedIcons = untouchedIcons and (cfg[key] == nil or cfg[key] == old)
+			end
+			-- The debuffs stay where the icons were. So do the buffs, unless nothing about the
+			-- icons was ever chosen: then they go where this version starts them.
+			local side = cfg.auraSide
+			if side ~= nil then
+				cfg.debuffSide = side
+				if side ~= OLD_AURA_SIDE[kind] or not untouchedIcons then
+					cfg.buffSide = side
+				end
+			end
+			-- A frame that grows keeps its edge where it was only if it was never moved.
+			local widened = starts.width ~= nil and cfg.width == starts.width
+			for key, old in pairs(starts) do
+				if cfg[key] == old and (key ~= "x" or widened) and (untouchedIcons or not ICON_KEYS[key]) then
+					cfg[key] = Defaults.UNITS[kind][key]
+				end
+			end
+		end
+	end
+	return profile
 end
 
 -- Brings a profile, however it arrived, to something every other file can rely on: every setting

@@ -832,7 +832,7 @@ def arrange():
 # The description page
 # ---------------------------------------------------------------------------
 SIM_NOTE = ("Drawn by the addon's own code in a simulator of the game's interface, over a painted city. Not a screenshot of the game. "
-            "Spell icons and raid marks \u00a9 Blizzard Entertainment.")
+            "Spell icons, raid marks, portraits and the elite dragon \u00a9 Blizzard Entertainment.")
 
 
 def in_play():

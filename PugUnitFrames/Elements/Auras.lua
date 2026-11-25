@@ -3,9 +3,11 @@ local ADDON, ns = ...
 -- Buffs and debuffs as rows of icons beside the plate, and for group frames a light on the plate
 -- in the colour of a debuff the player can remove.
 --
--- Debuffs come first (nearest the plate), buffs start on a fresh row after them. Which auras
--- there are comes from the game already filtered and in order; what each one is can be sealed,
--- so an icon is drawn by handing the aura's id to Sealed.lua and nothing is read back.
+-- Buffs and debuffs each have a side of the plate (above, below, left, right, or on it). On the
+-- same side the debuffs come first, nearest the plate, and the buffs start on a fresh row after
+-- them. Which auras there are comes from the game already filtered and in order; what each one
+-- is can be sealed, so an icon is drawn by handing the aura's id to Sealed.lua and nothing is
+-- read back.
 local Frame, Style, Sealed = ns.Frame, ns.Style, ns.Sealed
 
 local Auras = { name = "Auras" }
@@ -14,6 +16,7 @@ Auras.events = { "UNIT_AURA" }
 
 local GAP = 2
 local SIDE_GAP = 4          -- between the plate and icons beside it
+local STACK_GAP = 3         -- between the plate and icons above or below it (Frame.TakeAbove)
 local LIGHT_WIDTH = 2       -- pixels of the removable-debuff light along the plate's rim
 local PULSE = 0.55          -- seconds for that light to dim, and again to come back
 local PULSE_LOW = 0.35      -- how far it dims
@@ -63,20 +66,21 @@ local function MakeIcon(frame)
 	return button
 end
 
--- Sizes and places icon number `slot` (counted from 0, row by row) for the frame's settings.
-local function PlaceIcon(frame, button, slot)
+-- Sizes and places icon number `slot` of a side (counted from 0, row by row) for the frame's
+-- settings.
+local function PlaceIcon(frame, button, slot, side)
 	local cfg, pixel = frame.cfg, frame.pixel
 	local size = cfg.auraSize
 	local step = size + GAP
 	local column, row = slot % cfg.auraPerRow, math.floor(slot / cfg.auraPerRow)
-	local body, side = frame.body, cfg.auraSide
+	local body = frame.body
 
 	button:ClearAllPoints()
 	button:SetSize(size, size)
 	if side == "above" then
-		button:SetPoint("BOTTOMLEFT", body, "TOPLEFT", column * step, frame.auraOffset + row * step)
+		button:SetPoint("BOTTOMLEFT", body, "TOPLEFT", column * step, frame.auraAbove + row * step)
 	elseif side == "below" then
-		button:SetPoint("TOPLEFT", body, "BOTTOMLEFT", column * step, -(frame.auraOffset + row * step))
+		button:SetPoint("TOPLEFT", body, "BOTTOMLEFT", column * step, -(frame.auraBelow + row * step))
 	elseif side == "right" then
 		button:SetPoint("TOPLEFT", body, "TOPRIGHT", SIDE_GAP + column * step, -row * step)
 	elseif side == "left" then
@@ -128,6 +132,47 @@ function Auras.Create(frame)
 	frame.auras = { holder = holder, icons = {}, light = light, lamp = lamp, pulse = pulse }
 end
 
+-- Which sides of the plate have icons, and how many rows and columns of them at most.
+local function Sides(cfg)
+	local sides = {}
+	local function Add(side, count)
+		if count > 0 then
+			local there = sides[side] or { rows = 0, columns = 0 }
+			there.rows = there.rows + math.ceil(count / cfg.auraPerRow)
+			there.columns = math.max(there.columns, math.min(count, cfg.auraPerRow))
+			sides[side] = there
+		end
+	end
+	Add(cfg.debuffSide, cfg.debuffs)
+	Add(cfg.buffSide, cfg.buffs)
+	return sides
+end
+
+-- The room the icons can take outside the plate, on each of its four sides. Group.lua keeps
+-- the members of a group that far apart, so one member's icons never lie on the next one's plate.
+function Auras.Room(cfg)
+	local room = { above = 0, below = 0, left = 0, right = 0 }
+	local step = cfg.auraSize + GAP
+	local sides = Sides(cfg)
+	for _, side in ipairs({ "above", "below" }) do
+		local there = sides[side]
+		if there then
+			room[side] = STACK_GAP + there.rows * step - GAP
+			-- Rows above or below start at the plate's left end and may run past its right end.
+			room.right = math.max(room.right, there.columns * step - GAP - cfg.width)
+		end
+	end
+	for _, side in ipairs({ "left", "right" }) do
+		local there = sides[side]
+		if there then
+			room[side] = math.max(room[side], SIDE_GAP + there.columns * step - GAP)
+			-- Rows beside the plate start at its top and may hang lower than its bottom edge.
+			room.below = math.max(room.below, there.rows * step - GAP - cfg.height)
+		end
+	end
+	return room
+end
+
 function Auras.Layout(frame, cfg, on)
 	local auras = frame.auras
 	auras.holder:SetShown(on)
@@ -135,13 +180,9 @@ function Auras.Layout(frame, cfg, on)
 		return
 	end
 	-- Rows above or below the plate start past whatever else is stacked there.
-	if cfg.auraSide == "above" then
-		frame.auraOffset = Frame.TakeAbove(frame, 0)
-	elseif cfg.auraSide == "below" then
-		frame.auraOffset = Frame.TakeBelow(frame, 0)
-	else
-		frame.auraOffset = 0
-	end
+	local sides = Sides(cfg)
+	frame.auraAbove = sides.above and Frame.TakeAbove(frame, 0) or 0
+	frame.auraBelow = sides.below and Frame.TakeBelow(frame, 0) or 0
 	for _, button in ipairs(auras.icons) do
 		button:Hide()
 	end
@@ -169,12 +210,12 @@ end
 
 -- Draws the auras with these ids on the next icons, from grid slot `slot` on. Returns the slot
 -- after the last one drawn.
-local function DrawBlock(frame, unit, ids, slot, kindCurve)
+local function DrawBlock(frame, unit, ids, slot, side, kindCurve)
 	local auras, edge = frame.auras, Style.theme.edge
 	for _, id in ipairs(ids) do
 		auras.used = auras.used + 1
 		local button = auras.icons[auras.used] or MakeIcon(frame)
-		PlaceIcon(frame, button, slot)
+		PlaceIcon(frame, button, slot, side)
 		if not kindCurve then
 			button.edge:SetVertexColor(edge[1], edge[2], edge[3])
 		end
@@ -192,15 +233,16 @@ end
 local function Draw(frame, unit)
 	local auras, cfg = frame.auras, frame.cfg
 	auras.used = 0
-	local slot = 0
+	local taken = 0 -- slots the debuffs have used on their side
 	if cfg.debuffs > 0 then
 		local ids = Sealed.AuraIDs(unit, cfg.myDebuffs and "HARMFUL|PLAYER" or "HARMFUL", cfg.debuffs)
-		slot = DrawBlock(frame, unit, ids, slot, Style.debuffKindCurve)
+		taken = DrawBlock(frame, unit, ids, 0, cfg.debuffSide, Style.debuffKindCurve)
 	end
 	if cfg.buffs > 0 then
-		-- Buffs start on a fresh row.
-		slot = math.ceil(slot / cfg.auraPerRow) * cfg.auraPerRow
-		DrawBlock(frame, unit, Sealed.AuraIDs(unit, cfg.myBuffs and "HELPFUL|PLAYER" or "HELPFUL", cfg.buffs), slot, nil)
+		-- On the debuffs' side the buffs start on a fresh row after them; on a side of their own,
+		-- at its beginning.
+		local slot = cfg.buffSide == cfg.debuffSide and math.ceil(taken / cfg.auraPerRow) * cfg.auraPerRow or 0
+		DrawBlock(frame, unit, Sealed.AuraIDs(unit, cfg.myBuffs and "HELPFUL|PLAYER" or "HELPFUL", cfg.buffs), slot, cfg.buffSide, nil)
 	end
 	for index = auras.used + 1, #auras.icons do
 		auras.icons[index]:Hide()

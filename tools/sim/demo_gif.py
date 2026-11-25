@@ -23,7 +23,7 @@ CUT = (96, 54, 1824, 1026)  # of a 1920 x 1080 picture: the frames with a margin
 SIZE = (1200, 675)
 # How long each moment stays, in milliseconds. The third is the thick of it and is given longer.
 HOLD = (1400, 1400, 2400, 1700, 1700)
-NOTE = "Drawn by the addon's own code in a simulator of the game's interface, over a painted city. Spell icons and raid marks © Blizzard Entertainment."
+NOTE = "Drawn by the addon's own code in a simulator of the game's interface, over a painted city. Spell icons, raid marks, portraits and the elite dragon © Blizzard Entertainment."
 KEEP = 255  # the palette entry that means: leave what the picture before had here
 
 

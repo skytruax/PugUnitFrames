@@ -31,7 +31,8 @@
 
 <p align="center"><sub>The moving picture is the addon's own code drawing a fight in a simulator of the game's interface, over a
 painted city (<a href="#developing">how</a>). The picture at the top is an illustration built from the addon's own artwork.
-Neither is a screenshot of the game. The spell icons and raid marks in them are Blizzard's, and the title lettering is
+Neither is a screenshot of the game. The spell icons, raid marks, portraits and the dragon beside an elite's level are
+Blizzard's (the portraits are the faces the game shows until it has drawn a unit's own), and the title lettering is
 LifeCraft, a typeface by Eliot Truelove.</sub></p>
 
 ---
@@ -49,10 +50,12 @@ Free Unit Frames.
 
 ## Status
 
-**0.2 is the first version under this name.** It passes both of its test suites (a model of the client that seals
+**0.3 changes what you see when you log in**: first name and surname, portraits, a dragon on
+elites, Questie's quest icons, and a party with its buffs above each member
+([changelog](CHANGELOG.md)). It passes both of its test suites (a model of the client that seals
 values the way the game does, and a simulator running Blizzard's real interface code). Neither is
-the game, and this version comes straight from them, so expect a rough edge. If something looks
-wrong in the game, `/pug status` lists any error it caught: please open an issue with that text.
+the game, so expect a rough edge. If something looks wrong in the game, `/pug status` lists any
+error it caught: please open an issue with that text.
 
 ## What you get
 
@@ -99,9 +102,14 @@ wrong in the game, `/pug status` lists any error it caught: please open an issue
   </tr>
 </table>
 
-Also in there: raid icons, the leader's crown, a mark for tank, healer and damage, a flag on anyone
-marked for fighting players, resting, in combat, ready-check answers and a resurrection on its way;
-shields as a band along the top of the health bar; combo points on the target for rogues and
+Also in there: portraits; a character's first name and surname, on a line of their own wherever a
+frame has the height (first name over surname on a raid frame), which is also where a long creature
+name fits; the game's dragon beside the level of an elite or rare creature; Questie's icon on a
+creature that one of your quests needs, if you run [Questie](https://github.com/Questie/Questie);
+each party member's buffs in a row above the frame, as on the target; raid icons, resting, in
+combat, ready-check answers and a resurrection on its way; the leader's crown, a mark for tank,
+healer and damage and a flag on anyone marked for fighting players, each of them switched on if you
+want it; shields as a band along the top of the health bar; combo points on the target for rogues and
 druids, a druid's mana under the form's bar, a hunter's pet's mood, and totems under the player for
 shamans, sent away with a right click; party frames when you are alone, if you like to see yourself
 there, in order of role if you like; a player frame that fades when nothing is going on; English,
@@ -114,7 +122,8 @@ on your target works as it does without the addon: the game's own target frame, 
 belongs to, is set aside unseen and not hidden.
 
 <sub>These six pictures are illustrations, not screenshots, drawn by <code>tools/make_listing.py</code>
-from the addon's own textures and layout numbers. The spell icons and raid marks in them are Blizzard's.</sub>
+from the addon's own textures and layout numbers. The spell icons and raid marks in them are Blizzard's.
+They were drawn for version 0.2 and do not show the portraits and the two lines of text of 0.3 yet.</sub>
 
 ## Install
 
@@ -180,11 +189,11 @@ tools/
     run.sh demo.sh     the tests and the picture; the moving demo
     menu.sh            opens the target's menu the way the game's controller mode does
     photos.sh          the picture over photographs of your own, each marked as a composite
-    scene_art.py       what a picture needs that the simulator lacks: icons, raid marks, a world, the font
+    scene_art.py       what a picture needs that the simulator lacks: icons, raid marks, portraits, a world, the font
   make_art.py          draws every texture the addon ships
   make_listing.py      draws the banner, the logo and the store pictures
   forge_hall.py        the dwarf in his forge hall behind the title pictures: a drawing of our own
-  game_icons.py        fetches the game's own spell icons and raid marks those pictures show
+  game_icons.py        fetches the game's own spell icons, raid marks, portraits and dragons those pictures show
   brand.py             the look those pictures share with FreeControl's
   sealed_list.py       makes tools/sealed_apis.txt from Blizzard's API documentation
 ```
@@ -210,8 +219,8 @@ seal values, so anything that depends on how the live client behaves is confirme
 
 <p align="center"><sub>The addon's own code drawing beside Blizzard's interface code in the simulator. The simulator has
 none of the game's art and no world, and reads no font from an addon's folder, so the scene
-(<code>tools/sim/tests/sim/screenshot.lua</code>) hands it the game's icons for its spells, the raid marks, a painted city
-and the addon's own font, and answers the game functions the simulator has no handle for: other units' auras, casts
+(<code>tools/sim/tests/sim/screenshot.lua</code>) hands it the game's icons for its spells, the raid marks, the game's stand-in
+portraits and its elite dragon, a painted city and the addon's own font, and answers the game functions the simulator has no handle for: other units' auras, casts
 and power, threat, range. Blizzard's own interface, bare without its art, is put away.</sub></p>
 
 The pictures and textures are drawn by scripts too (`pip install pillow numpy`):
@@ -221,7 +230,8 @@ python3 tools/make_art.py            # the textures in PugUnitFrames/Art
 python3 tools/make_listing.py        # docs/banner.png, docs/social.png, the logo, curseforge/gallery
 ```
 
-The pictures show the game's own spell icons and raid marks, as the frames do in the game. Those
+The pictures show the game's own spell icons, raid marks, stand-in portraits and elite dragon, as the
+frames show the game's art in the game. Those
 are Blizzard Entertainment's and are not part of this repository: `tools/game_icons.py` fetches
 them into a git-ignored folder from a [public mirror](https://github.com/Gethe/wow-ui-textures) of
 the game's interface art when the pictures are built (`--placeholders` draws stand-ins instead).

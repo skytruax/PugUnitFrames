@@ -4,7 +4,7 @@
 ## Notes-deDE: Schlanke, aufgeräumte Einheitenfenster: du, dein Ziel und dessen Ziel, Fokus, Begleiter, Gruppe und Schlachtzug.
 ## Notes-esES: Marcos de unidad limpios y ligeros: tú, tu objetivo y el suyo, foco, mascota, grupo y banda.
 ## Notes-frFR: Des cadres d'unité sobres et légers : vous, votre cible et la sienne, focalisation, familier, groupe et raid.
-## Version: 0.2.0
+## Version: 0.3.0
 ## Author: Sky Truax
 ## X-License: MIT
 ## X-Website: https://github.com/skytruax/PugUnitFrames
@@ -24,6 +24,7 @@ Elements\Power.lua
 Elements\Texts.lua
 Elements\Portrait.lua
 Elements\Marks.lua
+Elements\Quest.lua
 Elements\Threat.lua
 Elements\Range.lua
 Elements\CastBar.lua

@@ -10,6 +10,12 @@
 --   * It has none of the game's art. tools/sim/scene_art.py puts the game's icons for the scene's
 --     spells, its raid marks and a painted city into the scratch copy (PugUnitFramesSimArt);
 --     without them icons are blank squares and the world is the simulator's grey.
+--   * It draws no portraits and none of the game's named pictures (the dragon beside an elite's
+--     level is one). The scene puts the game's own stand-in portraits there, the faces the game
+--     shows until it has drawn a unit's own, and the game's dragon, both from scene_art.py.
+--   * Its characters have one name. On this client a character has a first name and a surname,
+--     which the game hands over as the second answer to "what is this unit called": the scene
+--     gives that answer for its people.
 --   * It draws a bar that runs on a timer as empty, and does not move the end of a bar's fill
 --     texture as the game does, which is what the cast bar's bright edge is pinned to. The scene
 --     fills each cast bar as far as its cast has come and pins the edge there.
@@ -43,6 +49,20 @@ local SPELLS = {
 	["Immolate"] = { kind = MAGIC, harmful = true, total = 15 },
 	["Battle Shout"] = { total = 120 },
 	["Enrage"] = { total = 8 },
+	["Power Word: Fortitude"] = { total = 1800 },
+	["Mark of the Wild"] = { total = 1800 },
+	["Arcane Intellect"] = { total = 1800 },
+	["Blessing of Might"] = { total = 300 },
+	["Renew"] = { total = 15 },
+}
+
+-- What the party went into the fight with: seconds left as the fight begins. Each moment is
+-- eight seconds or so after the one before.
+local BUFFS = {
+	party1 = { { "Power Word: Fortitude", 1500 }, { "Mark of the Wild", 1310 }, { "Blessing of Might", 240 }, { "Battle Shout", 118 } },
+	party2 = { { "Power Word: Fortitude", 1500 }, { "Mark of the Wild", 1310 }, { "Arcane Intellect", 1420 } },
+	party3 = { { "Power Word: Fortitude", 1500 }, { "Mark of the Wild", 1310 }, { "Arcane Intellect", 1420 } },
+	party4 = { { "Power Word: Fortitude", 1500 }, { "Mark of the Wild", 1310 }, { "Blessing of Might", 240 } },
 }
 
 -- player: health, mana, and how far into Holy Light (2.5 s) if casting
@@ -106,19 +126,58 @@ local FIGHT = {
 	},
 }
 local moment = FIGHT[STEP] or error("the fight has no moment " .. tostring(STEP))
+for unit, buffs in pairs(BUFFS) do
+	moment.auras[unit] = moment.auras[unit] or {}
+	for _, buff in ipairs(buffs) do
+		table.insert(moment.auras[unit], { buff[1], buff[2] - 8 * (STEP - 1) })
+	end
+end
+-- The priest's Renew is on the shaman from the moment the poison lands.
+if STEP >= 3 and STEP <= 4 then
+	table.insert(moment.auras.party3, { "Renew", STEP == 3 and 13 or 5 })
+end
 
 ---------------------------------------------------------------------------
 -- Where the frames stand in the picture (a 960 x 540 screen; the settings are the player's own
 -- to change, these are simply a tidy arrangement of them)
 ---------------------------------------------------------------------------
+-- Surnames, as the game hands them over: the second answer of UnitName.
+local SURNAMES = {
+	player = "Brightmoor", party1 = "Ironbeard", party2 = "Dawnwhisper", party3 = "Copperpot", party4 = "Holloway",
+	focus = "Vilecaller",
+}
+local gameUnitName = UnitName
+function UnitName(unit)
+	local name = gameUnitName(unit)
+	return name, SURNAMES[unit]
+end
+
+-- Portraits: the game draws each from the unit's own model. The simulator draws none (what it
+-- does in their place also moves the picture inside the texture, which the game never does), so
+-- from here on each unit of the scene gets one of the game's stand-in faces. This comes before
+-- the frames are laid out below, which puts each portrait's cut back as the addon wants it.
+local FACES = {
+	player = "human-female", party1 = "dwarf-male", party2 = "nightelf-male", party3 = "gnome-female", party4 = "human-male",
+	focus = "orc-male", target = "creature",
+}
+if art and art.portraits then
+	function SetPortraitTexture(texture, unit)
+		local face = art.portraits[FACES[unit] or ""]
+		if face then
+			texture:SetTexture(art.folder .. face)
+		end
+	end
+end
+
 local units = ns.db.units
 -- The simulator answers "is the pet visible" with yes although there is no pet, which leaves an
 -- empty pet frame in the picture. In the game the frame is only up while a pet is.
 units.pet.enabled = false
-units.party.x, units.party.y = -395, 212
-units.focus.x, units.focus.y = -128, -22
-units.player.x, units.player.y = -99, -118
-units.target.x, units.target.y = 241, -118
+-- Everything keeps inside the middle the moving demo is cut to (tools/sim/demo_gif.py).
+units.party.x, units.party.y = -420, 212
+units.focus.x, units.focus.y = -80, -58
+units.player.x, units.player.y = -64, -150
+units.target.x, units.target.y = 236, -150
 ns.Refresh()
 
 ---------------------------------------------------------------------------
@@ -310,6 +369,18 @@ if art then
 end
 
 ns.Frame.RefreshAll()
+
+-- The dragon beside an elite's level is one of the game's named pictures, which the simulator
+-- cannot draw: the same picture is put there from a file.
+if art and art.ranks then
+	for _, frame in ipairs(ns.Frame.All()) do
+		local rank = frame.texts and frame.texts.rank
+		local picture = rank and rank:IsShown() and art.ranks[rank:GetAtlas() or ""]
+		if picture then
+			rank:SetTexture(art.folder .. picture)
+		end
+	end
+end
 
 -- Each cast bar on show, filled as far as its cast has come, with its bright edge where the fill ends.
 local done = { player = healing and healing / 2.5 or nil }
