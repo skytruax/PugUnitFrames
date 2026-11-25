@@ -214,7 +214,9 @@ local function CanRead(font)
 	pending[font] = true
 	ns.After(wait, function()
 		pending[font] = nil
-		if CanRead(font) then
+		-- Only while it is still the font the settings ask for: Style.Apply starts the tries
+		-- again if they come to ask for it later.
+		if Style.FONTS[ns.db.font] == font and CanRead(font) then
 			ns.Refresh()
 		end
 	end)

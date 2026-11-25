@@ -260,6 +260,9 @@ ns.On("PLAYER_LOGIN", function()
 	ns.Style.Apply()
 	-- A reload in the middle of a fight starts in combat: the frames are then made when it ends.
 	ns.RunOutOfCombat("build", function()
+		-- The look as it is now, not as it was at login: the game may have handed the addon's font
+		-- over while the frames were waiting for a fight to end.
+		ns.Style.Apply()
 		ns.Units.Spawn()
 		ns.Group.Spawn()
 		ns.Blizzard.Apply()

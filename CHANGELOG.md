@@ -1,5 +1,15 @@
 # Changelog
 
+## Not released yet
+
+Fixed, after a second reading of 0.3.2:
+
+- Logging in or reloading in the middle of a fight, with the game slow to hand the addon's font over: the frames made when the fight ended were lettered in the game's font, while `/pug status` said the addon's was in use. They are made in the font the game has handed over by then.
+- With the font set to the game's own, the addon's font file was still tried, and reported after ten minutes if the game would not take it. A font nobody asks for is left alone.
+- Icons on the target of target (off unless you switch them on) were taken down and put up again four times a second, and the tooltip of the one under the mouse with them. Once a second now.
+- A part of a frame that could not be made was made again at every change of a setting, each time leaving its pieces behind. It is tried once.
+- The level's badge, on a frame without a portrait and with a low health bar, could hang a pixel over the bar's lower edge.
+
 ## v0.3.2
 
 Fixed:

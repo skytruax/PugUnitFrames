@@ -696,6 +696,31 @@ Test("the game's containers hear of aura changes themselves, and are told of a n
 	Equal(0, #ns.GetProblems())
 end)
 
+Test("the target's target, drawn afresh four times a second, has its icons looked at afresh once a second", function()
+	local ns = Login()
+	ns.db.units.targettarget.debuffs = 4
+	ns.Refresh()
+	Target(HOGGER)
+	M.SetUnit("targettarget", WithAuras(Friend(9), CopyTable(AURAS)))
+	M.UpdateUnitWatch()
+	local frame = PugUnitFrames_targettarget
+	Equal(3, #ShownIcons(frame), "the three debuffs")
+	local container = frame.auras.sides.below.container
+	local before = container.refreshes
+	for _ = 1, 20 do
+		M.Advance(0.25) -- five seconds of being looked at
+	end
+	local looks = container.refreshes - before
+	True(looks >= 4 and looks <= 6, "about one fresh look a second, not four: " .. looks)
+	-- The game sends no word of this unit's auras, so the fresh look is what finds a change.
+	table.remove(M.units.targettarget.auras, 1)
+	for _ = 1, 5 do
+		M.Advance(0.25)
+	end
+	Equal(2, #ShownIcons(frame), "a debuff that is gone goes within the second")
+	Equal(0, #ns.GetProblems())
+end)
+
 Test("a setting that changes the icons in a fight is taken up by the buttons when it ends", function()
 	local ns = Login()
 	Target(WithAuras(HOGGER, AURAS))
@@ -1664,6 +1689,40 @@ Test("/pug status says which font the frames are lettered in", function()
 	True(Printed("Font: the game's own."), "the game's, when that is what is asked for")
 end)
 
+Test("a font handed over while the frames wait for a fight to end is the one they are built in", function()
+	local inter = "Interface\\AddOns\\PugUnitFrames\\Fonts\\Inter-SemiBold.ttf"
+	M.unreadableFonts[inter] = true
+	Player()
+	M.SetCombat(true)
+	local ns = Login()
+	False(ns.IsBuilt(), "a login in the middle of a fight: no frames yet")
+	M.unreadableFonts[inter] = nil
+	Pass(3)
+	Equal("the addon's own", ns.Style.FontStatus(), "the game has handed the font over meanwhile")
+	M.SetCombat(false)
+	True(ns.IsBuilt())
+	Equal(inter, PugUnitFrames_player.texts.name.font[1], "and the frames are made with it")
+	Equal(0, #ns.GetProblems())
+end)
+
+Test("a font that is no longer asked for is no longer tried, and nothing is said about it", function()
+	local inter = "Interface\\AddOns\\PugUnitFrames\\Fonts\\Inter-SemiBold.ttf"
+	M.unreadableFonts[inter] = true
+	local ns = Login()
+	Pass(5)
+	ns.db.font = "game"
+	ns.Refresh()
+	Pass(700)
+	Equal(0, #ns.GetProblems(), "ten minutes on, no word about a font nobody wants")
+	Equal("the game's own", ns.Style.FontStatus())
+	-- Asked for again, it is tried again.
+	M.unreadableFonts[inter] = nil
+	ns.db.font = "inter"
+	ns.Refresh()
+	Equal(inter, PugUnitFrames_player.texts.name.font[1])
+	Equal(0, #ns.GetProblems())
+end)
+
 Test("the empty part of a health bar is the bar's own colour under a dark veil", function()
 	local ns = Login()
 	local bar = PugUnitFrames_player.health
@@ -1896,6 +1955,28 @@ Test("an element that cannot be laid out is left out, and the rest of the frame 
 	ns.Refresh()
 	True(player.active.Marks, "mended, the element is back")
 	True(#M.luaErrors >= 1, "the errors went to the game's own handler, not into a drawer")
+	M.luaErrors = {} -- expected in this scenario
+end)
+
+Test("an element that cannot be made is tried once, not at every layout", function()
+	local ns = Login()
+	local cast = ns.Elements.CastBar
+	local made = 0
+	local create = cast.Create
+	cast.Create = function()
+		made = made + 1
+		error("the cast bar will not be made")
+	end
+	ns.db.units.pet.castbar = true -- a frame that had no cast bar yet
+	ns.Refresh()
+	ns.Refresh()
+	ns.Refresh()
+	Equal(1, made, "once")
+	Equal(1, #ns.GetProblems(), "and reported once")
+	Equal(1, ns.GetProblems()[1].count)
+	False(PugUnitFrames_pet.active.CastBar, "the frame goes without it")
+	True(PugUnitFrames_pet.active.Health, "and has everything else")
+	cast.Create = create
 	M.luaErrors = {} -- expected in this scenario
 end)
 

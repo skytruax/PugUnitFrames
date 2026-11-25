@@ -160,6 +160,10 @@ function Texts.Layout(frame, cfg, on)
 	local badged = (cfg.levelBadge and cfg.level and not narrow) or false
 	local badgeHeight = numberSize + 5
 	local onPortrait = badged and cfg.portrait ~= "none" and cfg.height - 2 * pixel >= 2 * badgeHeight
+	if badged and not onPortrait then
+		-- On the line it is a little lower, so that it stays on the lowest bar that has two lines.
+		badgeHeight = numberSize + 3
+	end
 	-- The power number goes on the power bar, where the bar is tall enough for it.
 	local onBar = showPower and not narrow and cfg.powerHeight > powerSize
 	-- Two lines, where the health bar has the height and there is something for the lower one.

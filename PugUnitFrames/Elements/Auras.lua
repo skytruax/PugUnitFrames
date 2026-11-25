@@ -26,6 +26,7 @@ Auras.worldEvents = { "PLAYER_REGEN_ENABLED" }
 local GAP = 2
 local SIDE_GAP = 4          -- between the plate and icons beside it
 local STACK_GAP = 3         -- between the plate and icons above or below it (Frame.TakeAbove)
+local LOOK_AFRESH = 1       -- seconds between fresh looks at the auras of a unit the game sends no news of
 local LIGHT_WIDTH = 2       -- pixels of the removable-debuff light along the plate's rim
 local PULSE = 0.55          -- seconds for that light to dim, and again to come back
 local PULSE_LOW = 0.35      -- how far it dims
@@ -401,6 +402,14 @@ function Auras.Update(frame, unit, event)
 	if event == "PLAYER_REGEN_ENABLED" then
 		return
 	end
+	-- A fresh look takes every icon down and puts it up again (and the tooltip of the one under
+	-- the mouse with it). A frame drawn afresh four times a second, as the target's target is
+	-- because the game sends no news of that unit, has it once a second.
+	local now = GetTime()
+	if frame.pollEvery and auras.unit == unit and now - (auras.looked or 0) < LOOK_AFRESH then
+		return
+	end
+	auras.unit, auras.looked = unit, now
 	for _, side in ipairs(SIDES) do
 		local there = auras.sides[side]
 		if there then

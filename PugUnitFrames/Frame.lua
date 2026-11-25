@@ -362,10 +362,13 @@ function Frame.Layout(frame)
 		local wanted = element.Wanted(cfg, frame.kind) and true or false
 		-- Each element is made and laid out on its own: one that fails is reported (ns.Try hands
 		-- the error to the game as any error is) and left out, and the rest of the frame stands.
-		local sound = true
-		if wanted and not frame.made[name] then
+		-- One that could not be made is not made again: a second try would leave a second set of
+		-- half-made pieces on the frame, and a third after it.
+		local sound = not frame.broken[name]
+		if wanted and sound and not frame.made[name] then
 			sound = ns.Try(element.Create, frame)
 			frame.made[name] = sound
+			frame.broken[name] = not sound or nil
 		end
 		if frame.made[name] then
 			sound = ns.Try(element.Layout, frame, cfg, wanted) and sound
@@ -433,6 +436,7 @@ end
 function Frame.Build(frame, kind)
 	frame.kind = kind
 	frame.made = {}
+	frame.broken = {}
 	frame.active = {}
 	frame.listeners = {}
 	frame.eventUnits = {}
