@@ -109,7 +109,8 @@ creature that one of your quests needs, if you run [Questie](https://github.com/
 each party member's buffs in a row above the frame, as on the target; raid icons, resting, in
 combat, ready-check answers and a resurrection on its way; the leader's crown, a mark for tank,
 healer and damage and a flag on anyone marked for fighting players, each of them switched on if you
-want it; shields as a band along the top of the health bar; combo points on the target for rogues and
+want it; shields drawn after the health as healing on its way is, with a pale cap on the end of
+the bar when there is more shield than room; combo points on the target for rogues and
 druids, a druid's mana under the form's bar, a hunter's pet's mood, and totems under the player for
 shamans, sent away with a right click; party frames when you are alone, if you like to see yourself
 there, in order of role if you like; a player frame that fades when nothing is going on; English,

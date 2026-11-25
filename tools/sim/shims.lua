@@ -74,3 +74,59 @@ end)
 -- shown, which is how the game starts out.
 C_PlayerInfo = C_PlayerInfo or {}
 Shim(C_PlayerInfo, "ShouldDisplaySurname", function() return true end)
+
+-- The simulator has the game's calculator for healing on its way and shields, but its calculator
+-- hands a shield back whole, whatever it was told to keep the shield within. Blizzard documents
+-- what each rule keeps it within (Enum.UnitDamageAbsorbClampMode); this does that, and passes
+-- everything else on to the simulator's own.
+do
+	local MODES = Enum.UnitDamageAbsorbClampMode
+	local create, fill = CreateUnitHealPredictionCalculator, UnitGetDetailedHealPrediction
+
+	local function KeepsWithin()
+		local probe = create()
+		probe:SetDamageAbsorbClampMode(MODES.MissingHealth)
+		probe:SetPredictedValues({ health = 50, healthMax = 100, totalIncomingHeals = 0, totalIncomingHealsFromHealer = 0,
+			totalDamageAbsorbs = 80, totalHealAbsorbs = 0 })
+		return (probe:GetDamageAbsorbs()) == 50
+	end
+
+	if create and fill and MODES and not KeepsWithin() then
+		local inside = setmetatable({}, { __mode = "k" }) -- our calculator -> the simulator's
+
+		function CreateUnitHealPredictionCalculator()
+			local inner, mode = create(), MODES.MissingHealth
+			local calculator = setmetatable({}, { __index = function(_, name)
+				local member = inner[name]
+				if type(member) ~= "function" then
+					return member
+				end
+				return function(_, ...)
+					return member(inner, ...)
+				end
+			end })
+			function calculator:SetDamageAbsorbClampMode(newMode)
+				mode = newMode
+				inner:SetDamageAbsorbClampMode(newMode)
+			end
+			function calculator:GetDamageAbsorbs()
+				local values = inner:GetPredictedValues()
+				local health, most = values.health or 0, values.healthMax or 0
+				local shield, heals = values.totalDamageAbsorbs or 0, values.totalIncomingHeals or 0
+				local room = most
+				if mode == MODES.MissingHealth then
+					room = math.max(0, most - health - heals)
+				elseif mode == MODES.MissingHealthWithoutIncomingHeals then
+					room = math.max(0, most - health)
+				end
+				return math.min(shield, room), shield > room
+			end
+			inside[calculator] = inner
+			return calculator
+		end
+
+		function UnitGetDetailedHealPrediction(unit, healer, calculator)
+			return fill(unit, healer, inside[calculator] or calculator)
+		end
+	end
+end

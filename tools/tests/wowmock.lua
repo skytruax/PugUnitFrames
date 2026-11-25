@@ -578,6 +578,14 @@ end
 function Texture:SetColorTexture(r, g, b, a) self.color = { r, g, b, a } end
 function Texture:SetVertexColor(r, g, b, a) self.vertex = { r, g, b, a } end
 function Texture:SetTexCoord(...) self.coords = { ... } end
+-- A colour that runs from one to another across the texture: from `low` at the left or the
+-- bottom to `high` at the right or the top.
+function Texture:SetGradient(orientation, low, high)
+	Plain("SetGradient's orientation", orientation)
+	assert(orientation == "HORIZONTAL" or orientation == "VERTICAL", "SetGradient: not an orientation: " .. tostring(orientation))
+	assert(type(low) == "table" and low.GetRGBA and type(high) == "table" and high.GetRGBA, "SetGradient takes two colour objects")
+	self.gradient = { orientation = orientation, low = { low:GetRGBA() }, high = { high:GetRGBA() } }
+end
 function Texture:SetBlendMode(mode) Plain("SetBlendMode", mode) self.blend = mode end
 function Texture:SetSpriteSheetCell(cell, rows, columns)
 	Plain("SetSpriteSheetCell's rows and columns", rows, columns)
@@ -1437,6 +1445,40 @@ end
 
 -- What is soaking up damage for the unit: always sealed (SecretReturns).
 function UnitGetTotalAbsorbs(token) local unit = Unit(token, "UnitGetTotalAbsorbs") return Seal(unit and unit.absorb or 0) end
+
+-- The game's calculator for healing on its way and shields: an object that is filled with a
+-- unit's numbers and hands back, sealed, how much of a shield fits under the rule it was given
+-- (Enum.UnitDamageAbsorbClampMode), and whether there was more than that.
+Enum.UnitDamageAbsorbClampMode = { MissingHealth = 0, MissingHealthWithoutIncomingHeals = 1, MaximumHealth = 2 }
+M.calculators = 0
+function CreateUnitHealPredictionCalculator()
+	M.calculators = M.calculators + 1
+	local calculator = { mode = 0, health = 0, healthMax = 0, heals = 0, absorb = 0 }
+	function calculator:SetDamageAbsorbClampMode(mode)
+		Plain("SetDamageAbsorbClampMode", mode)
+		assert(mode == 0 or mode == 1 or mode == 2, "SetDamageAbsorbClampMode: not a clamp mode: " .. tostring(mode))
+		self.mode = mode
+	end
+	function calculator:GetDamageAbsorbs()
+		local room = self.healthMax
+		if self.mode == 0 then
+			room = math.max(0, self.healthMax - self.health - self.heals)
+		elseif self.mode == 1 then
+			room = math.max(0, self.healthMax - self.health)
+		end
+		return Seal(math.min(self.absorb, room)), Seal(self.absorb > room)
+	end
+	return calculator
+end
+function UnitGetDetailedHealPrediction(token, healer, calculator)
+	local unit = Unit(token, "UnitGetDetailedHealPrediction")
+	Plain("UnitGetDetailedHealPrediction's healer", healer)
+	assert(type(calculator) == "table" and calculator.GetDamageAbsorbs, "UnitGetDetailedHealPrediction needs a calculator")
+	calculator.health = unit and unit.health or 0
+	calculator.healthMax = unit and unit.healthMax or 0
+	calculator.heals = unit and unit.incomingHeals or 0
+	calculator.absorb = unit and unit.absorb or 0
+end
 
 -- Power. A unit has the power it runs on, and a druid in a form has mana besides (mana, manaMax);
 -- `powerless` is something that runs on a power in name only. Asked for a power it does not

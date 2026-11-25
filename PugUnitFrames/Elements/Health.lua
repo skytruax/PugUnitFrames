@@ -1,6 +1,7 @@
 local ADDON, ns = ...
 
--- The health bar, and on it the healing that is on its way and the shields that soak up damage.
+-- The health bar, and after the health on it, the healing that is on its way and the shields
+-- that soak up damage.
 local Frame, Style, Sealed = ns.Frame, ns.Style, ns.Sealed
 
 local Health = { name = "Health" }
@@ -28,12 +29,21 @@ function Health.Create(frame)
 	bar.heal = CreateFrame("StatusBar", nil, bar)
 	bar:SetClipsChildren(true)
 
-	-- A shield (Power Word: Shield and its like) is a pale band along the top of the bar, on the
-	-- same scale again: as long as the shield is large against full health. It starts at the
-	-- bar's own start and not where the health ends, so it shows on someone at full health too,
-	-- which is when a shield is usually cast.
-	bar.absorb = CreateFrame("StatusBar", nil, bar)
-	bar.absorb:SetFrameLevel(bar.heal:GetFrameLevel() + 1)
+	-- A shield (Power Word: Shield and its like) is drawn the same way, in a pale colour: a
+	-- third bar that starts where the healing on its way ends, on the same scale again, so its
+	-- length is the shield's size. Only as much of it is drawn as there is room for before the
+	-- end of the health bar. When there is more shield than room, a pale cap lights up on the
+	-- end of the bar: that is all a shield on someone at full health has to show, which is when
+	-- a shield is usually cast.
+	bar.shield = CreateFrame("StatusBar", nil, bar)
+	bar.shield:SetFrameLevel(bar.heal:GetFrameLevel() + 1)
+	-- The cap sits over the three bars.
+	bar.capHolder = CreateFrame("Frame", nil, bar)
+	bar.capHolder:SetAllPoints(bar)
+	bar.capHolder:SetFrameLevel(bar.shield:GetFrameLevel() + 1)
+	bar.cap = bar.capHolder:CreateTexture(nil, "OVERLAY")
+	bar.cap:SetColorTexture(1, 1, 1, 1)
+	bar.cap:SetAlpha(0)
 
 	frame.health = bar
 end
@@ -92,15 +102,50 @@ function Health.Layout(frame, cfg)
 	heal:SetStatusBarColor(Style.HEAL[1], Style.HEAL[2], Style.HEAL[3], Style.HEAL[4])
 	heal:SetShown(cfg.heals and true or false)
 
-	local absorb = bar.absorb
-	absorb:ClearAllPoints()
-	absorb:SetPoint("TOPLEFT", bar, "TOPLEFT")
-	absorb:SetPoint("TOPRIGHT", bar, "TOPRIGHT")
-	absorb:SetHeight(math.max(2 * pixel, math.floor(cfg.height * 0.10 + 0.5)))
-	absorb:SetStatusBarTexture(Style.TEXTURES.flat)
-	absorb:SetReverseFill(leftward)
-	absorb:SetStatusBarColor(Style.ABSORB[1], Style.ABSORB[2], Style.ABSORB[3], Style.ABSORB[4])
-	absorb:SetShown(cfg.absorbs and true or false)
+	-- The shield follows the healing on its way, or the health itself where healing is not drawn.
+	local shield, tint = bar.shield, Style.ABSORB
+	local before = cfg.heals and heal:GetStatusBarTexture() or fill
+	shield:ClearAllPoints()
+	if upright then
+		shield:SetPoint("BOTTOMLEFT", before, "TOPLEFT")
+		shield:SetPoint("BOTTOMRIGHT", before, "TOPRIGHT")
+		shield:SetHeight(cfg.height)
+	elseif leftward then
+		shield:SetPoint("TOPRIGHT", before, "TOPLEFT")
+		shield:SetPoint("BOTTOMRIGHT", before, "BOTTOMLEFT")
+		shield:SetWidth(math.max(1, frame.barWidth))
+	else
+		shield:SetPoint("TOPLEFT", before, "TOPRIGHT")
+		shield:SetPoint("BOTTOMLEFT", before, "BOTTOMRIGHT")
+		shield:SetWidth(math.max(1, frame.barWidth))
+	end
+	shield:SetStatusBarTexture(Style.texture)
+	shield:SetOrientation(orientation)
+	shield:SetReverseFill(leftward)
+	shield:SetStatusBarColor(tint[1], tint[2], tint[3], tint[4])
+	shield:SetShown(cfg.absorbs and true or false)
+
+	-- The cap: the shield's colour on the end the bar fills towards, fading back into the bar.
+	local cap, reach = bar.cap, math.max(6, math.floor(cfg.height * 0.2 + 0.5))
+	local faint, full = CreateColor(tint[1], tint[2], tint[3], 0), CreateColor(tint[1], tint[2], tint[3], 0.95)
+	cap:ClearAllPoints()
+	if upright then
+		cap:SetPoint("TOPLEFT", bar, "TOPLEFT")
+		cap:SetPoint("TOPRIGHT", bar, "TOPRIGHT")
+		cap:SetHeight(reach)
+		cap:SetGradient("VERTICAL", faint, full)
+	elseif leftward then
+		cap:SetPoint("TOPLEFT", bar, "TOPLEFT")
+		cap:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT")
+		cap:SetWidth(reach)
+		cap:SetGradient("HORIZONTAL", full, faint)
+	else
+		cap:SetPoint("TOPRIGHT", bar, "TOPRIGHT")
+		cap:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT")
+		cap:SetWidth(reach)
+		cap:SetGradient("HORIZONTAL", faint, full)
+	end
+	bar.capHolder:SetShown(cfg.absorbs and true or false)
 end
 
 -- The bar and the empty part behind it take the same colour (which may be sealed numbers: they
@@ -151,7 +196,8 @@ function Health.Update(frame, unit, event)
 	if not UnitIsConnected(unit) or UnitIsDeadOrGhost(unit) then
 		Empty(bar)
 		Empty(bar.heal)
-		Empty(bar.absorb)
+		Empty(bar.shield)
+		bar.cap:SetAlpha(0)
 		-- All of the bar is its empty part now: grey, whoever it was.
 		bar.trough:SetVertexColor(Style.Toned(Style.REACTION.gone))
 		return
@@ -164,7 +210,7 @@ function Health.Update(frame, unit, event)
 		Sealed.IncomingHealsToBar(bar.heal, unit)
 	end
 	if cfg.absorbs then
-		Sealed.AbsorbsToBar(bar.absorb, unit)
+		Sealed.ShieldToBar(bar.shield, bar.cap, unit, cfg.heals and true or false)
 	end
 end
 

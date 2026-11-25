@@ -13,6 +13,9 @@
 --   * It draws no portraits and none of the game's named pictures (the dragon beside an elite's
 --     level is one). The scene puts the game's own stand-in portraits there, the faces the game
 --     shows until it has drawn a unit's own, and the game's dragon, both from scene_art.py.
+--   * It has no shields. The scene tells the game's calculator for them how large each is, and,
+--     as with the cast bars, puts each shield's stretch of bar where the health ends, since the
+--     simulator leaves the end of a bar's fill where it was.
 --   * Its characters have one name. On this client a character has a first name and a surname,
 --     which the game hands over as the second answer to "what is this unit called": the scene
 --     gives that answer for its people.
@@ -54,6 +57,7 @@ local SPELLS = {
 	["Arcane Intellect"] = { total = 1800 },
 	["Blessing of Might"] = { total = 300 },
 	["Renew"] = { total = 15 },
+	["Power Word: Shield"] = { total = 30 },
 }
 
 -- What the party went into the fight with: seconds left as the fight begins. Each moment is
@@ -136,6 +140,19 @@ end
 if STEP >= 3 and STEP <= 4 then
 	table.insert(moment.auras.party3, { "Renew", STEP == 3 and 13 or 5 })
 end
+-- Shields: the priest's Power Word: Shield on the tank as Hogger turns on him, wearing thin
+-- under the blows, and one on the priest himself, who is at full health and so has no room on
+-- his bar for any of it: only the cap on the bar's end. unit -> what is left of the shield.
+local SHIELDS = ({
+	{},
+	{ party1 = 840 },
+	{ party1 = 410, party2 = 600 },
+	{ party2 = 600 },
+	{ party2 = 600 },
+})[STEP]
+for unit in pairs(SHIELDS) do
+	table.insert(moment.auras[unit], { "Power Word: Shield", 30 - 6 * (STEP - 2) })
+end
 
 ---------------------------------------------------------------------------
 -- Where the frames stand in the picture (a 960 x 540 screen; the settings are the player's own
@@ -150,6 +167,17 @@ local gameUnitName = UnitName
 function UnitName(unit)
 	local name = gameUnitName(unit)
 	return name, SURNAMES[unit]
+end
+
+-- The game's calculator is filled by the game with a unit's health, healing and shields. The
+-- simulator knows of no shields: the scene adds its own to what the simulator filled in.
+local gamePrediction = UnitGetDetailedHealPrediction
+function UnitGetDetailedHealPrediction(unit, healer, calculator)
+	gamePrediction(unit, healer, calculator)
+	local values = calculator:GetPredictedValues()
+	values.health, values.healthMax = UnitHealth(unit), UnitHealthMax(unit)
+	values.totalDamageAbsorbs = SHIELDS[unit] or 0
+	calculator:SetPredictedValues(values)
 end
 
 -- Portraits: the game draws each from the unit's own model. The simulator draws none (what it
@@ -396,6 +424,19 @@ for _, frame in ipairs(ns.Frame.All()) do
 		cast.spark:ClearAllPoints()
 		cast.spark:SetPoint("TOP", cast.bar, "TOPLEFT", along, 0)
 		cast.spark:SetPoint("BOTTOM", cast.bar, "BOTTOMLEFT", along, 0)
+	end
+end
+
+-- Each shield's stretch of bar, put where the unit's health ends (the game ties it to the end
+-- of the fill, which this simulator does not move).
+for _, frame in ipairs(ns.Frame.All()) do
+	local unit = frame.unit
+	if unit and SHIELDS[unit] and frame:IsVisible() then
+		local bar = frame.health
+		local along = bar:GetWidth() * UnitHealth(unit) / UnitHealthMax(unit)
+		bar.shield:ClearAllPoints()
+		bar.shield:SetPoint("TOPLEFT", bar, "TOPLEFT", along, 0)
+		bar.shield:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", along, 0)
 	end
 end
 

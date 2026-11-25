@@ -150,6 +150,54 @@ test("Questie's icon for a creature is drawn in the target frame's corner, when 
 	NoProblems()
 end)
 
+test("a shield follows the health on the bar, and a cap on the bar's end says when there is more than fits", function()
+	-- The simulator has no shields: this one is added to what its calculator was filled with.
+	local shield = 0
+	local gamePrediction = UnitGetDetailedHealPrediction
+	UnitGetDetailedHealPrediction = function(unit, healer, calculator)
+		gamePrediction(unit, healer, calculator)
+		if unit == "player" then
+			local values = calculator:GetPredictedValues()
+			values.health, values.healthMax = UnitHealth(unit), UnitHealthMax(unit)
+			values.totalDamageAbsorbs = shield
+			calculator:SetPredictedValues(values)
+		end
+	end
+	A_Admin.SetPlayerHealth(600, 1000)
+	Tick()
+	local bar = PugUnitFrames_player.health
+	assertTrue(bar.shield:IsShown())
+	local _, after = bar.shield:GetPoint(1)
+	assertEquals(bar.heal:GetStatusBarTexture(), after, "it starts where the healing on its way ends")
+	local _, healAfter = bar.heal:GetPoint(1)
+	assertEquals(bar:GetStatusBarTexture(), healAfter, "which starts where the health ends")
+
+	shield = 250
+	ns.Frame.Refresh(PugUnitFrames_player)
+	assertAlmostEquals(250, bar.shield:GetValue(), 0.5)
+	local _, most = bar.shield:GetMinMaxValues()
+	assertAlmostEquals(1000, most, 0.5)
+	assertAlmostEquals(0, bar.cap:GetAlpha(), 0.01)
+
+	shield = 900
+	ns.Frame.Refresh(PugUnitFrames_player)
+	assertAlmostEquals(400, bar.shield:GetValue(), 0.5)
+	assertAlmostEquals(1, bar.cap:GetAlpha(), 0.01)
+	assertTrue(bar.cap:GetRight() <= bar:GetRight() + 0.5 and bar.cap:GetLeft() >= bar:GetRight() - 12, "the cap is the bar's last few units")
+
+	A_Admin.SetPlayerHealth(1000, 1000)
+	Tick()
+	ns.Frame.Refresh(PugUnitFrames_player)
+	assertAlmostEquals(0, bar.shield:GetValue(), 0.5)
+	assertAlmostEquals(1, bar.cap:GetAlpha(), 0.01)
+
+	shield = 0
+	ns.Frame.Refresh(PugUnitFrames_player)
+	assertAlmostEquals(0, bar.cap:GetAlpha(), 0.01)
+	UnitGetDetailedHealPrediction = gamePrediction
+	NoProblems()
+end)
+
 test("party members stand far enough apart for the row of buffs above each", function()
 	A_Admin.SetPartySize(4)
 	Tick()

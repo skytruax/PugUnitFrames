@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.1
+
+- **Shields are drawn the way healing on its way is**: a pale stretch of bar that starts where the health ends (after the healing, when some is on its way) and is as long as the shield is large. It takes the place of the band along the top of the bar. Only as much of a shield is drawn as there is room for before the end of the bar; when there is more shield than room, a pale cap lights up on the bar's end. That cap is all a shield on someone at full health has to show, which is when a shield is usually cast. "Shields on the health bar" still switches it, frame by frame.
+
 ## v0.3.0
 
 What you see when you log in has changed. Every part of it is a setting, and can be switched back.

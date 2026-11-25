@@ -107,11 +107,37 @@ function Sealed.IncomingHealsToBar(bar, unit)
 	bar:SetValue(amount)
 end
 
--- What is soaking up damage before the unit's health does (a priest's shield), as a bar that
--- shares the health bar's scale: as long as the shield is large against maximum health.
-function Sealed.AbsorbsToBar(bar, unit)
+-- A shield: what soaks up damage before the unit's health does (a priest's Power Word: Shield).
+-- It goes on a bar that follows the health, and the healing on its way, and shares the health
+-- bar's scale, so its length is the shield's size.
+--
+-- How large a shield is, is always sealed, and so is how much health the unit is missing: this
+-- addon cannot work out how much of the shield there is room for. The game has a calculator for
+-- exactly that. Asked to keep the shield within what the unit is missing, it hands back that
+-- much of it, and a second answer, whether there was more than fits. The first goes to the bar;
+-- the second goes to `cap`, a mark on the end of the health bar, as its alpha: someone at full
+-- health under a shield has no room for any of it, and has the mark.
+--
+-- `afterHeals` says whether healing on its way is drawn between the health and the shield, and
+-- so has its room first.
+local ROOM = Enum.UnitDamageAbsorbClampMode
+local shieldSums -- one calculator, filled for each unit in turn
+
+function Sealed.ShieldToBar(bar, cap, unit, afterHeals)
 	bar:SetMinMaxValues(0, UnitHealthMax(unit))
-	bar:SetValue(UnitGetTotalAbsorbs(unit))
+	if not ROOM or not CreateUnitHealPredictionCalculator then
+		-- A client without the calculator: the whole shield, cut off where the health bar ends,
+		-- and nothing to say that it was.
+		bar:SetValue(UnitGetTotalAbsorbs(unit))
+		cap:SetAlpha(0)
+		return
+	end
+	shieldSums = shieldSums or CreateUnitHealPredictionCalculator()
+	shieldSums:SetDamageAbsorbClampMode(afterHeals and ROOM.MissingHealth or ROOM.MissingHealthWithoutIncomingHeals)
+	UnitGetDetailedHealPrediction(unit, nil, shieldSums)
+	local fits, more = shieldSums:GetDamageAbsorbs()
+	bar:SetValue(fits)
+	cap:SetAlphaFromBoolean(more, 1, 0)
 end
 
 ---------------------------------------------------------------------------

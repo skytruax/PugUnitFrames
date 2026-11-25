@@ -1965,26 +1965,87 @@ Test("someone else's kill is grey whatever colours the bar", function()
 	Sealed(bar.barColor[1], "free again, it is coloured by its health")
 end)
 
-Test("a shield shows as a band along the top of the health bar, on the health bar's scale", function()
-	local ns = Login()
-	local band = PugUnitFrames_player.health.absorb
-	True(band:IsShown())
-	Equal(0, Value(band.value), "no shield, nothing drawn")
-	M.units.player.absorb = 1200
+Test("a shield is drawn as healing on its way is: after the health, as much of it as there is room for", function()
+	local ns = Login() -- the player: 4000 of 5000 health
+	local bar = PugUnitFrames_player.health
+	local shield, cap = bar.shield, bar.cap
+	True(shield:IsShown())
+	Equal(0, Value(shield.value), "no shield, nothing drawn")
+	Equal(0, Value(cap.alpha), "and no cap on the bar")
+	Equal(bar.heal.barTexture, shield.anchors[1][2], "it starts where the healing on its way ends")
+	Equal("TOPLEFT", shield.anchors[1][1])
+	Equal("TOPRIGHT", shield.anchors[1][3])
+
+	M.units.player.absorb = 600
 	M.Fire("UNIT_ABSORB_AMOUNT_CHANGED", "player")
-	Sealed(band.value, "the size of a shield is always sealed")
-	Equal(1200, Value(band.value))
-	Equal(5000, Value(band.high), "against full health")
-	Equal("TOPLEFT", band.anchors[1][1], "from the bar's start, so it shows at full health too")
+	Sealed(shield.value, "the size of a shield is always sealed")
+	Equal(600, Value(shield.value), "a shield smaller than what is missing is drawn whole")
+	Equal(5000, Value(shield.high), "on the health bar's scale")
+	Sealed(cap.alpha)
+	Equal(0, Value(cap.alpha), "all of it fits: no cap")
+
+	-- More shield than room: what fits is drawn, and the cap on the end of the bar says there is more.
+	M.units.player.absorb = 1800
+	M.Fire("UNIT_ABSORB_AMOUNT_CHANGED", "player")
+	Equal(1000, Value(shield.value), "as much as the missing thousand has room for")
+	Equal(1, Value(cap.alpha), "the cap is lit")
+
+	-- Healing on its way stands between the health and the shield and has its room first.
+	M.units.player.incomingHeals = 700
+	M.Fire("UNIT_HEAL_PREDICTION", "player")
+	Equal(700, Value(bar.heal.value))
+	Equal(300, Value(shield.value), "what the heal leaves")
+	Equal(1, Value(cap.alpha))
+
+	-- At full health there is room for none of it: the cap alone shows the shield.
+	M.units.player.health, M.units.player.incomingHeals = 5000, nil
+	M.Fire("UNIT_HEALTH", "player")
+	Equal(0, Value(shield.value))
+	Equal(1, Value(cap.alpha), "which is when a shield is usually cast")
+	Equal("TOPRIGHT", cap.anchors[1][1], "on the end the bar fills towards")
+	Equal(0, cap.gradient.low[4], "fading back into the bar")
+	True(cap.gradient.high[4] > 0.9)
+	Equal(1, M.calculators, "one calculator serves every frame")
 
 	M.units.player.dead = true
 	M.Fire("UNIT_HEALTH", "player")
-	Equal(0, band.value, "nobody shields the dead")
+	Equal(0, shield.value, "nobody shields the dead")
+	Equal(0, cap.alpha)
 	M.units.player.dead = false
 
 	ns.db.units.player.absorbs = false
 	ns.Refresh()
-	False(band:IsShown())
+	False(shield:IsShown())
+	False(bar.capHolder:IsShown())
+	Equal(0, #ns.GetProblems())
+end)
+
+Test("with healing on its way not drawn, the shield follows the health itself", function()
+	local ns = Login()
+	local cfg, bar = ns.db.units.player, PugUnitFrames_player.health
+	cfg.heals = false
+	ns.Refresh()
+	Equal(bar.barTexture, bar.shield.anchors[1][2], "after the health")
+	M.units.player.absorb, M.units.player.incomingHeals = 900, 700
+	M.Fire("UNIT_ABSORB_AMOUNT_CHANGED", "player")
+	Equal(900, Value(bar.shield.value), "and a heal that is not drawn takes none of its room")
+	Equal(0, Value(bar.cap.alpha))
+end)
+
+Test("a shield on a party member and on a target is drawn the same way", function()
+	local ns = Login()
+	Party(1) -- Friend1: 2000 of 2500
+	M.units.party1.absorb = 800
+	M.Fire("UNIT_ABSORB_AMOUNT_CHANGED", "party1")
+	local bar = PartyButton(ns, 1).health
+	Equal(500, Value(bar.shield.value))
+	Equal(1, Value(bar.cap.alpha))
+	Target(HOGGER) -- 300 of 600, health and maximum both sealed
+	M.units.target.absorb = 100
+	M.Fire("UNIT_ABSORB_AMOUNT_CHANGED", "target")
+	Equal(100, Value(PugUnitFrames_target.health.shield.value))
+	Equal(0, Value(PugUnitFrames_target.health.cap.alpha))
+	Equal(0, #ns.GetProblems())
 end)
 
 Test("bars can fill to the left or upwards, and a bar can be turned round", function()
@@ -2002,13 +2063,21 @@ Test("bars can fill to the left or upwards, and a bar can be turned round", func
 	Equal("TOPRIGHT", bar.heal.anchors[1][1])
 	Equal("TOPLEFT", bar.heal.anchors[1][3], "from the other end of the fill")
 	True(PugUnitFrames_player.power.reverseFill, "and so does the power bar")
-	True(bar.absorb.reverseFill)
+	True(bar.shield.reverseFill, "and the shield after the healing")
+	Equal("TOPRIGHT", bar.shield.anchors[1][1])
+	Equal("TOPLEFT", bar.shield.anchors[1][3])
+	Equal("TOPLEFT", bar.cap.anchors[1][1], "the cap is on the end the bar now fills towards")
+	True(bar.cap.gradient.low[4] > 0.9, "full at that end")
 
 	cfg.fill = "up"
 	ns.Refresh()
 	Equal("VERTICAL", bar.orientation)
 	Equal("VERTICAL", bar.heal.orientation)
 	Equal("BOTTOMLEFT", bar.heal.anchors[1][1])
+	Equal("VERTICAL", bar.shield.orientation)
+	Equal("BOTTOMLEFT", bar.shield.anchors[1][1], "the shield above the healing")
+	Equal("VERTICAL", bar.cap.gradient.orientation, "and the cap along the top")
+	True(bar.cap.gradient.high[4] > 0.9)
 	False(PugUnitFrames_player.power.reverseFill, "the power bar, a strip along the bottom, fills as ever")
 
 	-- Turned round: a dark bar, and the class colour where health is missing.

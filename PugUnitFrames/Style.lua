@@ -106,7 +106,7 @@ Style.THREAT = {
 
 Style.CAST = { 0.93, 0.74, 0.28 }
 Style.HEAL = { 0.45, 0.92, 0.55, 0.55 } -- healing on its way, drawn past the end of the health bar
-Style.ABSORB = { 0.84, 0.93, 1.00, 0.92 } -- a shield that soaks up damage: a pale band along the top of the health bar
+Style.ABSORB = { 0.66, 0.84, 1.00, 0.72 } -- a shield that soaks up damage, drawn after the health as healing on its way is
 Style.POINT = { 0.96, 0.78, 0.25 }      -- a combo point
 
 -- The time left on an icon is written by the game, in one of its own fonts: small figures of even

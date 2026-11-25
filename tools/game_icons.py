@@ -53,6 +53,7 @@ FILES = {
     "Power Word: Fortitude": "Spell_Holy_WordFortitude.PNG",
     "Blessing of Might": "Spell_Holy_FistOfJustice.PNG",
     "Renew": "Spell_Holy_Renew.PNG",
+    "Power Word: Shield": "Spell_Holy_PowerWordShield.PNG",
     "Battle Shout": "Ability_Warrior_BattleShout.PNG",
 }
 
