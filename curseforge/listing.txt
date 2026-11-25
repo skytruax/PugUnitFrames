@@ -52,9 +52,11 @@ Images, in this order
     and 02-frames.png to 08-logo.png (1920 x 1080 each). 09-in-play is the addon's own code
     drawing a fight in the simulator; the others are illustrations. Each says on the picture what
     it is, and credits the game's spell icons and raid marks on the frames to Blizzard.
-    All of them were drawn again on 2026-11-24, after 0.3.3, for the look the frames have since
-    0.3 (portraits, first name and surname on a line of their own, the party's buffs above each
-    member, shields after the health): upload all nine again, in place of whatever is there.
+    All of them were drawn again on 2026-11-24 and 25, after 0.3.3: for the look the frames have
+    since 0.3 (portraits, first name and surname on a line of their own, the party's buffs above
+    each member, shields after the health) and with the settings they start with since the
+    version after 0.3.3 (health as an amount, levels on the party, no mark on the target, no
+    shadows). Upload all nine again, in place of whatever is there.
 
 Files
     0.1.0 (uploaded by hand) and 0.1.1 (by the release workflow) are the addon under its first

@@ -1,5 +1,17 @@
 # Changelog
 
+## Not released yet
+
+- **New starting settings.** A new profile, and a frame you reset, now starts with the settings the addon's author plays with:
+    - larger frames (player and target at 115%, party at 120%, focus at 130%), with a taller power bar and cast bar on player and target;
+    - health written as an amount on player, target and party;
+    - cast bars and levels on the party, and party portraits that look towards the bars;
+    - at most six buffs on the target, and no raid mark or combat mark on it;
+    - no shadows under the frames;
+    - raid frames switched off: in a raid you keep the game's own raid frames until you switch these on (Options > Frames > Raid > Show this frame).
+- **Where the frames start.** On a wide screen (an interface scaled down, or an ultrawide monitor) they start in the author's arrangement: player at the left and target at the right of the fight, focus and pet out at the left edge, the party below the player. Where that does not fit, they start close together around the lower middle, as before, moved apart a little for their new sizes.
+- **Settings you already have are not changed**: no frame of yours is moved, resized or switched off by this update. `/pug reset all` gives you the new starting settings if you want them.
+
 ## v0.3.3
 
 - **The level is plain text again**, at the start of the line under the name with the dragon before it, exactly as it was before 0.3.2. The badge that 0.3.2 put on the portrait is still there for those who liked it, as a setting that starts switched off: "Level as a badge", Options > Frames > Text and portrait. Settings saved by 0.3.2 have it switched off once, since 0.3.2 had switched it on for everyone; if you want the badge, switch it on again.

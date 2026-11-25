@@ -159,7 +159,7 @@ for unit in pairs(SHIELDS) do
 end
 
 ---------------------------------------------------------------------------
--- Where the frames stand in the picture (a 960 x 540 screen; the settings are the player's own
+-- Where the frames stand in the picture (a 1280 x 720 screen; the settings are the player's own
 -- to change, these are simply a tidy arrangement of them)
 ---------------------------------------------------------------------------
 -- Surnames, as the game hands them over: the second answer of UnitName.
@@ -206,10 +206,10 @@ local units = ns.db.units
 -- empty pet frame in the picture. In the game the frame is only up while a pet is.
 units.pet.enabled = false
 -- Everything keeps inside the middle the moving demo is cut to (tools/sim/demo_gif.py).
-units.party.x, units.party.y = -420, 212
-units.focus.x, units.focus.y = -80, -58
-units.player.x, units.player.y = -64, -150
-units.target.x, units.target.y = 236, -150
+units.party.x, units.party.y = -560, 288
+units.focus.x, units.focus.y = -60, -34
+units.player.x, units.player.y = -70, -204
+units.target.x, units.target.y = 272, -204
 ns.Refresh()
 
 ---------------------------------------------------------------------------

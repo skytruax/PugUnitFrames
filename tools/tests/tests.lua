@@ -79,10 +79,31 @@ local function Player(class, extra)
 	return M.SetUnit("player", fields)
 end
 
+-- The settings the scenarios are written against. What a frame starts out as is a matter of
+-- taste and changes with it (0.3.4 took the author's own settings for it): a scenario about how
+-- something is drawn should not break when it does. So unless a scenario brings saved settings
+-- of its own, it starts from these, which are what the frames started as up to 0.3.3. The
+-- scenarios about the starting settings themselves say `PugUnitFramesDB = {}` first.
+local BENCH = {
+	shadows = true,
+	units = {
+		player = { scale = 1, healthText = "both", castHeight = 16, powerHeight = 10, x = -290, y = -210 },
+		target = { scale = 1, healthText = "both", castHeight = 16, powerHeight = 10, buffs = 9, marks = true, x = 290, y = -210 },
+		targettarget = { x = 484, y = -219 },
+		focus = { scale = 1, x = -306, y = -130 },
+		pet = { x = -476, y = -219 },
+		party = { scale = 1, castbar = false, castHeight = 10, healthText = "short", level = false, mirror = false, x = -620, y = 160 },
+		raid = { enabled = true, x = -640, y = 250 },
+	},
+}
+
 -- Sets a player up, loads the addon and goes through the game's login events.
 local function Login(class)
 	if not M.units.player then
 		Player(class)
+	end
+	if PugUnitFramesDB == nil then
+		PugUnitFramesDB = { schema = 3, profiles = { Default = CopyTable(BENCH) } }
 	end
 	local ns = LoadAddon()
 	M.Fire("ADDON_LOADED", "PugUnitFrames")
@@ -1339,6 +1360,136 @@ Test("on a narrow screen, fresh settings start inside it; chosen places are left
 	Equal(-500, ns.db.units.party.x, "until the frame is reset")
 end)
 
+-- The rectangle a single frame takes on the screen, from its settings: left, bottom, right, top.
+local function Plate(cfg)
+	local halfWidth, halfHeight = cfg.width * cfg.scale / 2, cfg.height * cfg.scale / 2
+	return cfg.x - halfWidth, cfg.y - halfHeight, cfg.x + halfWidth, cfg.y + halfHeight
+end
+
+Test("a new player starts with the author's own settings", function()
+	PugUnitFramesDB = {}
+	local ns = Login()
+	local db, units = ns.db, ns.db.units
+	False(db.shadows, "no shadows under the plates")
+	Equal("value", units.player.healthText, "health as an amount")
+	Equal("value", units.target.healthText)
+	Equal("value", units.party.healthText)
+	Near(1.15, units.player.scale, "larger frames")
+	Near(1.15, units.target.scale)
+	Near(1.3, units.focus.scale)
+	Near(1.2, units.party.scale)
+	Equal(12, units.player.powerHeight)
+	Equal(20, units.player.castHeight)
+	Equal(6, units.target.buffs)
+	False(units.target.marks, "no marks on the target")
+	True(units.party.castbar, "cast bars on the party")
+	Equal(13, units.party.castHeight)
+	True(units.party.level, "and levels")
+	True(units.party.mirror, "its portraits look towards the bars")
+	False(units.raid.enabled, "raid frames only for those who switch them on")
+	False(units.player.levelBadge, "and the level plain, as ever")
+	True(db.locked)
+	Near(1.15, PugUnitFrames_player:GetScale(), "the frames are built that way")
+	Equal("1,000", (function()
+		M.units.player.health = 1000
+		M.Fire("UNIT_HEALTH", "player")
+		return Value(PugUnitFrames_player.texts.health.text)
+	end)())
+
+	-- In a raid the game's own raid frames are left to the game, since ours are switched off.
+	Raid(12)
+	local raid = ns.Group.Get("raid")
+	False(raid:IsShown(), "our raid header stays away")
+	False(ns.Blizzard.IsAway("raid"), "and the game's raid frames are not put away")
+	Party(2)
+	local member = PartyButton(ns, 1)
+	True(member.active.CastBar, "a party member has a cast bar")
+	Equal("60", member.texts.level.text, "and its level")
+	Equal(0, #ns.GetProblems())
+end)
+
+Test("settings a player already has are not touched by the new starting ones", function()
+	PugUnitFramesDB = { schema = 3, profiles = { Default = { shadows = true, units = {
+		player = { scale = 1, healthText = "both", x = -290, y = -210 },
+		party = { castbar = false, level = false, scale = 1 },
+		raid = { enabled = true },
+	} } } }
+	local ns = Login()
+	local units = ns.db.units
+	True(ns.db.shadows)
+	Equal(1, units.player.scale)
+	Equal("both", units.player.healthText)
+	Equal(-290, units.player.x, "nor is a frame moved")
+	False(units.party.castbar)
+	False(units.party.level)
+	True(units.raid.enabled)
+	Equal(3, PugUnitFramesDB.schema, "the saved settings are laid out as before")
+end)
+
+Test("on a wide screen the frames start in the author's arrangement", function()
+	UIParent.width = 2134 -- 16:9 with the interface scaled to 64%: 1067 either side of the middle
+	PugUnitFramesDB = {}
+	local ns = Login()
+	local units = ns.db.units
+	Equal(-525, units.player.x)
+	Equal(141, units.player.y)
+	Equal(506, units.target.x)
+	Equal(125, units.target.y)
+	Equal(567, units.targettarget.x)
+	Equal(44, units.targettarget.y)
+	Equal(-841, units.focus.x)
+	Equal(153, units.focus.y)
+	Equal(-909, units.pet.x)
+	Equal(94, units.pet.y)
+	Equal(-652, units.party.x)
+	Equal(35, units.party.y)
+	Equal(-1055, units.raid.x, "the raid's corner, twelve in from the edge of the screen")
+	Equal(-319, units.raid.y)
+	units.focus.x = 0
+	SlashCmdList.PUGUNITFRAMES("reset focus")
+	Equal(-841, ns.db.units.focus.x, "a frame that is reset goes back there")
+
+	-- A screen a little too narrow for it starts with the close arrangement instead.
+	UIParent.width = 1960
+	SlashCmdList.PUGUNITFRAMES("reset all")
+	Equal(-290, ns.db.units.player.x)
+	Equal(-250, ns.db.units.focus.x)
+end)
+
+Test("on a screen of the game's own scale the frames start close together, none on another", function()
+	UIParent.width, UIParent.height = 1365, 768
+	PugUnitFramesDB = {}
+	local ns = Login()
+	local units = ns.db.units
+	Equal(-290, units.player.x)
+	Equal(-210, units.player.y)
+	local kinds = { "player", "target", "targettarget", "focus", "pet" }
+	for index, kind in ipairs(kinds) do
+		local left, bottom, right, top = Plate(units[kind])
+		True(left >= -682.5 + 12 and right <= 682.5 - 12, kind .. " is on the screen")
+		True(bottom >= -384 and top <= 384, kind .. " is on the screen, top to bottom")
+		for other = index + 1, #kinds do
+			local l, b, r, t = Plate(units[kinds[other]])
+			True(right + 6 <= l or r + 6 <= left or top + 6 <= b or t + 6 <= bottom, kind .. " and " .. kinds[other] .. " stand apart")
+		end
+	end
+	-- The party's column, with its buffs above, its cast bars below and its debuffs beside,
+	-- keeps clear of the single frames as well.
+	local party = units.party
+	local between = ns.Group.Gaps(party)
+	local partyLeft, partyTop = party.x, party.y + (3 + party.auraSize) * party.scale
+	local partyRight = party.x + (party.width + 4 + party.debuffs * (party.auraSize + 2)) * party.scale
+	local partyBottom = party.y - (4 * party.height + 3 * between + party.castHeight + 3) * party.scale
+	True(partyTop <= 384 and partyBottom >= -384 and partyLeft >= -682.5 + 12, "the party is on the screen")
+	for _, kind in ipairs(kinds) do
+		local l, b, r, t = Plate(units[kind])
+		-- What stands above a single frame (a row of icons) and below it (a cast bar) is its as well.
+		t = t + (units[kind].debuffs > 0 and (3 + units[kind].auraSize) * units[kind].scale or 0)
+		b = b - (units[kind].castbar and (units[kind].castHeight + 3) * units[kind].scale or 0)
+		True(partyRight + 4 <= l or r + 4 <= partyLeft or partyTop + 4 <= b or t + 4 <= partyBottom, "the party and the " .. kind .. " frame stand apart")
+	end
+end)
+
 Test("each character remembers its profile through its own saved file", function()
 	PugUnitFramesDB = { profiles = { Healer = { fontSize = 14 }, Default = {} } }
 	PugUnitFramesCharDB = { profile = "Healer" }
@@ -1397,7 +1548,7 @@ Test("an imported profile is checked like a saved one", function()
 	Equal("night", settings.theme)
 	Equal(11, settings.fontSize)
 	Equal(232, settings.units.player.width)
-	Equal("both", settings.units.player.healthText)
+	Equal("value", settings.units.player.healthText, "what is not a setting's value becomes what the setting starts as")
 	Equal(5, settings.units.raid.perColumn)
 	Equal(nil, settings.payload)
 end)

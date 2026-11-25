@@ -240,7 +240,7 @@ def face(who, size, mirror=False):
 
 
 def frame(canvas, left, top, k, width, height, power_height, name, colour, share, power=None, power_share=1.0,
-          surname=None, level=None, health=None, power_text=None, portrait=None, who=None, rank=None,
+          surname=None, level=None, health=None, power_text=None, portrait=None, who=None, mirror=False, rank=None,
           dead=False, faded=False, heal=0.0, absorb=0.0, threat=False,
           cast=None, cast_height=16, auras=(), buffs=(), aura_size=20, aura_side="right", buff_side=None, per_row=8,
           narrow=False, font_size=11, theme=SLATE, texture="Bar-Smooth", lit=None, shield=False, points=0, mark=None,
@@ -252,7 +252,7 @@ def frame(canvas, left, top, k, width, height, power_height, name, colour, share
     name, surname     a character has both; a creature has one name
     level, rank       the level as it is written ("60", "11+") and the dragon before it ("gold", "silver")
     health, power_text  the numbers as they are written: health on the lower line, power on its bar
-    portrait, who     "left" or "right", and whose stand-in face (tools/game_icons.py)
+    portrait, who     "left" or "right", and whose stand-in face (tools/game_icons.py); mirror turns it round
     auras, buffs      debuffs and buffs as (spell, kind[, stacks]); aura_side and buff_side say where
     heal, absorb      healing on its way and a shield, as shares of full health
     """
@@ -289,7 +289,7 @@ def frame(canvas, left, top, k, width, height, power_height, name, colour, share
     bar_left = left + px + (square + px if portrait == "left" else 0)
     bar_right = left + w - px - (square + px if portrait == "right" else 0)
     if portrait and not PLACEHOLDERS:
-        picture = face(who or "human-male", square)
+        picture = face(who or "human-male", square, mirror)
         layer.alpha_composite(picture, (left + px if portrait == "left" else left + w - px - square, top + px))
     elif portrait:
         x0 = left + px if portrait == "left" else left + w - px - square
@@ -463,15 +463,16 @@ FORT, WILD, WIT, MIGHT = ("Power Word: Fortitude", None), ("Mark of the Wild", N
 SHOUT, RENEW, WORD = ("Battle Shout", None), ("Renew", None), ("Power Word: Shield", None)
 BUFFS = [MIGHT, WIT, WILD]
 
-# The party of the simulator's picture: a character has a first name and a surname, a portrait, the
-# buffs in a row above the plate and the debuffs beside it, and health written as an amount.
+# The party of the simulator's picture: a character has a first name and a surname, a portrait
+# that looks towards the bars, a level, the buffs in a row above the plate and the debuffs beside
+# it, and health written as an amount.
 PARTY = [
     dict(name="Thryn", surname="Ironbeard", who="dwarf-male", colour=CLASS["WARRIOR"], share=0.64, power="RAGE", power_share=0.45,
          health="3264", threat=True, auras=[BLEED, ("Sunder Armor", "none", "2")], buffs=[FORT, WILD, MIGHT, SHOUT]),
     dict(name="Lioren", surname="Dawnwhisper", who="nightelf-male", colour=CLASS["PRIEST"], share=1.0, power="MANA", power_share=0.72,
          health="3100", absorb=0.3, buffs=[FORT, WILD, WIT, WORD]),
     dict(name="Maeve", surname="Copperpot", who="gnome-female", colour=CLASS["MAGE"], share=0.38, power="MANA", power_share=0.30,
-         health="1368", heal=0.30, lit="poison", auras=[POISON, MAGIC], buffs=[FORT, WILD, WIT, RENEW]),
+         health="1368", heal=0.30, lit="poison", auras=[POISON, MAGIC], buffs=[FORT, WILD, WIT, RENEW], level="59"),
     dict(name="Brask", surname="Holloway", who="human-male", colour=CLASS["HUNTER"], share=0.86, power="MANA", power_share=0.90,
          health="3440", faded=True, buffs=[FORT, WILD, MIGHT]),
 ]
@@ -480,23 +481,23 @@ PARTY_PITCH = 40 + 12 + 3 + 20  # a plate, the gap, and the row of buffs above t
 
 def party_frame(canvas, left, top, k, member, **extra):
     """A party member's frame as it starts out: 200 x 40 with a portrait, buffs above, debuffs beside."""
-    told = dict(portrait="left", aura_side="right", buff_side="above", aura_size=20, per_row=8)
+    told = dict(portrait="left", mirror=True, level="60", aura_side="right", buff_side="above", aura_size=20, per_row=8)
     told.update(member)
     told.update(extra)
     return frame(canvas, left, top, k, 200, 40, 6, **told)
 
 
 def player_frame(canvas, left, top, k, **extra):
-    told = dict(surname="Brightmoor", who="human-female", portrait="left", level="60", health="3550  71%", power_text="2310")
+    told = dict(surname="Brightmoor", who="human-female", portrait="left", level="60", health="3550", power_text="2310")
     told.update(extra)
     return frame(canvas, left, top, k, 232, 46, 10, "Halla", CLASS["PALADIN"], 0.71, "MANA", 0.58, **told)
 
 
 def target_frame(canvas, left, top, k, **extra):
     """A hostile elite: its power bar is put away (a creature that gathers no rage has none to show)."""
-    told = dict(who="creature", portrait="right", rank="gold", level="11+", level_colour=EASY, health="279  42%",
+    told = dict(who="creature", portrait="right", rank="gold", level="11+", level_colour=EASY, health="279",
                 auras=[BLEED, SUNDER, MAGIC, CURSE, POISON, ("Immolate", "magic")], buffs=[SHOUT], aura_size=22, aura_side="above",
-                per_row=9, raid_mark=8)
+                per_row=9)
     told.update(extra)
     return frame(canvas, left, top, k, 232, 46, 0, "Hogger", HOSTILE, 0.42, **told)
 
@@ -535,22 +536,22 @@ def raid_grid(canvas, left, top, k, members, columns_of=5, shadow=False, ready=(
 
 def stage(canvas, cx, cy, k):
     """Draws the frames around (cx, cy): the party on the left, the player and the target in the
-    middle, three columns of raid frames on the right. Over a bright scene, so each casts a shadow."""
+    middle, three columns of raid frames on the right."""
     def at(x, y):
         return round(cx + x * k), round(cy + y * k)
 
     for index, member in enumerate(PARTY):
         left, top = at(-532, -104 + index * PARTY_PITCH)
-        party_frame(canvas, left, top, k, member, shadow=True)
+        party_frame(canvas, left, top, k, member)
 
     # The player, with a cast under way; the target beside it with its debuffs and buffs above.
     left, top = at(-254, 6)
-    player_frame(canvas, left, top, k, cast=("Holy Light", 0.62, "Holy Light"), mark=("Combat", "rim"), shadow=True)
+    player_frame(canvas, left, top, k, cast=("Holy Light", 0.62, "Holy Light"), mark=("Combat", "rim"))
     left, top = at(2, 6)
-    target_frame(canvas, left, top, k, points=3, shadow=True)
+    target_frame(canvas, left, top, k, points=3)
 
     left, top = at(274, -104)
-    raid_grid(canvas, left, top, k, RAID_20[:15], shadow=True)
+    raid_grid(canvas, left, top, k, RAID_20[:15])
 
 
 # ---------------------------------------------------------------------------
@@ -785,7 +786,7 @@ def groups():
     canvas = slide([("Your group, ", WHITE), ("at a glance.", GOLD)],
                    "Party and raid frames tell you who is hurt, who is being hit, who is out of reach, and whom you can help.")
     party = (70, 330, 1030, 1000)
-    card(canvas, party, "Party", "buffs above, debuffs beside, health as an amount")
+    card(canvas, party, "Party", "buffs above, debuffs beside, cast bars if you like")
     k = 1.9
     told = [
         (PARTY[0], dict(), "Being attacked", "an outline, amber to red"),
@@ -882,9 +883,9 @@ def looks():
                    "Slate, Night and Hearth, with smooth, flat or glass bars: all drawn for this addon. Colour by class, by foe, or by health.")
     k = 2.2
     textures = [("Bar-Smooth", "Smooth"), ("Bar-Flat", "Flat"), ("Bar-Glass", "Glass")]
-    people = [("PALADIN", "Halla", "Brightmoor", "human-female", 0.71, "MANA", 0.58, "3550  71%", "2310"),
-              ("SHAMAN", "Odda", "Stormcaller", "orc-male", 0.86, "MANA", 0.74, "4128  86%", "3010"),
-              ("DRUID", "Wren", "Thistledown", "nightelf-male", 0.48, "ENERGY", 0.9, "1920  48%", "90")]
+    people = [("PALADIN", "Halla", "Brightmoor", "human-female", 0.71, "MANA", 0.58, "3550", "2310"),
+              ("SHAMAN", "Odda", "Stormcaller", "orc-male", 0.86, "MANA", 0.74, "4128", "3010"),
+              ("DRUID", "Wren", "Thistledown", "nightelf-male", 0.48, "ENERGY", 0.9, "1920", "90")]
     for column, (theme_name, theme) in enumerate(THEMES.items()):
         box = (60 + column * 607, 330, 60 + column * 607 + 587, 1000)
         card(canvas, box, theme_name, "theme")

@@ -58,7 +58,7 @@ Defaults.GENERAL = {
 	font = "inter",
 	fontSize = 11,
 	outline = false,
-	shadows = true,
+	shadows = false,
 	smooth = true,
 	farAlpha = 0.45,
 	alpha = 1,
@@ -165,32 +165,40 @@ end
 
 -- How each frame starts out. Version 0.3 changed some of this (portraits, the party's buffs and
 -- health numbers, room for long names): Defaults.Migrate below brings older profiles along.
+-- Version 0.3.4 changed more of it, to the settings the addon's author plays with: larger
+-- frames, health as an amount, cast bars and levels on the party, no shadows, no raid frames
+-- unless they are switched on. That is for new settings only (a new profile, a reset): what a
+-- player already has is left as it is, sizes and places included.
+--
+-- The places here (x, y) are the close arrangement, which fits a screen of 1365 by 768 units
+-- (16:9 at the game's own interface scale). A wider screen starts with the frames further apart:
+-- see WIDE_PLACES below.
 Defaults.UNITS = {
 	player = {
-		enabled = true, x = -290, y = -210, width = 232, height = 46, scale = 1, powerHeight = 10,
-		color = "class", healthText = "both", powerText = "value", name = true, surname = true, level = true, levelBadge = false, portrait = "left",
+		enabled = true, x = -290, y = -210, width = 232, height = 46, scale = 1.15, powerHeight = 12,
+		color = "class", healthText = "value", powerText = "value", name = true, surname = true, level = true, levelBadge = false, portrait = "left",
 		buffs = 0, debuffs = 0, myDebuffs = false, auraSize = 22, auraPerRow = 9, buffSide = "above", debuffSide = "above",
-		castbar = true, castHeight = 16, threat = true, heals = true, marks = true, totems = true,
+		castbar = true, castHeight = 20, threat = true, heals = true, marks = true, totems = true,
 		leader = false, role = false, pvp = false,
 		invert = false, fill = "right", mirror = false, myBuffs = false, absorbs = true, calm = 1, hideInGroup = false,
 	},
 	target = {
-		enabled = true, x = 290, y = -210, width = 232, height = 46, scale = 1, powerHeight = 10,
-		color = "class", healthText = "both", powerText = "value", name = true, surname = true, level = true, levelBadge = false, portrait = "right",
-		buffs = 9, debuffs = 18, myDebuffs = false, auraSize = 22, auraPerRow = 9, buffSide = "above", debuffSide = "above",
-		castbar = true, castHeight = 16, marks = true, points = true,
+		enabled = true, x = 290, y = -210, width = 232, height = 46, scale = 1.15, powerHeight = 12,
+		color = "class", healthText = "value", powerText = "value", name = true, surname = true, level = true, levelBadge = false, portrait = "right",
+		buffs = 6, debuffs = 18, myDebuffs = false, auraSize = 22, auraPerRow = 9, buffSide = "above", debuffSide = "above",
+		castbar = true, castHeight = 20, marks = false, points = true,
 		leader = false, role = false, pvp = false, elite = true, quest = true,
 		invert = false, fill = "right", mirror = false, myBuffs = false, absorbs = true, hideNoPower = true,
 	},
 	targettarget = {
-		enabled = true, x = 484, y = -219, width = 140, height = 28, scale = 1, powerHeight = 4,
+		enabled = true, x = 504, y = -219, width = 140, height = 28, scale = 1, powerHeight = 4,
 		color = "class", healthText = "none", powerText = "none", name = true, surname = true, level = false, levelBadge = false, portrait = "none",
 		buffs = 0, debuffs = 0, myDebuffs = false, auraSize = 18, auraPerRow = 6, buffSide = "below", debuffSide = "below",
 		marks = true, leader = false, role = false, pvp = false, elite = true, quest = true,
 		invert = false, fill = "right", mirror = false, myBuffs = false, absorbs = true, hideNoPower = true,
 	},
 	focus = {
-		enabled = true, x = -306, y = -130, width = 200, height = 40, scale = 1, powerHeight = 6,
+		enabled = true, x = -250, y = -125, width = 200, height = 40, scale = 1.3, powerHeight = 6,
 		color = "class", healthText = "percent", powerText = "none", name = true, surname = true, level = false, levelBadge = false, portrait = "left",
 		buffs = 0, debuffs = 6, myDebuffs = false, auraSize = 20, auraPerRow = 8, buffSide = "above", debuffSide = "above",
 		castbar = true, castHeight = 12, marks = true,
@@ -198,23 +206,23 @@ Defaults.UNITS = {
 		invert = false, fill = "right", mirror = false, myBuffs = false, absorbs = true, hideNoPower = true,
 	},
 	pet = {
-		enabled = true, x = -476, y = -219, width = 124, height = 28, scale = 1, powerHeight = 4,
+		enabled = true, x = -496, y = -219, width = 124, height = 28, scale = 1, powerHeight = 4,
 		color = "reaction", healthText = "none", powerText = "none", name = true, surname = true, level = false, levelBadge = false, portrait = "none",
 		buffs = 0, debuffs = 0, myDebuffs = false, auraSize = 18, auraPerRow = 6, buffSide = "below", debuffSide = "below",
 		castbar = false, castHeight = 10, threat = true, heals = true, marks = false,
 		invert = false, fill = "right", mirror = false, myBuffs = false, absorbs = true, calm = 1, happiness = true,
 	},
 	party = {
-		enabled = true, x = -620, y = 160, width = 200, height = 40, scale = 1, powerHeight = 6,
-		color = "class", healthText = "short", powerText = "none", name = true, surname = true, level = false, levelBadge = false, portrait = "left",
+		enabled = true, x = -671, y = 330, width = 200, height = 40, scale = 1.2, powerHeight = 6,
+		color = "class", healthText = "value", powerText = "none", name = true, surname = true, level = true, levelBadge = false, portrait = "left",
 		buffs = 8, debuffs = 4, myDebuffs = false, auraSize = 20, auraPerRow = 8, buffSide = "above", debuffSide = "right",
-		castbar = false, castHeight = 10, threat = true, range = true, heals = true, marks = true, dispel = true,
+		castbar = true, castHeight = 13, threat = true, range = true, heals = true, marks = true, dispel = true,
 		leader = false, role = false, pvp = false,
 		growth = "down", spacing = 12, showPlayer = false, showSolo = false,
-		invert = false, fill = "right", mirror = false, myBuffs = false, absorbs = true, highlight = true, byRole = false,
+		invert = false, fill = "right", mirror = true, myBuffs = false, absorbs = true, highlight = true, byRole = false,
 	},
 	raid = {
-		enabled = true, x = -640, y = 250, width = 82, height = 40, scale = 1, powerHeight = 3,
+		enabled = false, x = -640, y = 250, width = 82, height = 40, scale = 1, powerHeight = 3,
 		color = "class", healthText = "none", powerText = "none", name = true, surname = true, level = false, levelBadge = false, portrait = "none",
 		buffs = 0, debuffs = 2, myDebuffs = false, auraSize = 15, auraPerRow = 2, buffSide = "inside", debuffSide = "inside",
 		threat = true, range = true, heals = true, marks = true, dispel = true,
@@ -278,6 +286,15 @@ local OLD_STARTS = {
 	focus = { portrait = "none", width = 174, height = 34, x = -319 },
 	party = { portrait = "none", healthText = "percent", buffs = 0, width = 172, auraPerRow = 4 },
 }
+-- And what each of those started as in version 0.3, which is where an untouched one goes. It is
+-- written down here and not read from the starting settings above, which have moved on since.
+local STARTS_0_3 = {
+	player = { portrait = "left", powerHeight = 10 },
+	target = { portrait = "right", powerHeight = 10 },
+	targettarget = { healthText = "none", width = 140, x = 484 },
+	focus = { portrait = "left", width = 200, height = 40, x = -306 },
+	party = { portrait = "left", healthText = "short", buffs = 8, width = 200, auraPerRow = 8 },
+}
 -- Buffs and debuffs shared one setting for where their icons stand ("auraSide").
 local OLD_AURA_SIDE = {
 	player = "above", target = "above", targettarget = "below", focus = "above", pet = "below", party = "right", raid = "inside",
@@ -293,6 +310,8 @@ local ICON_KEYS = { buffs = true, auraPerRow = true }
 -- down by what stood between the plates then, so that the members stay as far apart as they
 -- were; a gap never touched is left to grow, which is what keeps icons off the next plate.
 local OLD_GAPS = { party = { spacing = 12 }, raid = { spacing = 4, columnSpacing = 6 } }
+-- What else decided how much stood between two members then, and has started differently since.
+local OLD_BETWEEN = { party = { castbar = false, castHeight = 10 } }
 
 -- How much stood between two members of a group, and between two columns, under the old
 -- settings of a frame: asked of the code that lays groups out, of a copy of the settings with
@@ -302,7 +321,7 @@ local function OldRoom(kind, cfg)
 	for key, value in pairs(cfg) do
 		probe[key] = value
 	end
-	for _, olds in ipairs({ OLD_STARTS[kind] or {}, OLD_ICONS[kind] or {} }) do
+	for _, olds in ipairs({ OLD_STARTS[kind] or {}, OLD_ICONS[kind] or {}, OLD_BETWEEN[kind] or {} }) do
 		for key, old in pairs(olds) do
 			if probe[key] == nil then
 				probe[key] = old
@@ -369,7 +388,7 @@ function Defaults.Migrate(profile, from)
 			local widened = starts.width ~= nil and cfg.width == starts.width
 			for key, old in pairs(starts) do
 				if cfg[key] == old and (key ~= "x" or widened) and (untouchedIcons or not ICON_KEYS[key]) then
-					cfg[key] = Defaults.UNITS[kind][key]
+					cfg[key] = STARTS_0_3[kind][key]
 				end
 			end
 		end
@@ -413,15 +432,51 @@ function Defaults.Sanitize(profile)
 	return profile
 end
 
--- The starting places are laid out for a wide screen. On a narrower one this pulls a frame that
--- would start off the side back in, to a little inside the edge. It is for fresh settings only:
--- where the player has put a frame is the player's business.
+-- Where the frames start on a screen with room for it: the author's own arrangement, the
+-- player and the target well apart with the fight between them, the focus and the pet out at the
+-- left. It was laid out on a screen 2134 units wide (16:9 with the interface scaled to 64%) and
+-- needs most of that. The raid's place is the bottom left corner of that screen.
+local WIDE_PLACES = {
+	player = { x = -525, y = 141 }, target = { x = 506, y = 125 }, targettarget = { x = 567, y = 44 },
+	focus = { x = -841, y = 153 }, pet = { x = -909, y = 94 }, party = { x = -652, y = 35 }, raid = { x = -1067, y = -319 },
+}
+
+-- A frame that would start off the side of the screen is pulled back in, to a little inside the
+-- edge. This is for fresh settings only: where the player has put a frame is the player's business.
 local SIDE_MARGIN = 12
+
+-- How far from the middle of the screen a frame's sides are, at this place. A single frame is
+-- placed by its middle, a group by its top left corner.
+local function Sides(kind, cfg, x)
+	local grouped = kind == "party" or kind == "raid"
+	local left = grouped and x or x - cfg.width * cfg.scale / 2
+	return left, left + cfg.width * cfg.scale
+end
+
+-- Whether the wide arrangement fits this screen: every frame that starts switched on, whole and
+-- inside the margin. (One that starts switched off is pulled in like any other when it is used.)
+local function WideFits(units)
+	local half = UIParent:GetWidth() / 2
+	for kind, place in pairs(WIDE_PLACES) do
+		local cfg = Defaults.UNITS[kind]
+		if cfg.enabled then
+			local left, right = Sides(kind, units[kind] or cfg, place.x)
+			if left < -half + SIDE_MARGIN or right > half - SIDE_MARGIN then
+				return false
+			end
+		end
+	end
+	return true
+end
 
 local function FitToScreen(profile, only)
 	local half = UIParent:GetWidth() / 2
+	local wide = WideFits(profile.units)
 	for kind, cfg in pairs(profile.units) do
 		if not only or kind == only then
+			if wide then
+				cfg.x, cfg.y = WIDE_PLACES[kind].x, WIDE_PLACES[kind].y
+			end
 			-- A single frame is placed by its middle, a group by its top left corner.
 			local grouped = kind == "party" or kind == "raid"
 			local left = grouped and cfg.x or cfg.x - cfg.width * cfg.scale / 2

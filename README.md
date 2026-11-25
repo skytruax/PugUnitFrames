@@ -135,7 +135,9 @@ raid marks, portraits and the elite dragon in them are Blizzard's.</sub>
 3. Start the game, or log out and in again if it is running.
 
 The game's own player, target, focus, pet, party and raid frames and its cast bar step aside for the
-ones this addon draws. Each can be kept: Options > AddOns > Pug Unit Frames.
+ones this addon draws. Each can be kept: Options > AddOns > Pug Unit Frames. The raid frames start
+switched off, so in a raid you have the game's own until you switch these on (Options > Frames >
+Raid > Show this frame).
 
 ## Settings
 

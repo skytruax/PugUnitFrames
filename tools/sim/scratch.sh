@@ -28,5 +28,7 @@ make_scratch() {
   fi
 }
 
-# What every picture is drawn with: a 960 x 540 screen at two pixels to the unit.
-PICTURE_OPTIONS=(--size 1920x1080 --ui-scale 2)
+# What every picture is drawn with: a 1280 x 720 screen at a pixel and a half to the unit, which
+# with the frames as large as they start out (0.3.4) shows them about as large as the pictures
+# always had them.
+PICTURE_OPTIONS=(--size 1920x1080 --ui-scale 1.5)
