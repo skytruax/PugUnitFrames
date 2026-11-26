@@ -193,10 +193,23 @@ test("a shield follows the health on the bar, and a cap on the bar's end says wh
 			calculator:SetPredictedValues(values)
 		end
 	end
+	-- The cap on the bar's end is given the whole shield's size, which the addon asks for itself.
+	local gameAbsorbs = UnitGetTotalAbsorbs
+	UnitGetTotalAbsorbs = function(unit)
+		if unit == "player" then
+			return shield
+		end
+		return gameAbsorbs(unit)
+	end
 	A_Admin.SetPlayerHealth(600, 1000)
 	Tick()
 	local bar = PugUnitFrames_player.health
+	-- There to be seen: shown, filled (there is a shield at all) and not see-through (it does not all fit).
+	local function CapSeen()
+		return bar.cap:IsVisible() and bar.cap:GetAlpha() > 0.5 and bar.cap:GetValue() >= 1
+	end
 	assertTrue(bar.shield:IsShown())
+	assertFalse(CapSeen(), "no shield, no cap")
 	local _, after = bar.shield:GetPoint(1)
 	assertEquals(bar.heal:GetStatusBarTexture(), after, "it starts where the healing on its way ends")
 	local _, healAfter = bar.heal:GetPoint(1)
@@ -207,24 +220,29 @@ test("a shield follows the health on the bar, and a cap on the bar's end says wh
 	assertAlmostEquals(250, bar.shield:GetValue(), 0.5)
 	local _, most = bar.shield:GetMinMaxValues()
 	assertAlmostEquals(1000, most, 0.5)
+	assertFalse(CapSeen(), "all of it fits: no cap")
 	assertAlmostEquals(0, bar.cap:GetAlpha(), 0.01)
 
 	shield = 900
 	ns.Frame.Refresh(PugUnitFrames_player)
 	assertAlmostEquals(400, bar.shield:GetValue(), 0.5)
-	assertAlmostEquals(1, bar.cap:GetAlpha(), 0.01)
+	assertTrue(CapSeen(), "more than fits: the cap is lit")
 	assertTrue(bar.cap:GetRight() <= bar:GetRight() + 0.5 and bar.cap:GetLeft() >= bar:GetRight() - 12, "the cap is the bar's last few units")
+	assertTrue(bar.cap:GetFrameLevel() > bar.shield:GetFrameLevel(), "over the shield and the healing")
 
 	A_Admin.SetPlayerHealth(1000, 1000)
 	Tick()
 	ns.Frame.Refresh(PugUnitFrames_player)
 	assertAlmostEquals(0, bar.shield:GetValue(), 0.5)
-	assertAlmostEquals(1, bar.cap:GetAlpha(), 0.01)
+	assertTrue(CapSeen(), "at full health the cap alone shows the shield")
 
 	shield = 0
 	ns.Frame.Refresh(PugUnitFrames_player)
-	assertAlmostEquals(0, bar.cap:GetAlpha(), 0.01)
+	assertFalse(CapSeen(), "gone with the shield")
+	assertAlmostEquals(0, bar.cap:GetValue(), 0.01, "the cap is empty without a shield, whatever the calculator says")
 	UnitGetDetailedHealPrediction = gamePrediction
+	UnitGetTotalAbsorbs = gameAbsorbs
+	ns.Frame.Refresh(PugUnitFrames_player)
 	NoProblems()
 end)
 

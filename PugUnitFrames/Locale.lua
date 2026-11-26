@@ -106,6 +106,7 @@ translations.deDE = {
 	["Icon size"] = "Symbolgröße",
 	["Icons per row"] = "Symbole pro Reihe",
 	["Cast bar height"] = "Höhe der Zauberleiste",
+	["Grey orange if uninterruptible"] = "Grauorange, wenn nicht unterbrechbar",
 	["Outline when attacked"] = "Umriss bei Angriff",
 	["Fade when out of range"] = "Außer Reichweite verblassen",
 	["Healing on its way"] = "Eingehende Heilung",
@@ -189,8 +190,8 @@ translations.deDE = {
 	["the game's own"] = "die Schrift des Spiels",
 	["the game's own, for this language's script"] = "die Schrift des Spiels, wegen der Schrift dieser Sprache",
 	["the addon's own"] = "die eigene Schrift des Addons",
-	["the game's own: the addon's font file could not be loaded"] = "die Schrift des Spiels: Die Schriftdatei des Addons ließ sich nicht laden",
-	["the game's own for now: the game has not handed over the addon's font file yet"] = "vorerst die Schrift des Spiels: Das Spiel hat die Schriftdatei des Addons noch nicht herausgegeben",
+	["the game's own: the game has not taken the addon's font file. If the addon was installed or updated while the game was running, close the game completely and start it again"] = "die Schrift des Spiels: Das Spiel hat die Schriftdatei des Addons nicht angenommen. Wurde das Addon installiert oder aktualisiert, während das Spiel lief, dann das Spiel ganz beenden und neu starten",
+	["the addon's own, but not on every text"] = "die eigene Schrift des Addons, aber nicht auf jedem Text",
 }
 
 translations.esES = {
@@ -286,6 +287,7 @@ translations.esES = {
 	["Icon size"] = "Tamaño de los iconos",
 	["Icons per row"] = "Iconos por fila",
 	["Cast bar height"] = "Altura de la barra de lanzamiento",
+	["Grey orange if uninterruptible"] = "Naranja grisáceo si no es interrumpible",
 	["Outline when attacked"] = "Contorno al ser atacado",
 	["Fade when out of range"] = "Atenuar fuera de alcance",
 	["Healing on its way"] = "Sanación en camino",
@@ -369,8 +371,8 @@ translations.esES = {
 	["the game's own"] = "la del juego",
 	["the game's own, for this language's script"] = "la del juego, por la escritura de este idioma",
 	["the addon's own"] = "la propia del addon",
-	["the game's own: the addon's font file could not be loaded"] = "la del juego: no se pudo cargar el archivo de fuente del addon",
-	["the game's own for now: the game has not handed over the addon's font file yet"] = "la del juego por ahora: el juego aún no ha entregado el archivo de fuente del addon",
+	["the game's own: the game has not taken the addon's font file. If the addon was installed or updated while the game was running, close the game completely and start it again"] = "la del juego: el juego no ha aceptado el archivo de fuente del addon. Si el addon se instaló o se actualizó con el juego abierto, cierra el juego por completo y vuelve a iniciarlo",
+	["the addon's own, but not on every text"] = "la propia del addon, pero no en todos los textos",
 }
 translations.esMX = translations.esES
 
@@ -467,6 +469,7 @@ translations.frFR = {
 	["Icon size"] = "Taille des icônes",
 	["Icons per row"] = "Icônes par rangée",
 	["Cast bar height"] = "Hauteur de la barre d'incantation",
+	["Grey orange if uninterruptible"] = "Orange grisé si non interruptible",
 	["Outline when attacked"] = "Contour en cas d'attaque",
 	["Fade when out of range"] = "Estomper hors de portée",
 	["Healing on its way"] = "Soins en cours d'arrivée",
@@ -550,8 +553,8 @@ translations.frFR = {
 	["the game's own"] = "celle du jeu",
 	["the game's own, for this language's script"] = "celle du jeu, pour l'écriture de cette langue",
 	["the addon's own"] = "celle de l'addon",
-	["the game's own: the addon's font file could not be loaded"] = "celle du jeu : le fichier de police de l'addon n'a pas pu être chargé",
-	["the game's own for now: the game has not handed over the addon's font file yet"] = "celle du jeu pour l'instant : le jeu n'a pas encore fourni le fichier de police de l'addon",
+	["the game's own: the game has not taken the addon's font file. If the addon was installed or updated while the game was running, close the game completely and start it again"] = "celle du jeu : le jeu n'a pas accepté le fichier de police de l'addon. Si l'addon a été installé ou mis à jour pendant que le jeu tournait, fermez complètement le jeu et relancez-le",
+	["the addon's own, but not on every text"] = "celle de l'addon, mais pas sur tous les textes",
 }
 
 for key, text in pairs(translations[GetLocale()] or {}) do

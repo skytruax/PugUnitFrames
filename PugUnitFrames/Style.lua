@@ -106,6 +106,7 @@ Style.THREAT = {
 }
 
 Style.CAST = { 0.93, 0.74, 0.28 }
+Style.CAST_LOCKED = { 0.74, 0.56, 0.42 } -- a cast that cannot be interrupted: a greyed orange, plainly not the cast's gold
 Style.HEAL = { 0.45, 0.92, 0.55, 0.55 } -- healing on its way, drawn past the end of the health bar
 Style.ABSORB = { 0.66, 0.84, 1.00, 0.72 } -- a shield that soaks up damage, drawn after the health as healing on its way is
 Style.POINT = { 0.96, 0.78, 0.25 }      -- a combo point
@@ -149,96 +150,190 @@ end
 ---------------------------------------------------------------------------
 Style.theme = Style.THEMES.slate
 Style.texture = Style.TEXTURES.smooth
-Style.font = STANDARD_TEXT_FONT
 Style.fontSize = 11
 Style.fontFlags = ""
 Style.shadows = true
 
--- Whether the game can read a font file. It refuses one it cannot: by an error on some clients,
--- by answering no on others, and on some by quietly leaving the text without a font, which
--- would be an error the first time anything is written with it. So the file is tried on a piece
--- of text nobody sees, and a yes is kept.
+-- The lettering. Every text is given the game's own font first, which the game always has,
+-- and the addon's on top of it where that is the one asked for. The game answers text by text:
+-- one it gives the addon's font to carries it from then on, one it does not keeps the game's,
+-- at the right size, and either can be written on. Nothing is decided beforehand on a piece of
+-- text nobody sees: that is how it was done up to version 0.3.4, and in the game the answer
+-- was no for a whole evening, on a file that other addons load in this client.
 --
--- A no is never kept. This game can take its time before it hands a font file over: seconds
--- after a reload, and on a first evening in the game it had still not done so after twelve
--- seconds, which is when an earlier version of this addon gave up for the session. So a file
--- that is refused is tried again and again, at longer intervals, the game's own font is used in
--- the meantime, and the frames are lettered anew the moment it is taken. After ten minutes of
--- refusals it is reported, once, and from then on tried once a minute. Asking while a try is
--- already on its way uses no try up. (Fonts.xml names the file too, so that the game is asked
--- for it as the addon loads.)
-local RETRY_AFTER = { 1, 2, 4, 8, 15, 30 } -- seconds from one try to the next; the last is repeated
-local REPORT_AFTER = 600                   -- seconds of refusals before they are reported
-local RETRY_LATER = 60                     -- seconds from one try to the next after that
-local readable, reported = {}, {}          -- [font] = true once the game has taken it, once its refusal is reported
-local tries, since, pending = {}, {}, {}   -- [font] = failed tries so far, when the first failed, a try on its way
-local tryout
-local samples = {}                         -- [font] = the text it is tried on
+-- What is known of this client: it knows the files that were in an addon's folder when the
+-- game was started, and no others until it is started again. C_UIFileAsset.IsKnownFile says
+-- which, and a file the game says it does not know is not offered to it at all. Other authors
+-- have measured that a font file written after the start is not taken either, not even under
+-- a name the game knows. So a refusal is not an error of this addon's and none is recorded
+-- for it: /pug status says how many texts carry the addon's font, what the game answered, and
+-- what there is to do, which is to start the game again.
+--
+-- A refusal holds for ten seconds for texts of the same size and style: the game is not asked
+-- again with every text. It is asked again when frames are next laid out after that, and once
+-- on its own, a little after the session's first refusal. Should it take the file after having
+-- refused it, the texts lettered in the game's font meanwhile are lettered again, so that no
+-- frame is left in another font than its neighbours.
+local GAME = STANDARD_TEXT_FONT
+local RETRY_GAP = 10       -- seconds a refusal holds for texts of the same size and style
+local MAX_RELETTERS = 3    -- times a session that everything is lettered again on its own
+local own                  -- the font file laid on top of the game's; nil: the game's alone
+local raised = {}          -- [font] = true: the game raised an error when given it, so it is left alone
+local refusal              -- what the game answered the last time it refused `own`: false, or nil for no answer
+local refusedAt            -- when that was; nil once a text has taken the font since
+local refusedFor = {}      -- [size and style] = when a text of that size and style was last refused
+local looked               -- the one look back after the session's first refusal has been set up
+local relettering, reletters = false, 0
+-- [text] = whether it carries `own` (false: the game refused it there). Only the texts lettered
+-- since the look was last read (Style.Apply), while the addon's font was the one asked for.
+local lettered = setmetatable({}, { __mode = "k" })
 
-local function TryToRead(font)
-	tryout = tryout or CreateFrame("Frame")
-	-- A fresh text has no font yet, so one that has a font afterwards got it from this file.
-	local sample = samples[font]
-	if not sample then
-		sample = tryout:CreateFontString(nil, "OVERLAY")
-		samples[font] = sample
+-- Whether this running game knows a file: true, false, or nil where it cannot be asked.
+local function Known(file)
+	local ask = C_UIFileAsset and C_UIFileAsset.IsKnownFile
+	if not ask then
+		return nil
 	end
-	local ran, answer = pcall(sample.SetFont, sample, font, 12, "")
-	local taken = ran and answer ~= false and sample:GetFont() ~= nil
-	return taken, ran and "the game would not take it" or tostring(answer)
+	local ran, known = ns.Try(ask, file)
+	if ran and type(known) == "boolean" then
+		return known
+	end
+	return nil
 end
 
-local function CanRead(font)
-	if readable[font] then
-		return true
-	elseif pending[font] then
+-- Letters everything again in a moment. Not without end: a game that says yes and no by turns
+-- is left with what it has.
+local function Reletter()
+	if relettering or reletters >= MAX_RELETTERS then
+		return
+	end
+	relettering = true
+	reletters = reletters + 1
+	ns.After(0.5, function()
+		relettering = false
+		ns.Refresh()
+	end)
+end
+
+-- Lays the addon's font over the game's on one text, and says whether the text now carries it.
+--
+-- The game says so itself: on this client SetFont answers true or false. A yes or a no is
+-- taken as it is, and the text is not asked what it holds: nothing in the game has shown that
+-- a text gives a font's file back the way it was given, or at once. Only a client that answers
+-- nothing at all is judged by the text: by whether what it holds is the game's font or not.
+local function LayOwn(text, size, flags)
+	local kind = size .. flags
+	if refusedFor[kind] and GetTime() - refusedFor[kind] < RETRY_GAP then
 		return false
 	end
-	local ok, why = TryToRead(font)
-	if ok then
-		readable[font] = true
-		return true
-	end
-	tries[font] = (tries[font] or 0) + 1
-	since[font] = since[font] or GetTime()
-	local wait = RETRY_AFTER[tries[font]] or RETRY_AFTER[#RETRY_AFTER]
-	if reported[font] then
-		wait = RETRY_LATER
-	elseif GetTime() - since[font] >= REPORT_AFTER then
-		reported[font] = true
-		wait = RETRY_LATER
-		ns.Report(("The font %s could not be loaded in %d tries over %d minutes (%s). The game's own font is used instead, and the file is still tried once a minute. If the addon was installed or updated while the game was running, restart the game: a reload does not always find files that are new."):format(
-			font, tries[font], math.floor(REPORT_AFTER / 60), why))
-	end
-	-- Tried again in a while; if it can be read by then, every frame is lettered anew.
-	pending[font] = true
-	ns.After(wait, function()
-		pending[font] = nil
-		-- Only while it is still the font the settings ask for: Style.Apply starts the tries
-		-- again if they come to ask for it later.
-		if Style.FONTS[ns.db.font] == font and CanRead(font) then
-			ns.Refresh()
+	-- Through ns.Try: an error over the file is kept for /pug status and handed to the game as
+	-- any error is.
+	local ran, answer = ns.Try(text.SetFont, text, own, size, flags)
+	local took = ran and answer and true or false
+	if ran and answer == nil then
+		-- No answer either way. The text is asked what it holds, with the addon's font on it
+		-- and then with the game's. If it had taken the addon's, that is laid on once more and
+		-- looked at once more: a game that does not answer is not taken at its word twice.
+		local held = text:GetFont()
+		text:SetFont(GAME, size, flags)
+		local plain = text:GetFont()
+		if held ~= nil and held ~= plain then
+			ran = ns.Try(text.SetFont, text, own, size, flags)
+			if ran then
+				local now = text:GetFont()
+				took = now ~= nil and now ~= plain
+			end
 		end
-	end)
-	return false
+	end
+	if not ran then
+		-- An error is raised once: the file is left alone after that, and whatever had taken
+		-- it before is lettered again, so that everything ends in one font.
+		raised[own] = true
+		own = nil
+		text:SetFont(GAME, size, flags)
+		Reletter()
+		return false
+	end
+	if not took then
+		-- The game's font again. A refusal is known to leave a text the font it had; should a
+		-- client take it away instead, the text has it back, or the next thing written on it
+		-- would be an error.
+		text:SetFont(GAME, size, flags)
+		refusal, refusedAt = answer, GetTime()
+		refusedFor[kind] = refusedAt
+		if not looked then
+			-- One look back, should the game only have been slow: everything is lettered again
+			-- a little after the session's first refusal. After that it is asked when frames
+			-- are laid out, and not on a timer.
+			looked = true
+			ns.After(RETRY_GAP + 1, function()
+				if own and refusedAt then
+					ns.Refresh()
+				end
+			end)
+		end
+		return false
+	end
+	if refusedFor[kind] then
+		-- Taken, where a text of this size and style was refused before: the game has changed
+		-- its mind. Every refusal is forgotten, and whatever was lettered in the game's font
+		-- meanwhile is lettered again. (A game that takes one style and refuses another has
+		-- not changed its mind, and is left to answer for each.)
+		refusedAt = nil
+		wipe(refusedFor)
+		for _, has in pairs(lettered) do
+			if has == false then
+				Reletter()
+				break
+			end
+		end
+	end
+	return true
 end
 
--- For /pug status: which font the frames are lettered in, and why if it is not the one asked for.
+-- For /pug status: which font the frames are lettered in. Where that is not plainly the one
+-- asked for, what is known follows in brackets: how many texts carry the addon's font out of
+-- how many lettered, whether the game knows the file, and what it answered when it refused.
 function Style.FontStatus()
 	local wanted = Style.FONTS[ns.db.font]
-	if not wanted or wanted == STANDARD_TEXT_FONT then
+	if not wanted or wanted == GAME then
 		return L["the game's own"]
 	elseif OTHER_SCRIPT[GetLocale()] then
 		return L["the game's own, for this language's script"]
-	elseif readable[wanted] then
+	end
+	local with, all = 0, 0
+	for _, has in pairs(lettered) do
+		all = all + 1
+		if has then
+			with = with + 1
+		end
+	end
+	if all > 0 and with == all then
 		return L["the addon's own"]
 	end
-	local state = reported[wanted] and L["the game's own: the addon's font file could not be loaded"]
-		or L["the game's own for now: the game has not handed over the addon's font file yet"]
-	return ("%s (%dx, %d s)"):format(state, tries[wanted] or 0, since[wanted] and GetTime() - since[wanted] or 0)
+	local known = Known(wanted)
+	local facts = { ("%d/%d"):format(with, all), "IsKnownFile: " .. (known == nil and "?" or tostring(known)) }
+	if raised[wanted] then
+		facts[#facts + 1] = "SetFont: error"
+	elseif with < all or refusedAt then
+		facts[#facts + 1] = "SetFont: " .. tostring(refusal)
+	end
+	local state
+	if with > 0 then
+		state = L["the addon's own, but not on every text"]
+	elseif all == 0 and known ~= false and not raised[wanted] and not refusedAt then
+		-- Nothing has been lettered yet (the frames are waiting for a fight to end), and nothing
+		-- speaks against it: the game has not been asked, or said yes when it last was.
+		state = L["the addon's own"]
+	else
+		state = L["the game's own: the game has not taken the addon's font file. If the addon was installed or updated while the game was running, close the game completely and start it again"]
+	end
+	return ("%s (%s)"):format(state, table.concat(facts, "; "))
 end
 
--- Reads the look out of the settings. Frames pick it up on their next Frame.Layout.
+-- Reads the look out of the settings. Frames pick it up on their next Frame.Layout, which
+-- whoever calls this sees to (ns.Refresh, the login code): the count of lettered texts starts
+-- over here.
 function Style.Apply()
 	local db = ns.db
 	Style.theme = Style.THEMES[db.theme] or Style.THEMES.slate
@@ -247,18 +342,24 @@ function Style.Apply()
 	Style.fontFlags = db.outline and "OUTLINE" or ""
 	Style.shadows = db.shadows
 
-	local font = Style.FONTS[db.font] or STANDARD_TEXT_FONT
-	if font ~= STANDARD_TEXT_FONT and (OTHER_SCRIPT[GetLocale()] or not CanRead(font)) then
-		font = STANDARD_TEXT_FONT
+	local wanted = Style.FONTS[db.font] or GAME
+	own = nil
+	if wanted ~= GAME and not OTHER_SCRIPT[GetLocale()] and not raised[wanted] and Known(wanted) ~= false then
+		own = wanted
 	end
-	Style.font = font
+	wipe(lettered)
 end
 
 -- Sets a font string to the font in use at the base size plus `delta`. `outlined` gives it an
 -- outline whatever the setting says (small figures on a picture, which need one to be read).
 function Style.SetFont(text, delta, outlined)
 	local flags = outlined and "OUTLINE" or Style.fontFlags
-	text:SetFont(Style.font, math.max(6, Style.fontSize + (delta or 0)), flags)
+	local size = math.max(6, Style.fontSize + (delta or 0))
+	text:SetFont(GAME, size, flags)
+	lettered[text] = nil
+	if own then
+		lettered[text] = LayOwn(text, size, flags)
+	end
 	if flags == "" then
 		text:SetShadowColor(0, 0, 0, 0.9)
 		text:SetShadowOffset(1, -1)

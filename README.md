@@ -83,7 +83,8 @@ error it caught: please open an issue with that text.
       <img src="curseforge/web/05-auras.jpg" alt="Debuff icons rimmed by kind, three cast bars, and the four places icons can go">
       <b>Buffs, debuffs and cast bars.</b> Icons with time left and stacks, debuffs rimmed in the
       colour of their kind, on the target only your own if you like. Cast bars with a shield on a
-      cast that cannot be interrupted and a moment of red when one is.
+      cast that cannot be interrupted, which on the target and the focus is a grey orange and not
+      the cast's gold, and a moment of red when a cast is interrupted.
     </td>
   </tr>
   <tr>
@@ -91,8 +92,8 @@ error it caught: please open an issue with that text.
       <img src="curseforge/web/06-looks.jpg" alt="The same frames in the themes Slate, Night and Hearth, with smooth, flat and glass bars">
       <b>Three looks, three textures.</b> Slate, Night and Hearth, all drawn for this addon, lettered
       in Inter (which the addon brings with it; the game's own font is one setting away), with a
-      soft shadow under every plate. Health coloured by class, by friend or foe, by how much is
-      left, or plain; numbers exact, short, as a percentage, or as what is missing.
+      soft shadow under every plate if you like one. Health coloured by class, by friend or foe, by
+      how much is left, or plain; numbers exact, short, as a percentage, or as what is missing.
     </td>
     <td width="50%" valign="top">
       <img src="curseforge/web/07-arrange.jpg" alt="Green handles on the frames of a game screen, one being dragged, and the list of commands">

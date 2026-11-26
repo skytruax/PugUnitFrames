@@ -31,6 +31,7 @@ local SETTING_LABELS = {
 	buffs = "Buffs shown", debuffs = "Debuffs shown", myBuffs = "Only my buffs", myDebuffs = "Only my debuffs",
 	auraSize = "Icon size", auraPerRow = "Icons per row", buffSide = "Buffs go", debuffSide = "Debuffs go",
 	castbar = "Cast bar", castHeight = "Cast bar height",
+	castLocked = "Grey orange if uninterruptible",
 	threat = "Outline when attacked", range = "Fade when out of range", heals = "Healing on its way",
 	absorbs = "Shields on the health bar",
 	marks = "Marks (raid icon, combat, ready check)", dispel = "Light up debuffs I can remove",

@@ -183,6 +183,12 @@ function UnitGetDetailedHealPrediction(unit, healer, calculator)
 	values.totalDamageAbsorbs = SHIELDS[unit] or 0
 	calculator:SetPredictedValues(values)
 end
+-- The cap on the end of a health bar is filled by the whole shield's size, which the addon asks
+-- the game for itself.
+local gameAbsorbs = UnitGetTotalAbsorbs
+function UnitGetTotalAbsorbs(unit)
+	return SHIELDS[unit] or gameAbsorbs(unit)
+end
 
 -- Portraits: the game draws each from the unit's own model. The simulator draws none (what it
 -- does in their place also moves the picture inside the texture, which the game never does), so

@@ -104,6 +104,7 @@ Defaults.UNIT_SPEC = {
 	myDebuffs = Bool(),               -- of the debuffs, only the ones the player put there
 	castbar = Bool(),
 	castHeight = Number(6, 30, 1),
+	castLocked = Bool(),              -- a cast that cannot be interrupted in a greyed orange, not the cast's gold
 	threat = Bool(),                  -- an outline while the unit is being attacked
 	range = Bool(),                   -- fade a group member who is out of range
 	heals = Bool(),                   -- healing on its way, past the end of the health bar
@@ -142,7 +143,7 @@ Defaults.UNIT_SECTIONS = {
 		"growth", "spacing", "showPlayer", "showSolo", "byRole", "perColumn", "columnGrowth", "columnSpacing", "scaleSmall", "scaleMid",
 	} },
 	{ key = "bars", keys = {
-		"color", "invert", "fill", "powerHeight", "hideNoPower", "heals", "absorbs", "castbar", "castHeight", "points", "totems",
+		"color", "invert", "fill", "powerHeight", "hideNoPower", "heals", "absorbs", "castbar", "castHeight", "castLocked", "points", "totems",
 	} },
 	{ key = "text", keys = {
 		"name", "surname", "level", "levelBadge", "healthText", "powerText", "portrait", "mirror",
@@ -178,7 +179,7 @@ Defaults.UNITS = {
 		enabled = true, x = -290, y = -210, width = 232, height = 46, scale = 1.15, powerHeight = 12,
 		color = "class", healthText = "value", powerText = "value", name = true, surname = true, level = true, levelBadge = false, portrait = "left",
 		buffs = 0, debuffs = 0, myDebuffs = false, auraSize = 22, auraPerRow = 9, buffSide = "above", debuffSide = "above",
-		castbar = true, castHeight = 20, threat = true, heals = true, marks = true, totems = true,
+		castbar = true, castHeight = 20, castLocked = false, threat = true, heals = true, marks = true, totems = true,
 		leader = false, role = false, pvp = false,
 		invert = false, fill = "right", mirror = false, myBuffs = false, absorbs = true, calm = 1, hideInGroup = false,
 	},
@@ -186,7 +187,7 @@ Defaults.UNITS = {
 		enabled = true, x = 290, y = -210, width = 232, height = 46, scale = 1.15, powerHeight = 12,
 		color = "class", healthText = "value", powerText = "value", name = true, surname = true, level = true, levelBadge = false, portrait = "right",
 		buffs = 6, debuffs = 18, myDebuffs = false, auraSize = 22, auraPerRow = 9, buffSide = "above", debuffSide = "above",
-		castbar = true, castHeight = 20, marks = false, points = true,
+		castbar = true, castHeight = 20, castLocked = true, marks = false, points = true,
 		leader = false, role = false, pvp = false, elite = true, quest = true,
 		invert = false, fill = "right", mirror = false, myBuffs = false, absorbs = true, hideNoPower = true,
 	},
@@ -201,7 +202,7 @@ Defaults.UNITS = {
 		enabled = true, x = -250, y = -125, width = 200, height = 40, scale = 1.3, powerHeight = 6,
 		color = "class", healthText = "percent", powerText = "none", name = true, surname = true, level = false, levelBadge = false, portrait = "left",
 		buffs = 0, debuffs = 6, myDebuffs = false, auraSize = 20, auraPerRow = 8, buffSide = "above", debuffSide = "above",
-		castbar = true, castHeight = 12, marks = true,
+		castbar = true, castHeight = 12, castLocked = true, marks = true,
 		leader = false, role = false, pvp = false, elite = true, quest = true,
 		invert = false, fill = "right", mirror = false, myBuffs = false, absorbs = true, hideNoPower = true,
 	},
@@ -209,14 +210,14 @@ Defaults.UNITS = {
 		enabled = true, x = -496, y = -219, width = 124, height = 28, scale = 1, powerHeight = 4,
 		color = "reaction", healthText = "none", powerText = "none", name = true, surname = true, level = false, levelBadge = false, portrait = "none",
 		buffs = 0, debuffs = 0, myDebuffs = false, auraSize = 18, auraPerRow = 6, buffSide = "below", debuffSide = "below",
-		castbar = false, castHeight = 10, threat = true, heals = true, marks = false,
+		castbar = false, castHeight = 10, castLocked = false, threat = true, heals = true, marks = false,
 		invert = false, fill = "right", mirror = false, myBuffs = false, absorbs = true, calm = 1, happiness = true,
 	},
 	party = {
 		enabled = true, x = -671, y = 330, width = 200, height = 40, scale = 1.2, powerHeight = 6,
 		color = "class", healthText = "value", powerText = "none", name = true, surname = true, level = true, levelBadge = false, portrait = "left",
 		buffs = 8, debuffs = 4, myDebuffs = false, auraSize = 20, auraPerRow = 8, buffSide = "above", debuffSide = "right",
-		castbar = true, castHeight = 13, threat = true, range = true, heals = true, marks = true, dispel = true,
+		castbar = true, castHeight = 13, castLocked = false, threat = true, range = true, heals = true, marks = true, dispel = true,
 		leader = false, role = false, pvp = false,
 		growth = "down", spacing = 12, showPlayer = false, showSolo = false,
 		invert = false, fill = "right", mirror = true, myBuffs = false, absorbs = true, highlight = true, byRole = false,

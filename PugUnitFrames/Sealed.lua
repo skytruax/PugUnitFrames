@@ -115,20 +115,32 @@ end
 -- addon cannot work out how much of the shield there is room for. The game has a calculator for
 -- exactly that. Asked to keep the shield within what the unit is missing, it hands back that
 -- much of it, and a second answer, whether there was more than fits. The first goes to the bar;
--- the second goes to `cap`, a mark on the end of the health bar, as its alpha: someone at full
--- health under a shield has no room for any of it, and has the mark.
+-- the second goes to `cap`, a mark on the end of the health bar, as its alpha (a frame's alpha,
+-- set as the fading of a group member out of range is): someone at full health under a shield
+-- has no room for any of it, and has the mark.
+--
+-- `cap` is a bar itself, from nought to one, and is given the whole shield's size: any shield
+-- fills it and none leaves it empty. So the mark is only there to be seen while there is a
+-- shield, whatever the calculator answers for a unit that has none and no room either.
 --
 -- `afterHeals` says whether healing on its way is drawn between the health and the shield, and
 -- so has its room first.
 local ROOM = Enum.UnitDamageAbsorbClampMode
 local shieldSums -- one calculator, filled for each unit in turn
+-- The game picks one of two numbers by a boolean that may be sealed.
+local Either = C_CurveUtil.EvaluateColorValueFromBoolean
 
 function Sealed.ShieldToBar(bar, cap, unit, afterHeals)
+	local whole = UnitGetTotalAbsorbs(unit)
+	if IsPlainNil(whole) then
+		whole = 0
+	end
 	bar:SetMinMaxValues(0, UnitHealthMax(unit))
 	if not ROOM or not CreateUnitHealPredictionCalculator then
 		-- A client without the calculator: the whole shield, cut off where the health bar ends,
 		-- and nothing to say that it was.
-		bar:SetValue(UnitGetTotalAbsorbs(unit))
+		bar:SetValue(whole)
+		cap:SetValue(0)
 		cap:SetAlpha(0)
 		return
 	end
@@ -137,7 +149,8 @@ function Sealed.ShieldToBar(bar, cap, unit, afterHeals)
 	UnitGetDetailedHealPrediction(unit, nil, shieldSums)
 	local fits, more = shieldSums:GetDamageAbsorbs()
 	bar:SetValue(fits)
-	cap:SetAlphaFromBoolean(more, 1, 0)
+	cap:SetValue(whole)
+	cap:SetAlpha(Either(more, 1, 0))
 end
 
 ---------------------------------------------------------------------------
@@ -342,6 +355,11 @@ end
 -- parts.text, its icon on parts.icon, and parts.shield shown while it cannot be interrupted.
 -- Returns whether there is one, and the game's id for it (never sealed), which says later whether
 -- a "cast ended" event is about the cast on show or about an older one.
+--
+-- The bar's colour is parts.open, and while the cast cannot be interrupted parts.shut, where
+-- the frame has one. Each is six numbers: the fill's colour, then the colour of the empty part
+-- behind it (parts.trough). Whether a cast can be interrupted may be sealed, so it is the game
+-- that picks between the two, a number at a time.
 function Sealed.CastToParts(parts, unit)
 	local channel = false
 	local duration = UnitCastingDuration(unit)
@@ -368,6 +386,14 @@ function Sealed.CastToParts(parts, unit)
 	parts.text:SetText(label)
 	parts.icon:SetTexture(icon)
 	parts.shield:SetAlphaFromBoolean(shielded, 1, 0)
+	local open, shut = parts.open, parts.shut
+	if shut then
+		parts.bar:SetStatusBarColor(Either(shielded, shut[1], open[1]), Either(shielded, shut[2], open[2]), Either(shielded, shut[3], open[3]))
+		parts.trough:SetVertexColor(Either(shielded, shut[4], open[4]), Either(shielded, shut[5], open[5]), Either(shielded, shut[6], open[6]))
+	else
+		parts.bar:SetStatusBarColor(open[1], open[2], open[3])
+		parts.trough:SetVertexColor(open[4], open[5], open[6])
+	end
 	return true, castBarID
 end
 

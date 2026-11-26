@@ -557,6 +557,90 @@ Test("another unit's cast is sealed and still drawn: timer, name, icon, shield",
 	False(cast:IsShown(), "cast over")
 end)
 
+Test("a cast that cannot be interrupted is a greyed orange on the target, and gold while it can be", function()
+	local ns = Login()
+	Target(HOGGER)
+	local cast = PugUnitFrames_target.cast
+	local gold, locked = ns.Style.CAST, ns.Style.CAST_LOCKED
+	local function Is(color, what)
+		local r, g, b = ns.Style.Toned(color)
+		Near(r, Value(cast.bar.barColor[1]), what)
+		Near(g, Value(cast.bar.barColor[2]), what)
+		Near(b, Value(cast.bar.barColor[3]), what)
+		local behindR, behindG, behindB = ns.Style.Veiled(r, g, b)
+		Near(behindR, Value(cast.trough.vertex[1]), what .. ", behind the fill too")
+		Near(behindG, Value(cast.trough.vertex[2]), what .. ", behind the fill too")
+		Near(behindB, Value(cast.trough.vertex[3]), what .. ", behind the fill too")
+	end
+	True(ns.db.units.target.castLocked, "a profile saved before this setting gains it as it starts: on for the target")
+
+	Cast("target", { name = "Fireball", icon = 135812, start = M.now, length = 2.5, id = 7 })
+	Sealed(cast.bar.barColor[1], "which of the two colours it is, is sealed with the cast: the game picks")
+	Sealed(cast.trough.vertex[1])
+	Is(gold, "a cast that can be interrupted is the cast's gold")
+
+	Cast("target", { name = "Shadow Bolt", icon = 1, start = M.now, length = 3, id = 8, shielded = true })
+	Is(locked, "one that cannot is a greyed orange")
+	Equal(1, Value(cast.shield.alpha), "with the shield as before")
+	-- A greyed orange: red over green over blue as an orange has them, closer together than
+	-- the gold's, and darker than it.
+	True(locked[1] > locked[2] and locked[2] > locked[3], "an orange")
+	True(locked[1] - locked[3] < 0.6 * (gold[1] - gold[3]), "greyed")
+	True(locked[1] + locked[2] + locked[3] < gold[1] + gold[2] + gold[3], "and not as bright as the gold")
+
+	-- The game says so when a cast becomes one or the other part-way.
+	M.units.target.cast.shielded = false
+	M.Fire("UNIT_SPELLCAST_INTERRUPTIBLE", "target")
+	Is(gold, "gold from the moment it can be interrupted")
+	M.units.target.cast.shielded = true
+	M.Fire("UNIT_SPELLCAST_NOT_INTERRUPTIBLE", "target")
+	Is(locked, "and back")
+
+	-- Interrupted (by someone, somehow): red for a moment, and the next cast is coloured afresh.
+	M.units.target.cast = nil
+	M.Fire("UNIT_SPELLCAST_INTERRUPTED", "target")
+	Near(0.86 * ns.Style.theme.tone, cast.bar.barColor[1], "red")
+	M.Advance(1)
+	Cast("target", { name = "Fireball", icon = 135812, start = M.now, length = 2.5, id = 9 })
+	Is(gold, "the next cast")
+
+	-- A channel is coloured the same way.
+	Cast("target", { name = "Drain Life", icon = 2, start = M.now, length = 5, id = 12, channel = true, shielded = true })
+	Is(locked, "a channel that cannot be interrupted")
+	Cast("target", { name = "Drain Life", icon = 2, start = M.now, length = 5, id = 13, channel = true })
+	Is(gold, "and one that can")
+
+	-- A setting of the frame's cast bar.
+	ns.db.units.target.castLocked = false
+	ns.Refresh()
+	Cast("target", { name = "Shadow Bolt", icon = 1, start = M.now, length = 3, id = 10, shielded = true })
+	PlainValue(cast.bar.barColor[1], "switched off, the game is not asked")
+	Is(gold, "and every cast is gold")
+	Equal(1, Value(cast.shield.alpha), "the shield still says which is which")
+	Equal(0, #ns.GetProblems())
+	Equal(0, #M.luaErrors)
+end)
+
+Test("grey orange for a cast that cannot be interrupted starts on for the target and the focus only", function()
+	PugUnitFramesDB = {}
+	local ns = Login()
+	local units = ns.db.units
+	True(units.target.castLocked, "the target")
+	True(units.focus.castLocked, "the focus, which is watched for the same reason")
+	False(units.player.castLocked, "the player's own cast is the player's to know")
+	False(units.party.castLocked)
+	False(units.pet.castLocked)
+	Equal(nil, units.targettarget.castLocked, "a frame with no cast bar has no such setting")
+	Equal(nil, units.raid.castLocked)
+	-- Switched on for the player, the player's own casts are coloured the same way.
+	units.player.castLocked = true
+	ns.Refresh()
+	Cast("player", { name = "Hearthstone", icon = 6, start = M.now, length = 10, id = 11, shielded = true })
+	local r = ns.Style.Toned(ns.Style.CAST_LOCKED)
+	Near(r, Value(PugUnitFrames_player.cast.bar.barColor[1]))
+	Equal(0, #ns.GetProblems())
+end)
+
 Test("a channel drains instead of filling, and the player's own cast is not sealed", function()
 	Login()
 	Cast("player", { name = "Blizzard", icon = 2, start = M.now, length = 8, id = 3, channel = true })
@@ -1672,6 +1756,15 @@ Test("the frames page shows each kind of frame the controls it has, and they wor
 	page.controls.elite:SetChecked(false)
 	page.controls.elite:Click()
 	Equal(false, ns.db.units.target.elite)
+	-- Grey orange for a cast that cannot be interrupted: a switch on the bars of a frame that has a cast bar.
+	page.sections.bars:Click()
+	True(page.controls.castLocked:IsShown(), "on the target")
+	True(ns.db.units.target.castLocked)
+	page.controls.castLocked:SetChecked(false)
+	page.controls.castLocked:Click()
+	Equal(false, ns.db.units.target.castLocked, "switched off with a click")
+	page.tabs.raid:Click()
+	False(page.controls.castLocked:IsShown(), "and none on the raid, which has no cast bars")
 	-- Every setting is on exactly one section.
 	local seen = {}
 	for _, section in ipairs(ns.Defaults.UNIT_SECTIONS) do
@@ -1777,57 +1870,159 @@ Test("where the game's language is written in another script, its own font is us
 	Equal(0, #ns.GetProblems())
 end)
 
-Test("a font file the game does not take is tried for ten minutes before a word is said, and tried on after that", function()
-	local inter = "Interface\\AddOns\\PugUnitFrames\\Fonts\\Inter-SemiBold.ttf"
-	M.unreadableFonts[inter] = true
-	local ns = Login()
-	Equal(STANDARD_TEXT_FONT, PugUnitFrames_player.texts.name.font[1], "every text still has a font")
-	Equal(STANDARD_TEXT_FONT, PugUnitFrames_player.texts.health.font[1])
-	Equal(0, #ns.GetProblems(), "not given up at the first refusal: the game may still be loading the file")
-	Pass(13)
-	Equal(0, #ns.GetProblems(), "nor after twelve seconds, which is where version 0.3.1 gave up")
-	True(ns.Style.FontStatus():find("has not handed over", 1, true), "/pug status says what it is waiting for")
-	Pass(580)
-	Equal(0, #ns.GetProblems(), "nor in the tenth minute")
-	Pass(40)
-	local problems = ns.GetProblems()
-	Equal(1, #problems, "said once, after ten minutes")
-	True(problems[1].text:find("Inter-SemiBold.ttf", 1, true), "and it names the file")
-	True(problems[1].text:find("restart the game", 1, true), "and what may help")
-	True(ns.Style.FontStatus():find("could not be loaded", 1, true))
-	ns.Refresh()
-	Pass(300)
-	Equal(1, #ns.GetProblems(), "and not again")
-	Equal(1, problems[1].count)
-	Equal(STANDARD_TEXT_FONT, PugUnitFrames_player.texts.name.font[1])
+local INTER = "Interface\\AddOns\\PugUnitFrames\\Fonts\\Inter-SemiBold.ttf"
 
-	-- It is still tried, once a minute: if the game hands the file over after all, it is used.
-	M.unreadableFonts[inter] = nil
-	Pass(61)
-	Equal(inter, PugUnitFrames_player.texts.name.font[1], "taken up, however late")
+Test("a font file the game does not take leaves every text in the game's font, at its own size, and is no error", function()
+	M.unreadableFonts[INTER] = true
+	local ns = Login()
+	local name, health, cast = PugUnitFrames_player.texts.name, PugUnitFrames_player.texts.health, PugUnitFrames_player.cast.text
+	Equal(STANDARD_TEXT_FONT, name.font[1], "every text still has a font")
+	Equal(STANDARD_TEXT_FONT, health.font[1])
+	Equal(STANDARD_TEXT_FONT, cast.font[1])
+	local sizes = { name.font[2], health.font[2], cast.font[2] }
+	local asked = M.fontTries[INTER]
+	True(asked >= 1 and asked <= 12, "the game was asked once for each size and style of text, not once for each text")
+	ns.Refresh()
+	Equal(asked, M.fontTries[INTER], "its no holds for a change of a setting a moment later")
+	Pass(12)
+	Equal(2 * asked, M.fontTries[INTER], "one look back on its own, a little after the first refusal")
+	Pass(700)
+	Equal(2 * asked, M.fontTries[INTER], "and after that nothing asks on a timer")
+	ns.Refresh()
+	Equal(3 * asked, M.fontTries[INTER], "the next lettering asks again")
+	Equal(0, #ns.GetProblems(), "a refusal is not an error of the addon's: none is recorded, at once or later")
+	Equal(0, #M.luaErrors)
+	local status = ns.Style.FontStatus()
+	True(status:find("has not taken the addon's font file", 1, true), "/pug status says so")
+	True(status:find("start it again", 1, true), "and what there is to do")
+	True(status:find("(0/", 1, true), "on how many texts it stands")
+	True(status:find("IsKnownFile: true", 1, true), "that the game knows the file")
+	True(status:find("SetFont: false", 1, true), "and what it answered")
+
+	-- Taken the next time the frames are laid out, whenever that is.
+	local refreshes, refresh = 0, ns.Refresh
+	ns.Refresh = function()
+		refreshes = refreshes + 1
+		return refresh()
+	end
+	M.unreadableFonts[INTER] = nil
+	Pass(11)
+	ns.Refresh()
+	Pass(5)
+	Equal(1, refreshes, "taken at a lettering of everything: nothing is left to be lettered again")
+	Equal(INTER, name.font[1], "taken up when the game takes it")
+	Equal(sizes[1], name.font[2], "at the sizes the texts had in the game's font")
+	Equal(sizes[2], health.font[2])
+	Equal(sizes[3], cast.font[2])
 	Equal("the addon's own", ns.Style.FontStatus())
+	Equal(0, #ns.GetProblems())
 end)
 
-Test("a font the game is slow to have ready is taken up when it arrives, and nothing is reported", function()
-	local inter = "Interface\\AddOns\\PugUnitFrames\\Fonts\\Inter-SemiBold.ttf"
-	M.unreadableFonts[inter] = true
+Test("a font file this running game does not know is said to be that, and is no error either", function()
+	M.unknownFiles[INTER] = true
+	M.fontRefusal = "error" -- what this game does when given a file it does not know is not documented
 	local ns = Login()
-	Equal(STANDARD_TEXT_FONT, PugUnitFrames_player.texts.name.font[1], "the game's font in the meantime")
-	True(PugUnitFrames_player:IsShown())
-	-- Asking again and again (every change of a setting does) uses no try up and starts no second
-	-- round of them.
-	for _ = 1, 20 do
-		ns.Refresh()
-	end
-	Pass(20)
-	Equal(STANDARD_TEXT_FONT, PugUnitFrames_player.texts.name.font[1], "still waiting, twenty seconds in")
-	M.unreadableFonts[inter] = nil
-	Pass(31)
-	Equal(inter, PugUnitFrames_player.texts.name.font[1], "the frames are lettered anew the moment the game takes it")
-	Equal(inter, PugUnitFrames_player.texts.health.font[1])
-	Equal("the addon's own", ns.Style.FontStatus())
-	Equal(0, #M.blocked)
+	Equal(STANDARD_TEXT_FONT, PugUnitFrames_player.texts.name.font[1])
+	Equal(nil, M.fontTries[INTER], "so a file the game says it does not know is not offered to it at all")
+	True(ns.Style.FontStatus():find("(0/0; IsKnownFile: false)", 1, true), "what an addon updated while the game ran looks like")
 	Equal(0, #ns.GetProblems())
+	SlashCmdList.PUGUNITFRAMES("status")
+	True(Printed("Font: the game's own: the game has not taken the addon's font file."), "in /pug status")
+	True(Printed("close the game completely and start it again"))
+	True(Printed("No errors recorded."))
+end)
+
+Test("a client that cannot be asked about files, and one that answers nothing for a font it takes", function()
+	C_UIFileAsset = nil
+	M.quietFonts = true
+	local ns = Login()
+	Equal(INTER, PugUnitFrames_player.texts.name.font[1], "the text has the font, and that is what counts")
+	Equal("the addon's own", ns.Style.FontStatus())
+	M.unreadableFonts[INTER] = true
+	M.fontRefusal = "nothing"
+	ns.Refresh()
+	Equal(STANDARD_TEXT_FONT, PugUnitFrames_player.texts.name.font[1], "refused without a word: the game's font stays")
+	local status = ns.Style.FontStatus()
+	True(status:find("IsKnownFile: ?", 1, true), "nobody to ask")
+	True(status:find("SetFont: nil", 1, true), "and no answer")
+	Equal(0, #ns.GetProblems())
+end)
+
+Test("a client that takes a text's font away when it refuses one: the text gets the game's back", function()
+	M.unreadableFonts[INTER] = true
+	M.fontRefusal = "drop"
+	local ns = Login()
+	local player = PugUnitFrames_player
+	Equal(STANDARD_TEXT_FONT, player.texts.name.font[1], "or the next thing written on it would be an error")
+	Equal(STANDARD_TEXT_FONT, player.cast.text.font[1])
+	Target(HOGGER)
+	Cast("target", { name = "Fireball", icon = 135812, start = M.now, length = 2.5, id = 7 })
+	M.Fire("UNIT_HEALTH", "player")
+	Equal(0, #M.luaErrors, "names, numbers and spells are written as ever")
+	Equal(0, #ns.GetProblems())
+	True(ns.Style.FontStatus():find("(0/", 1, true), "and no text is counted as carrying the addon's font")
+end)
+
+Test("the game's own answer is believed: a text is not asked which font it holds", function()
+	M.fontsUnnamed = true -- GetFont answers nothing, whatever a text holds
+	local ns = Login()
+	local name = PugUnitFrames_player.texts.name
+	Equal(INTER, name.font[1], "the game said yes, so the text has it")
+	Equal("the addon's own", ns.Style.FontStatus(), "and is counted so")
+	Equal(0, #ns.GetProblems())
+	-- Refused, by the same client: the game's font, and counted so.
+	M.unreadableFonts[INTER] = true
+	ns.Refresh()
+	Equal(STANDARD_TEXT_FONT, name.font[1])
+	True(ns.Style.FontStatus():find("(0/", 1, true))
+	True(ns.Style.FontStatus():find("SetFont: false", 1, true))
+	Equal(0, #ns.GetProblems())
+end)
+
+Test("a font the game takes after having refused it goes on every text, not only on those lettered since", function()
+	M.unreadableFonts[INTER] = true
+	local ns = Login()
+	local name = PugUnitFrames_player.texts.name
+	Equal(STANDARD_TEXT_FONT, name.font[1])
+	Pass(30)
+	M.unreadableFonts[INTER] = nil
+	-- One frame is laid out again (as a group member's is when the group changes): the game
+	-- says yes this time.
+	Target(HOGGER)
+	ns.Frame.Layout(PugUnitFrames_target)
+	Equal(INTER, PugUnitFrames_target.texts.name.font[1], "a frame lettered now has the font")
+	Equal(STANDARD_TEXT_FONT, name.font[1], "the player's, lettered earlier, not yet")
+	True(ns.Style.FontStatus():find("but not on every text", 1, true))
+	Pass(1)
+	Equal(INTER, name.font[1], "a moment later everything has been lettered again")
+	Equal(INTER, PugUnitFrames_player.texts.health.font[1])
+	Equal("the addon's own", ns.Style.FontStatus())
+	Equal(0, #ns.GetProblems())
+	Equal(0, #M.blocked)
+end)
+
+Test("a client that raises an error over the font file hears of it once, and the file is left alone", function()
+	M.unreadableFonts[INTER] = true
+	M.fontRefusal = "error"
+	local ns = Login()
+	local player = PugUnitFrames_player
+	Equal(STANDARD_TEXT_FONT, player.texts.name.font[1], "every text has the game's font")
+	Equal(STANDARD_TEXT_FONT, player.texts.health.font[1])
+	Equal(1, M.fontTries[INTER], "the game was given the file once")
+	Equal(1, #ns.GetProblems(), "the error is kept for /pug status")
+	Equal(1, #M.luaErrors, "and went to the game's error handler as any error does")
+	ns.Refresh()
+	ns.Refresh()
+	Equal(1, M.fontTries[INTER], "and never again this session")
+	Equal(1, ns.GetProblems()[1].count)
+	True(ns.Style.FontStatus():find("SetFont: error", 1, true))
+	-- Whichever text the error was over has a font again: everything is written as ever.
+	Target(HOGGER)
+	M.Fire("UNIT_HEALTH", "player")
+	M.Fire("UNIT_NAME_UPDATE", "player")
+	Cast("player", { name = "Heal", icon = 3, start = M.now, length = 2, id = 4 })
+	Equal(1, #M.luaErrors, "everything else is drawn as ever")
+	M.luaErrors = {} -- expected in this scenario
 end)
 
 Test("/pug status says which font the frames are lettered in", function()
@@ -1841,37 +2036,185 @@ Test("/pug status says which font the frames are lettered in", function()
 	True(Printed("Font: the game's own."), "the game's, when that is what is asked for")
 end)
 
-Test("a font handed over while the frames wait for a fight to end is the one they are built in", function()
-	local inter = "Interface\\AddOns\\PugUnitFrames\\Fonts\\Inter-SemiBold.ttf"
-	M.unreadableFonts[inter] = true
+Test("/pug status counts the texts when the game takes the font on some and not on others", function()
+	local ns = Login()
+	local name = PugUnitFrames_player.texts.name
+	M.unreadableFonts[INTER] = true
+	ns.Style.SetFont(name, 0)
+	Equal(STANDARD_TEXT_FONT, name.font[1])
+	local status = ns.Style.FontStatus()
+	True(status:find("the addon's own, but not on every text", 1, true))
+	False(status:find("(0/", 1, true), "the others still carry it")
+end)
+
+Test("a game that was only slow has its font on every text a little after login, with nothing done", function()
+	M.unreadableFonts[INTER] = true
+	local ns = Login()
+	Pass(2)
+	M.unreadableFonts[INTER] = nil -- refused for the first two seconds, and never again
+	Equal(STANDARD_TEXT_FONT, PugUnitFrames_player.texts.name.font[1])
+	Pass(10)
+	Equal(INTER, PugUnitFrames_player.texts.name.font[1], "the one look back finds it")
+	Equal(INTER, PugUnitFrames_player.texts.health.font[1])
+	Equal("the addon's own", ns.Style.FontStatus())
+	Equal(0, #ns.GetProblems())
+end)
+
+Test("a game that says yes and no by turns is left with what it has after three tries", function()
+	M.unreadableFonts[INTER] = true
+	local ns = Login()
+	Pass(15) -- the look back is behind us
+	local refreshes, refresh = 0, ns.Refresh
+	ns.Refresh = function()
+		refreshes = refreshes + 1
+		return refresh()
+	end
+	Target(HOGGER)
+	for round = 1, 6 do
+		-- A yes on one frame after a no: everything is lettered again in a moment...
+		M.unreadableFonts[INTER] = nil
+		Pass(11)
+		ns.Frame.Layout(PugUnitFrames_target)
+		Equal(INTER, PugUnitFrames_target.texts.name.font[1])
+		-- ...and by then the game says no again.
+		M.unreadableFonts[INTER] = true
+		Pass(11)
+		ns.Frame.Layout(PugUnitFrames_target)
+		Equal(math.min(round, 3), refreshes, "once for each late yes, three times at most")
+	end
+	Equal(0, #ns.GetProblems())
+end)
+
+Test("a client that says no and still has the text name the file: the no is what counts", function()
+	M.unreadableFonts[INTER] = true
+	M.fontRefusal = "named"
+	local ns = Login()
+	Equal(STANDARD_TEXT_FONT, PugUnitFrames_player.texts.name.font[1], "the game's font, given back")
+	Equal(STANDARD_TEXT_FONT, PugUnitFrames_player.cast.text.font[1])
+	local status = ns.Style.FontStatus()
+	True(status:find("(0/", 1, true), "and no text counted as carrying the addon's")
+	True(status:find("SetFont: false", 1, true))
+	Equal(0, #ns.GetProblems())
+end)
+
+Test("a client that answers nothing is not taken at its word twice", function()
+	M.quietFonts = true
+	M.fickleFonts = true -- it takes the font, and the second time it is given it, takes every font away
+	local ns = Login()
+	local player = PugUnitFrames_player
+	Equal(STANDARD_TEXT_FONT, player.texts.name.font[1], "the text is looked at again after the second laying, and has the game's font back")
+	Equal(STANDARD_TEXT_FONT, player.texts.health.font[1])
+	Equal(STANDARD_TEXT_FONT, player.cast.text.font[1])
+	Target(HOGGER)
+	M.Fire("UNIT_HEALTH", "player")
+	Cast("player", { name = "Heal", icon = 3, start = M.now, length = 2, id = 4 })
+	Equal(0, #M.luaErrors, "nothing is written on a text with no font")
+	False(ns.Style.FontStatus() == "the addon's own", "and none is counted as carrying the addon's")
+	Equal(0, #ns.GetProblems())
+end)
+
+Test("a refusal holds for texts of the same size and style, and for no others", function()
+	M.refuseOutlined = true -- a game that takes the file for plain text and not for outlined text
+	local ns = Login()
+	local holder = CreateFrame("Frame")
+	local plain, outlined, after = holder:CreateFontString(), holder:CreateFontString(), holder:CreateFontString()
+	ns.Style.SetFont(plain, 0)
+	ns.Style.SetFont(outlined, 0, true)
+	ns.Style.SetFont(after, 0)
+	Equal(INTER, plain.font[1])
+	Equal(STANDARD_TEXT_FONT, outlined.font[1], "refused where the game refuses it")
+	Equal("OUTLINE", outlined.font[3], "and outlined all the same")
+	Equal(INTER, after.font[1], "a plain text right after is asked for itself, and has the font")
+	local another = holder:CreateFontString()
+	local asked = M.fontTries[INTER]
+	ns.Style.SetFont(another, 0, true)
+	Equal(asked, M.fontTries[INTER], "a second outlined text of that size is not asked about within ten seconds")
+	Equal(STANDARD_TEXT_FONT, another.font[1])
+	Equal(0, #ns.GetProblems())
+end)
+
+Test("an error over the font after texts have taken it: everything ends in the game's font", function()
+	local ns = Login()
+	local name = PugUnitFrames_player.texts.name
+	Equal(INTER, name.font[1])
+	M.unreadableFonts[INTER] = true
+	M.fontRefusal = "error"
+	Target(HOGGER)
+	ns.Frame.Layout(PugUnitFrames_target) -- one frame is laid out, and the game raises an error over the file
+	Equal(1, #M.luaErrors)
+	Equal(INTER, name.font[1], "the player's frame still has the font for a moment")
+	Pass(1)
+	Equal(STANDARD_TEXT_FONT, name.font[1], "then everything is lettered again, in one font")
+	Equal(STANDARD_TEXT_FONT, PugUnitFrames_player.texts.health.font[1])
+	Equal(STANDARD_TEXT_FONT, PugUnitFrames_target.texts.name.font[1])
+	local status = ns.Style.FontStatus()
+	True(status:find("the game's own: the game has not taken", 1, true), "/pug status does not call it the addon's own")
+	True(status:find("(0/0; IsKnownFile: true; SetFont: error)", 1, true))
+	Equal(1, #M.luaErrors, "one error, raised once")
+	M.luaErrors = {} -- expected in this scenario
+end)
+
+Test("/pug status does not call a refused font the addon's own while a fight holds the lettering back", function()
+	M.unreadableFonts[INTER] = true
+	local ns = Login()
+	Pass(15)
+	M.SetCombat(true)
+	ns.db.fontSize = 12
+	ns.Refresh() -- the count starts over, and the lettering waits for the fight to end
+	local status = ns.Style.FontStatus()
+	True(status:find("the game's own: the game has not taken", 1, true))
+	True(status:find("(0/0; IsKnownFile: true; SetFont: false)", 1, true), "none lettered yet, and the game's last answer")
+	M.SetCombat(false)
+	True(ns.Style.FontStatus():find("(0/", 1, true))
+	False(ns.Style.FontStatus():find("(0/0", 1, true), "lettered again when the fight ends")
+	Equal(0, #ns.GetProblems())
+end)
+
+Test("a text that is no longer lettered is no longer counted", function()
+	M.unreadableFonts[INTER] = true
+	local ns = Login()
+	True(ns.Style.FontStatus():find("(0/", 1, true))
+	-- The player's cast bar is switched off: its text is not lettered again.
+	ns.db.units.player.castbar = false
+	M.unreadableFonts[INTER] = nil
+	Pass(11)
+	ns.Refresh()
+	Equal(INTER, PugUnitFrames_player.texts.name.font[1])
+	Equal(STANDARD_TEXT_FONT, PugUnitFrames_player.cast.text.font[1], "put away as it was")
+	Equal("the addon's own", ns.Style.FontStatus(), "every text that is lettered carries it")
+end)
+
+Test("frames made when a fight ends are lettered as the game answers then", function()
+	M.unreadableFonts[INTER] = true
 	Player()
 	M.SetCombat(true)
 	local ns = Login()
 	False(ns.IsBuilt(), "a login in the middle of a fight: no frames yet")
-	M.unreadableFonts[inter] = nil
-	Pass(3)
-	Equal("the addon's own", ns.Style.FontStatus(), "the game has handed the font over meanwhile")
+	Equal(nil, M.fontTries[INTER], "and no text to give a font to")
+	Equal("the addon's own (0/0; IsKnownFile: true)", ns.Style.FontStatus(), "/pug status says that none has been lettered")
+	M.unreadableFonts[INTER] = nil
 	M.SetCombat(false)
 	True(ns.IsBuilt())
-	Equal(inter, PugUnitFrames_player.texts.name.font[1], "and the frames are made with it")
+	Equal(INTER, PugUnitFrames_player.texts.name.font[1])
+	Equal("the addon's own", ns.Style.FontStatus())
 	Equal(0, #ns.GetProblems())
 end)
 
-Test("a font that is no longer asked for is no longer tried, and nothing is said about it", function()
-	local inter = "Interface\\AddOns\\PugUnitFrames\\Fonts\\Inter-SemiBold.ttf"
-	M.unreadableFonts[inter] = true
+Test("the addon's font file is not asked for while the game's font is the one wanted", function()
 	local ns = Login()
-	Pass(5)
 	ns.db.font = "game"
 	ns.Refresh()
-	Pass(700)
-	Equal(0, #ns.GetProblems(), "ten minutes on, no word about a font nobody wants")
+	Equal(STANDARD_TEXT_FONT, PugUnitFrames_player.texts.name.font[1])
 	Equal("the game's own", ns.Style.FontStatus())
-	-- Asked for again, it is tried again.
-	M.unreadableFonts[inter] = nil
+	local tries = M.fontTries[INTER]
+	ns.Refresh()
+	Equal(tries, M.fontTries[INTER])
+	-- Asked for again, it is on every text again.
 	ns.db.font = "inter"
 	ns.Refresh()
-	Equal(inter, PugUnitFrames_player.texts.name.font[1])
+	Equal(INTER, PugUnitFrames_player.texts.name.font[1])
+	Equal(INTER, PugUnitFrames_player.texts.health.font[1])
+	Equal("the addon's own", ns.Style.FontStatus())
 	Equal(0, #ns.GetProblems())
 end)
 
@@ -2406,13 +2749,23 @@ Test("someone else's kill is grey whatever colours the bar", function()
 	Sealed(bar.barColor[1], "free again, it is coloured by its health")
 end)
 
+-- Whether the cap on the end of a health bar is there to be seen. The cap is a small bar from
+-- nought to one: it has to be shown, filled (there is a shield at all) and not see-through (the
+-- shield does not all fit).
+local function CapSeen(bar)
+	local cap = bar.cap
+	return cap:IsVisible() and Value(cap.alpha) > 0 and Value(cap.value) >= cap.high
+end
+
 Test("a shield is drawn as healing on its way is: after the health, as much of it as there is room for", function()
 	local ns = Login() -- the player: 4000 of 5000 health
 	local bar = PugUnitFrames_player.health
 	local shield, cap = bar.shield, bar.cap
 	True(shield:IsShown())
 	Equal(0, Value(shield.value), "no shield, nothing drawn")
-	Equal(0, Value(cap.alpha), "and no cap on the bar")
+	False(CapSeen(bar), "and no cap on the bar")
+	Equal(0, cap.low, "the cap is a bar from nought to one")
+	Equal(1, cap.high)
 	Equal(bar.heal.barTexture, shield.anchors[1][2], "it starts where the healing on its way ends")
 	Equal("TOPLEFT", shield.anchors[1][1])
 	Equal("TOPRIGHT", shield.anchors[1][3])
@@ -2423,41 +2776,96 @@ Test("a shield is drawn as healing on its way is: after the health, as much of i
 	Equal(600, Value(shield.value), "a shield smaller than what is missing is drawn whole")
 	Equal(5000, Value(shield.high), "on the health bar's scale")
 	Sealed(cap.alpha)
-	Equal(0, Value(cap.alpha), "all of it fits: no cap")
+	Sealed(cap.value, "the cap is given the shield's size sealed, as the bar is")
+	Equal(600, Value(cap.value), "the whole of it: any shield fills the cap")
+	False(CapSeen(bar), "all of it fits: no cap")
 
 	-- More shield than room: what fits is drawn, and the cap on the end of the bar says there is more.
 	M.units.player.absorb = 1800
 	M.Fire("UNIT_ABSORB_AMOUNT_CHANGED", "player")
 	Equal(1000, Value(shield.value), "as much as the missing thousand has room for")
-	Equal(1, Value(cap.alpha), "the cap is lit")
+	True(CapSeen(bar), "the cap is lit")
 
 	-- Healing on its way stands between the health and the shield and has its room first.
 	M.units.player.incomingHeals = 700
 	M.Fire("UNIT_HEAL_PREDICTION", "player")
 	Equal(700, Value(bar.heal.value))
 	Equal(300, Value(shield.value), "what the heal leaves")
-	Equal(1, Value(cap.alpha))
+	True(CapSeen(bar))
 
 	-- At full health there is room for none of it: the cap alone shows the shield.
 	M.units.player.health, M.units.player.incomingHeals = 5000, nil
 	M.Fire("UNIT_HEALTH", "player")
 	Equal(0, Value(shield.value))
-	Equal(1, Value(cap.alpha), "which is when a shield is usually cast")
+	True(CapSeen(bar), "which is when a shield is usually cast")
 	Equal("TOPRIGHT", cap.anchors[1][1], "on the end the bar fills towards")
-	Equal(0, cap.gradient.low[4], "fading back into the bar")
-	True(cap.gradient.high[4] > 0.9)
+	Near(ns.Style.ABSORB[1], cap.barColor[1], "in the shield's colour")
+	Near(ns.Style.ABSORB[3], cap.barColor[3])
+	True(cap.barColor[4] > 0.9)
+	Equal(ns.Style.TEXTURES.flat, cap.barTexture.texture, "one even colour")
+	Equal(nil, cap.barTexture.gradient, "with no fade on it: in the game a fade is drawn whatever alpha it is given")
+	Equal(nil, cap.barTexture.alpha, "and no alpha of the texture's own either: it is the cap's, a frame's")
+	Equal(4, cap:GetWidth(), "as wide as the gap the numbers keep from the bar's end, so that no digit stands on it")
+	True(cap.level > shield.level, "over the shield and the healing")
 	Equal(1, M.calculators, "one calculator serves every frame")
 
 	M.units.player.dead = true
 	M.Fire("UNIT_HEALTH", "player")
 	Equal(0, shield.value, "nobody shields the dead")
-	Equal(0, cap.alpha)
+	Equal(0, cap.alpha, "see-through")
+	Equal(0, cap.value, "and empty")
+	False(CapSeen(bar))
 	M.units.player.dead = false
 
 	ns.db.units.player.absorbs = false
 	ns.Refresh()
 	False(shield:IsShown())
-	False(bar.capHolder:IsShown())
+	False(cap:IsShown())
+	Equal(0, #ns.GetProblems())
+end)
+
+Test("no shield, no cap, whatever the game's calculator makes of someone at full health", function()
+	M.clampedAtNought = true -- this one calls nothing in no room "more than fits"
+	local ns = Login()
+	local bar = PugUnitFrames_player.health
+	M.units.player.health = 5000
+	M.Fire("UNIT_HEALTH", "player")
+	Equal(1, Value(bar.cap.alpha), "the calculator says there is more")
+	Equal(0, Value(bar.cap.value), "of a shield that is not there")
+	False(CapSeen(bar), "so the cap is empty, and nothing is seen")
+	M.units.player.absorb = 1
+	M.Fire("UNIT_ABSORB_AMOUNT_CHANGED", "player")
+	True(CapSeen(bar), "the smallest shield fills it")
+	M.units.player.absorb = nil
+	M.Fire("UNIT_ABSORB_AMOUNT_CHANGED", "player")
+	False(CapSeen(bar), "gone with the shield")
+	Party(2)
+	False(CapSeen(PartyButton(ns, 1).health), "nor on anyone else at rest")
+	Equal(0, #ns.GetProblems())
+end)
+
+Test("a game that answers nothing about a unit's shields has none drawn", function()
+	M.noAbsorbAnswer = true
+	local ns = Login()
+	local bar = PugUnitFrames_player.health
+	M.units.player.absorb = 1800
+	M.Fire("UNIT_ABSORB_AMOUNT_CHANGED", "player")
+	Equal(0, Value(bar.cap.value), "nothing is taken for no shield")
+	False(CapSeen(bar))
+	Equal(0, #ns.GetProblems())
+	Equal(0, #M.luaErrors)
+end)
+
+Test("a client without the shield calculator draws the whole shield and never a cap", function()
+	CreateUnitHealPredictionCalculator = nil
+	local ns = Login()
+	local bar = PugUnitFrames_player.health
+	M.units.player.absorb = 1800
+	M.Fire("UNIT_ABSORB_AMOUNT_CHANGED", "player")
+	Equal(1800, Value(bar.shield.value), "all of it, cut off where the health bar ends")
+	Equal(0, bar.cap.value, "and nothing to say that it was")
+	Equal(0, bar.cap.alpha)
+	False(CapSeen(bar))
 	Equal(0, #ns.GetProblems())
 end)
 
@@ -2470,7 +2878,7 @@ Test("with healing on its way not drawn, the shield follows the health itself", 
 	M.units.player.absorb, M.units.player.incomingHeals = 900, 700
 	M.Fire("UNIT_ABSORB_AMOUNT_CHANGED", "player")
 	Equal(900, Value(bar.shield.value), "and a heal that is not drawn takes none of its room")
-	Equal(0, Value(bar.cap.alpha))
+	False(CapSeen(bar))
 end)
 
 Test("a shield on a party member and on a target is drawn the same way", function()
@@ -2480,12 +2888,20 @@ Test("a shield on a party member and on a target is drawn the same way", functio
 	M.Fire("UNIT_ABSORB_AMOUNT_CHANGED", "party1")
 	local bar = PartyButton(ns, 1).health
 	Equal(500, Value(bar.shield.value))
-	Equal(1, Value(bar.cap.alpha))
+	True(CapSeen(bar))
 	Target(HOGGER) -- 300 of 600, health and maximum both sealed
 	M.units.target.absorb = 100
 	M.Fire("UNIT_ABSORB_AMOUNT_CHANGED", "target")
 	Equal(100, Value(PugUnitFrames_target.health.shield.value))
-	Equal(0, Value(PugUnitFrames_target.health.cap.alpha))
+	False(CapSeen(PugUnitFrames_target.health))
+	-- More shield than the creature has room for, and then it dies under it: an empty bar with
+	-- no cap on its end.
+	M.units.target.absorb = 900
+	M.Fire("UNIT_ABSORB_AMOUNT_CHANGED", "target")
+	True(CapSeen(PugUnitFrames_target.health), "lit while it lives")
+	M.units.target.health, M.units.target.dead = 0, true
+	M.Fire("UNIT_HEALTH", "target")
+	False(CapSeen(PugUnitFrames_target.health), "a dead creature's bar has no cap")
 	Equal(0, #ns.GetProblems())
 end)
 
@@ -2508,7 +2924,7 @@ Test("bars can fill to the left or upwards, and a bar can be turned round", func
 	Equal("TOPRIGHT", bar.shield.anchors[1][1])
 	Equal("TOPLEFT", bar.shield.anchors[1][3])
 	Equal("TOPLEFT", bar.cap.anchors[1][1], "the cap is on the end the bar now fills towards")
-	True(bar.cap.gradient.low[4] > 0.9, "full at that end")
+	Equal("BOTTOMLEFT", bar.cap.anchors[2][1])
 
 	cfg.fill = "up"
 	ns.Refresh()
@@ -2517,8 +2933,9 @@ Test("bars can fill to the left or upwards, and a bar can be turned round", func
 	Equal("BOTTOMLEFT", bar.heal.anchors[1][1])
 	Equal("VERTICAL", bar.shield.orientation)
 	Equal("BOTTOMLEFT", bar.shield.anchors[1][1], "the shield above the healing")
-	Equal("VERTICAL", bar.cap.gradient.orientation, "and the cap along the top")
-	True(bar.cap.gradient.high[4] > 0.9)
+	Equal("TOPLEFT", bar.cap.anchors[1][1], "and the cap along the top")
+	Equal("TOPRIGHT", bar.cap.anchors[2][1])
+	Equal(4, bar.cap:GetHeight())
 	False(PugUnitFrames_player.power.reverseFill, "the power bar, a strip along the bottom, fills as ever")
 
 	-- Turned round: a dark bar, and the class colour where health is missing.

@@ -2,7 +2,8 @@ local ADDON, ns = ...
 
 -- The cast bar, under the plate: the spell's icon, its name, a timer that fills for a cast and
 -- drains for a channel with a bright edge where the fill ends, and a shield while it cannot be
--- interrupted.
+-- interrupted. Where the frame asks for it, such a cast is also a greyed orange and not the
+-- cast's gold, so that it is told apart before the shield is looked for.
 local Frame, Style, Sealed = ns.Frame, ns.Style, ns.Sealed
 local L = ns.L
 
@@ -21,6 +22,14 @@ local LOOK_AGAIN = 0.25    -- seconds between looks at a cast that is on show
 
 function CastBar.Wanted(cfg)
 	return cfg.castbar
+end
+
+-- A cast colour as Sealed.CastToParts takes it: the fill, then the empty part behind it, which
+-- is the same colour darkened as the empty part of a health bar is.
+local function Tints(color)
+	local r, g, b = Style.Toned(color)
+	local behindR, behindG, behindB = Style.Veiled(r, g, b)
+	return { r, g, b, behindR, behindG, behindB }
 end
 
 -- The bar and its shadow, fully there (they are made see-through when a cast's time is up).
@@ -80,7 +89,7 @@ function CastBar.Create(frame)
 	cast.shield:SetTexture(ns.ART .. "Mark-Shield")
 	cast.shield:SetAlpha(0)
 	-- What Sealed.CastToParts draws on.
-	cast.parts = { bar = cast.bar, text = cast.text, icon = cast.icon, shield = cast.shield }
+	cast.parts = { bar = cast.bar, trough = cast.trough, text = cast.text, icon = cast.icon, shield = cast.shield }
 	cast.fading = { cast, cast.shadow.holder }
 	cast:SetScript("OnUpdate", OnUpdate)
 	cast:Hide()
@@ -112,9 +121,12 @@ function CastBar.Layout(frame, cfg, on)
 	cast.bar:SetPoint("TOPLEFT", cast.icon, "TOPRIGHT", pixel, 0)
 	cast.bar:SetPoint("BOTTOMRIGHT", cast, "BOTTOMRIGHT", -pixel, pixel)
 	cast.bar:SetStatusBarTexture(Style.texture)
-	-- Behind the fill, the cast colour darkened, as the empty part of a health bar is.
 	cast.trough:SetTexture(Style.texture)
-	cast.trough:SetVertexColor(Style.Veiled(Style.Toned(Style.CAST)))
+	-- The colours a cast is drawn in (Sealed.CastToParts lays them on when one begins).
+	local open = Tints(Style.CAST)
+	cast.parts.open = open
+	cast.parts.shut = cfg.castLocked and Tints(Style.CAST_LOCKED) or nil
+	cast.trough:SetVertexColor(open[4], open[5], open[6])
 
 	local fill = cast.bar:GetStatusBarTexture()
 	cast.spark:ClearAllPoints()
@@ -147,7 +159,6 @@ function CastBar.Update(frame, unit, event)
 		cast.held = false
 		cast.since = 0
 		Solid(cast)
-		cast.bar:SetStatusBarColor(Style.Toned(Style.CAST))
 		cast.spark:Show()
 		cast:Show()
 		return

@@ -6,6 +6,10 @@ local Frame, Style, Sealed = ns.Frame, ns.Style, ns.Sealed
 
 local Health = { name = "Health" }
 
+-- How much of the bar's end the cap takes when there is more shield than room. No wider than
+-- the gap the numbers keep from the end of the bar (Texts.lua), so that no digit stands on it.
+local CAP = 4
+
 Health.events = {
 	"UNIT_HEALTH", "UNIT_MAXHEALTH", "UNIT_CONNECTION", "UNIT_FACTION", "UNIT_HEAL_PREDICTION", "UNIT_ABSORB_AMOUNT_CHANGED",
 }
@@ -37,12 +41,22 @@ function Health.Create(frame)
 	-- a shield is usually cast.
 	bar.shield = CreateFrame("StatusBar", nil, bar)
 	bar.shield:SetFrameLevel(bar.heal:GetFrameLevel() + 1)
-	-- The cap sits over the three bars.
-	bar.capHolder = CreateFrame("Frame", nil, bar)
-	bar.capHolder:SetAllPoints(bar)
-	bar.capHolder:SetFrameLevel(bar.shield:GetFrameLevel() + 1)
-	bar.cap = bar.capHolder:CreateTexture(nil, "OVERLAY")
-	bar.cap:SetColorTexture(1, 1, 1, 1)
+	-- The cap sits over the three bars, and is a small bar of its own. Two things have to be so
+	-- for it to be seen, and the game answers for each without this addon reading a number.
+	-- There is a shield at all: the cap runs from nought to one and is given the shield's
+	-- size, so it is filled by any shield and empty with none. And the shield does not all fit:
+	-- the cap is see-through unless the game's calculator says so (Sealed.ShieldToBar).
+	--
+	-- Up to 0.3.4 the cap was a texture with a fade on it (SetGradient), made see-through by its
+	-- own alpha. In the game that did nothing to it: the fade's own alpha was what was drawn,
+	-- and the cap stood on every health bar, a dead creature's included. So the cap is one even
+	-- colour now, with no fade for an alpha to be lost on; the alpha is its frame's, set the
+	-- way a group member out of range is faded, which the game has been seen to do; and while
+	-- there is no shield nothing is drawn at all.
+	bar.cap = CreateFrame("StatusBar", nil, bar)
+	bar.cap:SetFrameLevel(bar.shield:GetFrameLevel() + 1)
+	bar.cap:SetMinMaxValues(0, 1)
+	bar.cap:SetValue(0)
 	bar.cap:SetAlpha(0)
 
 	frame.health = bar
@@ -125,27 +139,25 @@ function Health.Layout(frame, cfg)
 	shield:SetStatusBarColor(tint[1], tint[2], tint[3], tint[4])
 	shield:SetShown(cfg.absorbs and true or false)
 
-	-- The cap: the shield's colour on the end the bar fills towards, fading back into the bar.
-	local cap, reach = bar.cap, math.max(6, math.floor(cfg.height * 0.2 + 0.5))
-	local faint, full = CreateColor(tint[1], tint[2], tint[3], 0), CreateColor(tint[1], tint[2], tint[3], 0.95)
+	-- The cap: the shield's colour, a few units of it, on the end the bar fills towards.
+	local cap, reach = bar.cap, CAP
+	cap:SetStatusBarTexture(Style.TEXTURES.flat)
+	cap:SetStatusBarColor(tint[1], tint[2], tint[3], 0.95)
 	cap:ClearAllPoints()
 	if upright then
 		cap:SetPoint("TOPLEFT", bar, "TOPLEFT")
 		cap:SetPoint("TOPRIGHT", bar, "TOPRIGHT")
 		cap:SetHeight(reach)
-		cap:SetGradient("VERTICAL", faint, full)
 	elseif leftward then
 		cap:SetPoint("TOPLEFT", bar, "TOPLEFT")
 		cap:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT")
 		cap:SetWidth(reach)
-		cap:SetGradient("HORIZONTAL", full, faint)
 	else
 		cap:SetPoint("TOPRIGHT", bar, "TOPRIGHT")
 		cap:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT")
 		cap:SetWidth(reach)
-		cap:SetGradient("HORIZONTAL", faint, full)
 	end
-	bar.capHolder:SetShown(cfg.absorbs and true or false)
+	cap:SetShown(cfg.absorbs and true or false)
 end
 
 -- The bar and the empty part behind it take the same colour (which may be sealed numbers: they
@@ -197,6 +209,7 @@ function Health.Update(frame, unit, event)
 		Empty(bar)
 		Empty(bar.heal)
 		Empty(bar.shield)
+		Empty(bar.cap)
 		bar.cap:SetAlpha(0)
 		-- All of the bar is its empty part now: grey, whoever it was.
 		bar.trough:SetVertexColor(Style.Toned(Style.REACTION.gone))

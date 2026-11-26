@@ -31,6 +31,9 @@ test("a fresh install starts with the author's own settings, and its frames are 
 	assertEquals(6, units.target.buffs)
 	assertFalse(units.raid.enabled)
 	assertFalse(units.player.levelBadge)
+	assertTrue(units.target.castLocked, "grey orange for a cast that cannot be interrupted: the target")
+	assertTrue(units.focus.castLocked, "and the focus")
+	assertFalse(units.player.castLocked)
 	assertAlmostEquals(1.15, PugUnitFrames_player:GetScale(), 0.001)
 	assertAlmostEquals(units.player.width, PugUnitFrames_player:GetWidth(), 0.01)
 	local party = PugUnitFrames_party

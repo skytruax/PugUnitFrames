@@ -1,6 +1,0 @@
-<Ui xmlns="http://www.blizzard.com/wow/ui/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/ ..\FrameXML\UI.xsd">
-	<!-- The addon's own font, named here so that the game is asked for the file as the addon
-	     loads. The game can take a while to hand a font file over, and until it has, the frames
-	     are lettered in the game's own font (Style.lua). Nothing uses this font object itself. -->
-	<Font name="PugUnitFramesFont" font="Interface\AddOns\PugUnitFrames\Fonts\Inter-SemiBold.ttf" height="12" virtual="true"/>
-</Ui>

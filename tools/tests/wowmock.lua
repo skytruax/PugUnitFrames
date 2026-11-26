@@ -53,6 +53,15 @@ local M = {
 	tooltip = {},          -- what the tooltip was last asked to show
 	reloads = 0,
 	unreadableFonts = {},  -- [path] = true: a font file the game cannot read
+	unknownFiles = {},     -- [path] = true: a file this running game does not know (it was not there when the game started)
+	fontRefusal = "false", -- how a font file is refused: "false", "nothing", "drop", "named" or "error" (see FontString:SetFont)
+	refuseOutlined = false, -- a game that takes a font file for plain text and refuses it for outlined text
+	noAbsorbAnswer = false, -- UnitGetTotalAbsorbs answers nothing at all
+	quietFonts = false,    -- a client that answers nothing, not true, for a font it takes
+	fickleFonts = false,   -- every second time a text is given a font file, the text is left with no font, without a word
+	fontTries = {},        -- [path] = how often a text was given that font file
+	fontsUnnamed = false,  -- a text does not say which font file it holds (GetFont answers nothing for it)
+	clampedAtNought = false, -- the shield calculator calls no shield in no room "more than fits"
 	unknownFilters = {},   -- [word] = true: an aura filter word this client's containers do not know
 	loadedAddOns = {},     -- [name] = true: another addon that is loaded
 	driven = {},           -- [frame] = the rule the game shows and hides it by (RegisterStateDriver)
@@ -235,6 +244,16 @@ function wipe(target)
 	end
 	return target
 end
+
+-- Whether this running game knows a file: one of its own, or one that was in an addon's folder
+-- when the game was started. It does not look whether the file is still there.
+C_UIFileAsset = {
+	IsKnownFile = function(asset)
+		Plain("IsKnownFile", asset)
+		assert(type(asset) == "string" or type(asset) == "number", "IsKnownFile needs a path or a file id")
+		return not M.unknownFiles[asset]
+	end,
+}
 
 C_AddOns = {
 	GetAddOnMetadata = function() return "0.0.0-test" end,
@@ -512,9 +531,22 @@ function Region:IsVisible()
 	end
 	return true
 end
+-- A texture with a fade on it (SetGradient) is drawn with the fade's own alpha in the game:
+-- giving it an alpha as well did nothing to it (seen in the game with 0.3.4, where a cap that
+-- was "made see-through" stood on every health bar). So this stand-in takes that for a mistake.
+local FADE_AND_ALPHA = "a texture with a gradient is drawn with the gradient's own alpha in the game: an alpha of its own does nothing to it. Put the alpha on a frame."
+
 -- SecretArguments = "AllowedWhenTainted"
-function Region:SetAlpha(alpha) self.alpha = alpha end
+function Region:SetAlpha(alpha)
+	if self.gradient then
+		error(FADE_AND_ALPHA, 2)
+	end
+	self.alpha = alpha
+end
 function Region:SetAlphaFromBoolean(flag, whenTrue, whenFalse)
+	if self.gradient then
+		error(FADE_AND_ALPHA, 2)
+	end
 	local value
 	if Unseal(flag) then
 		value = Unseal(whenTrue)
@@ -585,6 +617,9 @@ function Texture:SetGradient(orientation, low, high)
 	Plain("SetGradient's orientation", orientation)
 	assert(orientation == "HORIZONTAL" or orientation == "VERTICAL", "SetGradient: not an orientation: " .. tostring(orientation))
 	assert(type(low) == "table" and low.GetRGBA and type(high) == "table" and high.GetRGBA, "SetGradient takes two colour objects")
+	if self.alpha ~= nil then
+		error(FADE_AND_ALPHA, 2)
+	end
 	self.gradient = { orientation = orientation, low = { low:GetRGBA() }, high = { high:GetRGBA() } }
 end
 function Texture:SetBlendMode(mode) Plain("SetBlendMode", mode) self.blend = mode end
@@ -595,19 +630,49 @@ end
 
 -- FontString ---------------------------------------------------------------
 Inherit(FontString, Region)
--- A font file the game cannot read is refused (M.unreadableFonts[path]): the text keeps whatever
--- font it had, which for a fresh one is none.
+-- A font file the game cannot read (M.unreadableFonts[path]) or does not know
+-- (M.unknownFiles[path]) is refused. How, is the client's affair (M.fontRefusal):
+--   "false"    it answers false, and the text keeps whatever font it had, which for a fresh one
+--              is none (this is what the Forever client was seen to do);
+--   "nothing"  it answers nothing at all, and the text keeps the font it had;
+--   "drop"     it answers false and the text is left with no font;
+--   "named"    it answers false, and the text names the file all the same when asked;
+--   "error"    it raises an error, and the text is left with no font.
+-- A font it takes it answers with true, or with nothing where M.quietFonts is set.
 function FontString:SetFont(path, size, flags)
 	Plain("SetFont", path, size, flags)
 	assert(type(path) == "string" and type(size) == "number", "SetFont needs a path and a size")
-	if M.unreadableFonts[path] then
+	M.fontTries[path] = (M.fontTries[path] or 0) + 1
+	local outlined = M.refuseOutlined and path ~= STANDARD_TEXT_FONT and type(flags) == "string" and flags:find("OUTLINE", 1, true)
+	if M.unreadableFonts[path] or M.unknownFiles[path] or outlined then
+		if M.fontRefusal == "error" then
+			self.font = nil
+			error("FontString:SetFont(): the font file could not be loaded", 2)
+		elseif M.fontRefusal == "drop" then
+			self.font = nil
+			return false
+		elseif M.fontRefusal == "nothing" then
+			return
+		elseif M.fontRefusal == "named" then
+			self.font = { path, size, flags }
+		end
 		return false
 	end
+	if M.fickleFonts and path ~= STANDARD_TEXT_FONT then
+		self.fontAsks = (self.fontAsks or 0) + 1
+		if self.fontAsks % 2 == 0 then
+			self.font = nil
+			return
+		end
+	end
 	self.font = { path, size, flags }
+	if M.quietFonts then
+		return
+	end
 	return true
 end
 function FontString:GetFont()
-	if self.font then
+	if self.font and not M.fontsUnnamed then
 		return self.font[1], self.font[2], self.font[3]
 	end
 end
@@ -1474,7 +1539,13 @@ function UnitGetIncomingHeals(token)
 end
 
 -- What is soaking up damage for the unit: always sealed (SecretReturns).
-function UnitGetTotalAbsorbs(token) local unit = Unit(token, "UnitGetTotalAbsorbs") return Seal(unit and unit.absorb or 0) end
+function UnitGetTotalAbsorbs(token)
+	local unit = Unit(token, "UnitGetTotalAbsorbs")
+	if M.noAbsorbAnswer then
+		return nil
+	end
+	return Seal(unit and unit.absorb or 0)
+end
 
 -- The game's calculator for healing on its way and shields: an object that is filled with a
 -- unit's numbers and hands back, sealed, how much of a shield fits under the rule it was given
@@ -1496,7 +1567,14 @@ function CreateUnitHealPredictionCalculator()
 		elseif self.mode == 1 then
 			room = math.max(0, self.healthMax - self.health)
 		end
-		return Seal(math.min(self.absorb, room)), Seal(self.absorb > room)
+		-- "If true, the value is in excess of the clamp boundary" is all the game's documentation
+		-- says. Whether no shield in no room counts as that is not known, so a scenario can have
+		-- it either way.
+		local more = self.absorb > room
+		if M.clampedAtNought then
+			more = self.absorb >= room
+		end
+		return Seal(math.min(self.absorb, room)), Seal(more)
 	end
 	return calculator
 end

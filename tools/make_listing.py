@@ -89,6 +89,7 @@ POWER = {"MANA": (0.27, 0.53, 0.93), "RAGE": (0.83, 0.24, 0.22), "ENERGY": (0.94
 HOSTILE = (0.84, 0.29, 0.24)
 GONE = (0.42, 0.43, 0.45)  # the bar of someone dead or offline
 CAST = (0.93, 0.74, 0.28)
+CAST_LOCKED = (0.74, 0.56, 0.42)  # a cast that cannot be interrupted, as Style.CAST_LOCKED has it
 EASY = (185, 185, 185, 255)  # the level of a creature far below the player: the game's grey, lifted as Texts.lua lifts it
 HEAL = (0.45, 0.92, 0.55)
 THREAT = (0.90, 0.22, 0.18)
@@ -189,9 +190,11 @@ def shadow_under(canvas, box, blur=14, drop=8, strength=0.55):
 
 
 def cast_bar(canvas, left, top, k, width, height, spell, done, icon, shield=False, interrupted=False,
-             theme=SLATE, texture="Bar-Smooth", font_size=10):
+             theme=SLATE, texture="Bar-Smooth", font_size=10, locked=False):
     """A cast bar as CastBar.lua lays it out: icon, timer, spell name, and a shield at the end
-    while the cast cannot be interrupted. An interrupted one is full and red for a moment."""
+    while the cast cannot be interrupted. An interrupted one is full and red for a moment.
+    `locked` draws it in the greyed orange a frame can give a cast that cannot be interrupted
+    (the target and the focus do, as they start)."""
     px = max(1, round(k))
     w, h = round(width * k), round(height * k)
     tone = theme["tone"]
@@ -203,11 +206,12 @@ def cast_bar(canvas, left, top, k, width, height, spell, done, icon, shield=Fals
     canvas.alpha_composite(tile(square, icon), (left + px, top + px))
     bar_left = left + px + square + px
     bar_w = left + w - px - bar_left
-    colour = (0.86, 0.24, 0.20) if interrupted else CAST
+    cast_colour = CAST_LOCKED if locked else CAST
+    colour = (0.86, 0.24, 0.20) if interrupted else cast_colour
     share = 1.0 if interrupted else done
     # Behind the fill, the cast colour under the theme's veil, as the empty part of a health bar is.
     trough = tuple(round(channel * (1 - theme["shade"]) + 255 * veil * theme["shade"])
-                   for channel, veil in zip(toned(CAST, tone), theme["veil"]))
+                   for channel, veil in zip(toned(cast_colour, tone), theme["veil"]))
     canvas.alpha_composite(bar_fill(bar_w, square, trough, texture=texture), (bar_left, top + px))
     canvas.alpha_composite(bar_fill(bar_w * share, square, toned(colour, tone), texture=texture, share=share), (bar_left, top + px))
     if not interrupted and 0 < share < 1:  # the bright edge on the end of the fill, cut off at the bar's ends
@@ -244,7 +248,7 @@ def frame(canvas, left, top, k, width, height, power_height, name, colour, share
           dead=False, faded=False, heal=0.0, absorb=0.0, threat=False,
           cast=None, cast_height=16, auras=(), buffs=(), aura_size=20, aura_side="right", buff_side=None, per_row=8,
           narrow=False, font_size=11, theme=SLATE, texture="Bar-Smooth", lit=None, shield=False, points=0, mark=None,
-          raid_mark=None, shadow=False, level_colour=None):
+          raid_mark=None, shadow=False, level_colour=None, locked=False):
     """Draws a frame with its top left corner at (left, top), laid out as the addon lays one out
     since 0.3. k is how many picture pixels one of the addon's units takes. Returns the frame's
     bottom edge in the picture.
@@ -318,12 +322,10 @@ def frame(canvas, left, top, k, width, height, power_height, name, colour, share
         if reach > 0:
             layer.alpha_composite(bar_fill(bar_w * reach, bar_h, tuple(round(255 * c) for c in ABSORB), 184),
                                   (bar_left + round(bar_w * after), health_top))
-        if absorb > 1 - after + 1e-6:
-            cap = round(5 * k)
-            fade = np.zeros((bar_h, cap, 4), np.float32)
-            fade[..., :3] = [255 * c for c in ABSORB]
-            fade[..., 3] = np.linspace(0, 235, cap, dtype=np.float32)[None, :]
-            layer.alpha_composite(Image.fromarray(fade.astype(np.uint8), "RGBA"), (bar_right - cap, health_top))
+        if absorb > 1 - after + 1e-6:  # the cap, as Health.lua sizes it: a few units of the shield's colour
+            cap = round(4 * k)
+            block = Image.new("RGBA", (cap, bar_h), tuple(round(255 * c) for c in ABSORB) + (242,))
+            layer.alpha_composite(block, (bar_right - cap, health_top))
     if power_h > 0:
         ran_on = toned(POWER[power]) if power else toned(GONE)
         layer.alpha_composite(bar_fill(bar_w, power_h, dimmed(ran_on)), (bar_left, top + h - px - power_h))
@@ -409,7 +411,7 @@ def frame(canvas, left, top, k, width, height, power_height, name, colour, share
         cast_top = bottom + round(3 * k)
         if shadow:
             shadow_under(canvas, (left, cast_top, left + w, cast_top + round(cast_height * k)), blur=10, drop=6, strength=0.45)
-        bottom = cast_bar(layer, left, cast_top, k, width, cast_height, spell, done, cast_icon, shield, False, theme, texture, font_size - 1)
+        bottom = cast_bar(layer, left, cast_top, k, width, cast_height, spell, done, cast_icon, shield, False, theme, texture, font_size - 1, locked)
     if points:  # combo points: five pips under the plate, some of them filled
         pip_h, gap = round(5 * k), round(2 * k)
         pip_top = bottom + round(3 * k)
@@ -828,8 +830,8 @@ def combat():
     left = box[0] + round((box[2] - box[0] - 232 * k) / 2)
     top = 640
     small_caps(canvas, (left, top - round(51 * k) - 22), "Debuffs rimmed by kind, its buffs above them")
-    bottom = target_frame(canvas, left, top, k, cast=("Enrage", 0.48, "Enrage"), shield=True, threat=True)
-    small_caps(canvas, (left, bottom + 34), "A shield: this cast cannot be interrupted")
+    bottom = target_frame(canvas, left, top, k, cast=("Enrage", 0.48, "Enrage"), shield=True, locked=True, threat=True)
+    small_caps(canvas, (left, bottom + 34), "Grey orange, and a shield: it cannot be interrupted")
     small_caps(canvas, (left, bottom + 72), "The red outline: it is on you", THREAT_TEXT)
     return canvas
 
@@ -856,11 +858,11 @@ def auras():
     card(canvas, casts, "Cast bars", "player, target, focus, pet, party")
     k = 2.05
     rows = [("Holy Light", 0.62, "Holy Light", False, False, "a cast fills, a channel drains"),
-            ("Enrage", 0.44, "Enrage", True, False, "a shield: cannot be interrupted"),
+            ("Enrage", 0.44, "Enrage", True, False, "grey orange: uninterruptible"),
             ("Frostbolt", 0.7, "Frostbolt", False, True, "a moment in red")]
     for index, (spell, done, icon, shield, interrupted, told) in enumerate(rows):
         y = 778 + index * 70
-        cast_bar(canvas, 110, y, k, 232, 18, spell, done, icon, shield, interrupted)
+        cast_bar(canvas, 110, y, k, 232, 18, spell, done, icon, shield, interrupted, locked=shield)
         brand.text(canvas, (110 + round(232 * k) + 26, y + round(18 * k) / 2), told, 21, SOFT, "Medium", "lm")
 
     where = (980, 680, 1850, 1000)

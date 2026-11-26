@@ -126,27 +126,29 @@ test("moving the buffs to another side moves them to that side's container", fun
 	NoProblems()
 end)
 
--- The simulator has no casts but the player's. A party member's is put in front of the two
--- functions the addon asks, as the game would answer them.
-local function WithPartyCast(run)
+-- The simulator has no casts but the player's. Someone else's is put in front of the two
+-- functions the addon asks, as the game would answer them. `run` is handed a function that
+-- starts and ends the cast, and says whether it can be interrupted.
+local function WithCast(who, run)
 	local gameInfo, gameDuration = UnitCastingInfo, UnitCastingDuration
-	local casting = false
+	local casting, locked = false, false
 	local duration = C_DurationUtil.CreateDuration()
 	UnitCastingInfo = function(unit)
-		if unit == "party1" and casting then
-			return "Smite", "Smite", "Interface\\Icons\\Spell_Holy_HolySmite", GetTime() * 1000, (GetTime() + 2.5) * 1000, false, "cast-1", false, 585, 77
+		if unit == who and casting then
+			return "Smite", "Smite", "Interface\\Icons\\Spell_Holy_HolySmite", GetTime() * 1000, (GetTime() + 2.5) * 1000, false, "cast-1", locked, 585, 77
 		end
 		return gameInfo(unit)
 	end
 	UnitCastingDuration = function(unit)
-		if unit == "party1" then
+		if unit == who then
 			return casting and duration or nil
 		end
 		return gameDuration(unit)
 	end
-	local ok, problem = pcall(run, function(on)
-		casting = on
-		if on then
+	local ok, problem = pcall(run, function(on, cannotBeInterrupted)
+		local began = on and not casting
+		casting, locked = on, cannotBeInterrupted and true or false
+		if began then
 			duration:SetTimeFromStart(GetTime(), 2.5)
 		end
 	end)
@@ -154,6 +156,10 @@ local function WithPartyCast(run)
 	if not ok then
 		error(problem, 0)
 	end
+end
+
+local function WithPartyCast(run)
+	WithCast("party1", run)
 end
 
 test("a party member's cast bar comes up once cast bars are switched on for the party", function()
@@ -203,12 +209,81 @@ test("a party member's cast bar comes up once cast bars are switched on for the 
 	NoProblems()
 end)
 
-test("the game is asked for the addon's font as it loads, and the frames are lettered in it", function()
-	assertNotNil(PugUnitFramesFont, "Fonts.xml made the font object")
-	local file = PugUnitFramesFont:GetFont()
-	assertContains(file:gsub("\\", "/"), "PugUnitFrames/Fonts/Inter-SemiBold.ttf")
-	local used = PugUnitFrames_player.texts.name:GetFont()
-	assertContains(used:gsub("\\", "/"), "Inter-SemiBold.ttf")
+test("the frames are lettered in the addon's font, text by text, and /pug status says so", function()
+	for _, text in ipairs({ PugUnitFrames_player.texts.name, PugUnitFrames_player.texts.health, PugUnitFrames_player.cast.text }) do
+		local file, size = text:GetFont()
+		assertContains(file:gsub("\\", "/"), "PugUnitFrames/Fonts/Inter-SemiBold.ttf")
+		assertTrue(size >= 6)
+	end
+	assertEquals("the addon's own", ns.Style.FontStatus())
+	-- The game's own on request, and back.
+	ns.db.font = "game"
+	ns.Refresh()
+	Tick()
+	assertEquals(STANDARD_TEXT_FONT, (PugUnitFrames_player.texts.name:GetFont()))
+	assertEquals("the game's own", ns.Style.FontStatus())
+	ns.db.font = "inter"
+	ns.Refresh()
+	Tick()
+	assertContains(PugUnitFrames_player.texts.name:GetFont():gsub("\\", "/"), "Inter-SemiBold.ttf")
+	assertNil(PugUnitFramesFont, "no font object is declared for the file any more")
+	NoProblems()
+end)
+
+test("a cast on the target that cannot be interrupted is a greyed orange, and gold while it can be", function()
+	assertTrue(ns.db.units.target.castLocked, "on for the target as it starts")
+	A_Admin.SetTarget("Hogger", 11, 1, true)
+	Tick()
+	local cast = PugUnitFrames_target.cast
+	local function Is(color, what)
+		local r, g, b = ns.Style.Toned(color)
+		local barR, barG, barB = cast.bar:GetStatusBarColor()
+		assertAlmostEquals(r, barR, 0.01, what)
+		assertAlmostEquals(g, barG, 0.01, what)
+		assertAlmostEquals(b, barB, 0.01, what)
+		local behindR, behindG, behindB = ns.Style.Veiled(r, g, b)
+		local troughR, troughG, troughB = cast.trough:GetVertexColor()
+		assertAlmostEquals(behindR, troughR, 0.01, what)
+		assertAlmostEquals(behindG, troughG, 0.01, what)
+		assertAlmostEquals(behindB, troughB, 0.01, what)
+	end
+	-- The events go to the addon's frame alone: the game's own target frame, put away but still
+	-- listening, would be told of a cast its own questions know nothing about.
+	local frame = PugUnitFrames_target
+	local function Hear(event)
+		assertTrue(frame:IsEventRegistered(event), "the frame listens for " .. event)
+		frame:GetScript("OnEvent")(frame, event, "target")
+	end
+	WithCast("target", function(SetCasting)
+		SetCasting(true, false)
+		Hear("UNIT_SPELLCAST_START")
+		assertTrue(cast:IsVisible(), "the bar is up")
+		Is(ns.Style.CAST, "the cast's gold while it can be interrupted")
+		assertAlmostEquals(0, cast.shield:GetAlpha(), 0.01)
+		SetCasting(true, true)
+		Hear("UNIT_SPELLCAST_NOT_INTERRUPTIBLE")
+		Is(ns.Style.CAST_LOCKED, "a greyed orange once it cannot")
+		assertAlmostEquals(1, cast.shield:GetAlpha(), 0.01, "with the shield")
+		SetCasting(true, false)
+		Hear("UNIT_SPELLCAST_INTERRUPTIBLE")
+		Is(ns.Style.CAST, "and gold again")
+
+		ns.db.units.target.castLocked = false
+		ns.Refresh()
+		Tick()
+		SetCasting(true, true)
+		Hear("UNIT_SPELLCAST_NOT_INTERRUPTIBLE")
+		Is(ns.Style.CAST, "switched off, every cast is gold")
+		assertAlmostEquals(1, cast.shield:GetAlpha(), 0.01, "and the shield still says which is which")
+		ns.db.units.target.castLocked = true
+		ns.Refresh()
+		Tick()
+		SetCasting(false)
+		Hear("UNIT_SPELLCAST_STOP")
+		assertFalse(cast:IsShown())
+	end)
+	A_Admin.ClearTarget()
+	Tick()
 	NoProblems()
 end)
 

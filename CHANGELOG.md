@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.3.5
+
+New:
+
+- **A cast that cannot be interrupted is a grey orange.** On the cast bar of your target and of your focus, a cast that cannot be interrupted is drawn in a greyed orange in place of the cast's gold, so you see before you reach for an interrupt whether it would do anything. The shield on the end of the bar is still there, and the colour changes with it if a cast becomes interruptible part-way. "Grey orange if uninterruptible" is a setting of each frame's cast bar (Options > Frames > Bars): it starts on for target and focus, and off for player, pet and party.
+
+Fixed:
+
+- **A pale strip on the end of every health bar.** The cap that says "more shield than there is room for" stood on every health bar, shield or no shield, a dead creature's included. It is drawn only while the unit has a shield and the shield does not all fit, which is what it was made for. It is one even colour now, without the fade it had.
+- **The addon's font.** Whether the game takes the addon's font file was decided on a piece of text nobody sees, and in the game the answer was no for a whole evening: every text stayed in the game's font, and ten minutes in it was called an error. Each text is now given the game's font and then the addon's on top of it, so a text carries the addon's font from the moment the game takes it there, and keeps the game's where it does not.
+- A font the game does not take is no longer listed as an error, and the game is no longer asked for it on a timer all evening: a few times as the frames are made, once more a little later, and after that only when frames are laid out again. The "Font" line of `/pug status` says how many texts carry the addon's font, whether the game knows the file, and what it answered.
+
+Good to know:
+
+- If your frames are lettered in the game's font and you would like the addon's: close the game completely and start it again. This game works with the files that were in an addon's folder when it was started, and a font file that was installed or updated while it was running may not be taken until then. A reload does not change that.
+
 ## v0.3.4
 
 - **New starting settings.** A new profile, and a frame you reset, now starts with the settings the addon's author plays with:
